@@ -1,0 +1,30 @@
+CompileFlags:
+  Add:
+    - "-std=c++23"
+    - "-Wall"
+    - "-Wextra"
+    - "-Wpedantic"
+    - "-Wno-gnu-statement-expression-from-macro-expansion"
+  CompilationDatabase: build
+
+Diagnostics:
+  ClangTidy:
+    Add:
+      - modernize*
+      - performance*
+      - readability*
+      - bugprone*
+    Remove:
+      - modernize-use-trailing-return-type
+  UnusedIncludes: Strict
+
+Index:
+  Background: Build
+
+InlayHints:
+  Enabled: Yes
+  ParameterNames: Yes
+  DeducedTypes: Yes
+
+Hover:
+  ShowAKA: Yes

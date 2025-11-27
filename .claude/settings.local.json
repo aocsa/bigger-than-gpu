@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir:*)",
+      "Bash(cmake:*)",
+      "Bash(ninja:*)",
+      "Bash(ctest:*)",
+      "Bash(/Users/alexander/git/bigger-than-gpu/build/examples/simple_graph)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
