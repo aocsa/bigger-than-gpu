@@ -49,7 +49,7 @@ void test_try_pop_empty() {
     
     auto result = queue.TryPop();
     assert(!result.has_value());
-    assert(result.error().code() == StatusCode::Invalid);
+    assert(result.error().code() == ErrorCode::Invalid);
     
     std::cout << "PASSED\n";
 }
@@ -69,7 +69,7 @@ void test_finish() {
     // But next pop returns error
     result = queue.Pop();
     assert(!result.has_value());
-    assert(result.error().code() == StatusCode::Invalid);
+    assert(result.error().code() == ErrorCode::Invalid);
     
     // Can't add after finish
     auto status = queue.Put(std::make_unique<TestMessage>("2", 2));

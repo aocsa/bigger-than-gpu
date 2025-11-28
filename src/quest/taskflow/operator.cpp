@@ -108,7 +108,7 @@ ExecutionStatus SimpleOperator::run() {
 
     if (!message_result.has_value()) {
       // Check if this is a normal end-of-stream signal.
-      if (message_result.error().code() == StatusCode::Invalid) {
+      if (message_result.error().code() == ErrorCode::Invalid) {
         // Input exhausted - this is the normal completion path.
         break;
       }
