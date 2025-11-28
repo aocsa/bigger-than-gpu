@@ -88,7 +88,19 @@ enum class ErrorCode {
   OutOfRange,
 
   // End of data reached (used internally for iteration).
-  EndOfData
+  EndOfData,
+
+  // Query engine: Logical plan error.
+  LogicalPlanError,
+
+  // Query engine: Physical plan error.
+  PhysicalPlanError,
+
+  // Query engine: Expression evaluation error.
+  ExpressionError,
+
+  // Query engine: Schema mismatch or column not found.
+  SchemaError
 };
 
 // =============================================================================
@@ -183,6 +195,26 @@ class Status {
     return Status{ErrorCode::EndOfData, {}};
   }
 
+  /// @brief Create a logical plan error.
+  [[nodiscard]] static Status LogicalPlanError(std::string message) {
+    return Status{ErrorCode::LogicalPlanError, std::move(message)};
+  }
+
+  /// @brief Create a physical plan error.
+  [[nodiscard]] static Status PhysicalPlanError(std::string message) {
+    return Status{ErrorCode::PhysicalPlanError, std::move(message)};
+  }
+
+  /// @brief Create an expression evaluation error.
+  [[nodiscard]] static Status ExpressionError(std::string message) {
+    return Status{ErrorCode::ExpressionError, std::move(message)};
+  }
+
+  /// @brief Create a schema error.
+  [[nodiscard]] static Status SchemaError(std::string message) {
+    return Status{ErrorCode::SchemaError, std::move(message)};
+  }
+
   // ===========================================================================
   // Query Methods
   // ===========================================================================
@@ -254,6 +286,14 @@ class Status {
         return "OutOfRange";
       case ErrorCode::EndOfData:
         return "EndOfData";
+      case ErrorCode::LogicalPlanError:
+        return "LogicalPlanError";
+      case ErrorCode::PhysicalPlanError:
+        return "PhysicalPlanError";
+      case ErrorCode::ExpressionError:
+        return "ExpressionError";
+      case ErrorCode::SchemaError:
+        return "SchemaError";
     }
     return "Unknown";
   }
