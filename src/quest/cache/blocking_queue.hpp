@@ -18,6 +18,11 @@
 
 namespace quest::cache {
 
+using quest::Error;
+using quest::ErrorCode;
+using quest::Result;
+using quest::Status;
+
 // =============================================================================
 // Concept: Message must have an id() method returning string_view
 // =============================================================================
@@ -98,11 +103,11 @@ public:
         std::unique_lock lock(mutex_);
 
         if (!WaitFor(lock, [this] { return !queue_.empty() || finished_; })) {
-            return Err<T>(Status::IOError("Pop operation timed out"));
+            return quest::Status::IOError("Pop operation timed out");
         }
 
         if (queue_.empty()) {
-            return Err<T>(Status::Invalid("Queue finished and empty"));
+            return Status::Invalid("Queue finished and empty");
         }
 
         return PopFront();
@@ -113,9 +118,9 @@ public:
 
         if (queue_.empty()) {
             if (finished_) {
-                return Err<T>(Status::Invalid("Queue finished"));
+                return Status::Invalid("Queue finished");
             }
-            return Err<T>(Status::Invalid("Queue empty"));
+            return Status::Invalid("Queue empty");
         }
 
         return PopFront();
@@ -125,14 +130,14 @@ public:
         std::unique_lock lock(mutex_);
 
         auto deadline = std::chrono::steady_clock::now() + timeout;
-        if (!not_empty_.wait_until(lock, deadline, 
+        if (!not_empty_.wait_until(lock, deadline,
                 [this] { return !queue_.empty() || finished_; })) {
-            return Err<T>(Status::IOError(
-                std::format("Pop timed out after {}ms", timeout.count())));
+            return Status::IOError(
+                std::format("Pop timed out after {}ms", timeout.count()));
         }
 
         if (queue_.empty()) {
-            return Err<T>(Status::Invalid("Queue finished and empty"));
+            return Status::Invalid("Queue finished and empty");
         }
 
         return PopFront();
@@ -142,7 +147,7 @@ public:
         std::unique_lock lock(mutex_);
 
         if (!WaitFor(lock, [this] { return !queue_.empty() || finished_; })) {
-            return Err<std::vector<T>>(Status::IOError("PopAll operation timed out"));
+            return Status::IOError("PopAll operation timed out");
         }
 
         std::vector<T> result;
@@ -165,16 +170,16 @@ public:
         std::unique_lock lock(mutex_);
 
         if (!WaitFor(lock, [this, msg_id] { return ContainsId(msg_id) || finished_; })) {
-            return Err<T>(Status::IOError(
-                std::format("PopById timed out waiting for id: {}", msg_id)));
+            return Status::IOError(
+                std::format("PopById timed out waiting for id: {}", msg_id));
         }
 
         auto iter = std::ranges::find_if(queue_, 
             [msg_id](const auto& item) { return item->id() == msg_id; });
 
         if (iter == queue_.end()) {
-            return Err<T>(Status::NotFound(
-                std::format("Message with id '{}' not found", msg_id)));
+            return Status::NotFound(
+                std::format("Message with id '{}' not found", msg_id));
         }
 
         auto item = std::move(*iter);

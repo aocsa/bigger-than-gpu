@@ -1,2 +1,9 @@
 build/
 cmake-build-debug/
+.idea/bigger-than-gpu.iml
+.idea/editor.xml
+.idea/misc.xml
+.idea/modules.xml
+.idea/vcs.xml
+.idea/codeStyles/codeStyleConfig.xml
+.idea/codeStyles/Project.xml

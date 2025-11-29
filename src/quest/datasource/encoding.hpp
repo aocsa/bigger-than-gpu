@@ -230,7 +230,7 @@ class RleBitPackingDecoder {
     if (current_count_ == 0) {
       auto status = ReadNextGroup();
       if (!status.ok()) {
-        return std::unexpected(status);
+        return std::unexpected(status.error());
       }
     }
 
@@ -253,7 +253,7 @@ class RleBitPackingDecoder {
     for (size_t i = 0; i < values.size(); ++i) {
       auto result = ReadValue();
       if (!result.has_value()) {
-        return result.error();
+        return std::unexpected(result.error());
       }
       values[i] = result.value();
     }

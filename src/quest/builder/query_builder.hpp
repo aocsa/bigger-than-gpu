@@ -100,12 +100,12 @@ class QueryBuilder {
   [[nodiscard]] static Result<QueryBuilder> FromParquet(
       const std::string& filename) {
     auto source_result = datasource::ParquetDataSource::Open(filename);
-    if (!source_result.has_value()) {
+    if (!source_result) {
       return std::unexpected(source_result.error());
     }
     // Move the ParquetDataSource into a shared_ptr
     auto source = std::make_shared<datasource::ParquetDataSource>(
-        std::move(source_result.value()));
+        std::move(*source_result));
     return QueryBuilder(
         std::make_unique<Scan>(filename, std::move(source), std::nullopt));
   }
@@ -161,8 +161,8 @@ class QueryBuilder {
   /// @brief Execute the query and call callback for each batch.
   [[nodiscard]] Status Execute(const ResultCallback& callback) && {
     auto physical_result = CreatePhysicalPlan(*plan_);
-    if (!physical_result.has_value()) {
-      return physical_result.error();
+    if (!physical_result) {
+      return std::unexpected(physical_result.error());
     }
     return physical_result.value()->Execute(callback);
   }
@@ -171,13 +171,13 @@ class QueryBuilder {
   [[nodiscard]] Result<std::vector<RecordBatch>> ExecuteCollect() && {
     std::vector<RecordBatch> results;
     auto physical_result = CreatePhysicalPlan(*plan_);
-    if (!physical_result.has_value()) {
+    if (!physical_result) {
       return std::unexpected(physical_result.error());
     }
     auto status = physical_result.value()->Execute(
         [&results](RecordBatch batch) { results.push_back(std::move(batch)); });
-    if (!status.ok()) {
-      return std::unexpected(status);
+    if (!status) {
+      return std::unexpected(status.error());
     }
     return results;
   }

@@ -22,7 +22,7 @@ using namespace quest;
 
 int main(int argc, char* argv[]) {
   // Default to test file in examples directory
-  std::string filename = "examples/employees_uncompressed.parquet";
+  std::string filename = "/Users/alexander/git/bigger-than-gpu/examples/employees_uncompressed.parquet";
   if (argc > 1) {
     filename = argv[1];
   }

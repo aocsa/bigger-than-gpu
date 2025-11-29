@@ -82,37 +82,33 @@ CPUCacheData& CPUCacheData::operator=(CPUCacheData&& other) noexcept {
 Result<std::shared_ptr<CacheData>> CPUCacheData::to_cpu() {
     // Already in CPU memory, return shared_ptr to this
     // Note: This requires the caller to already have a shared_ptr
-    return Err<std::shared_ptr<CacheData>>(
-        Status::Invalid("Cannot convert CPUCacheData to CPU - use existing shared_ptr"));
+    return Status::Invalid("Cannot convert CPUCacheData to CPU - use existing shared_ptr");
 }
 
 Result<std::shared_ptr<CacheData>> CPUCacheData::to_disk() {
     if (!valid_) {
-        return Err<std::shared_ptr<CacheData>>(Status::Invalid("Cache data is not valid"));
+        return Status::Invalid("Cache data is not valid");
     }
-    
+
     if (!disk_resource_) {
-        return Err<std::shared_ptr<CacheData>>(
-            Status::Invalid("No disk resource configured for spilling"));
+        return Status::Invalid("No disk resource configured for spilling");
     }
-    
+
     // Generate cache file path
     auto file_path = disk_resource_->generate_cache_path("cpu_spill");
-    
+
     // Write data to disk
     std::ofstream file(file_path, std::ios::binary);
     if (!file) {
-        return Err<std::shared_ptr<CacheData>>(
-            Status::IOError("Failed to create cache file: " + file_path.string()));
+        return Status::IOError("Failed to create cache file: " + file_path.string());
     }
-    
-    file.write(reinterpret_cast<const char*>(data_.data()), 
+
+    file.write(reinterpret_cast<const char*>(data_.data()),
                static_cast<std::streamsize>(data_.size()));
-    
+
     if (!file) {
         std::filesystem::remove(file_path);
-        return Err<std::shared_ptr<CacheData>>(
-            Status::IOError("Failed to write cache file: " + file_path.string()));
+        return Status::IOError("Failed to write cache file: " + file_path.string());
     }
     
     file.close();
@@ -210,26 +206,24 @@ bool DiskCacheData::is_valid() const noexcept {
 
 Result<std::shared_ptr<CacheData>> DiskCacheData::to_cpu() {
     if (!is_valid()) {
-        return Err<std::shared_ptr<CacheData>>(Status::Invalid("Cache file is not valid"));
+        return Status::Invalid("Cache file is not valid");
     }
-    
+
     // Read file into memory
     std::ifstream file(file_path_, std::ios::binary | std::ios::ate);
     if (!file) {
-        return Err<std::shared_ptr<CacheData>>(
-            Status::IOError("Failed to open cache file: " + file_path_.string()));
+        return Status::IOError("Failed to open cache file: " + file_path_.string());
     }
-    
+
     auto file_size = static_cast<std::size_t>(file.tellg());
     file.seekg(0, std::ios::beg);
-    
+
     std::vector<std::byte> data(file_size);
-    file.read(reinterpret_cast<char*>(data.data()), 
+    file.read(reinterpret_cast<char*>(data.data()),
               static_cast<std::streamsize>(file_size));
-    
+
     if (!file) {
-        return Err<std::shared_ptr<CacheData>>(
-            Status::IOError("Failed to read cache file: " + file_path_.string()));
+        return Status::IOError("Failed to read cache file: " + file_path_.string());
     }
     
     // Create CPU cache data
@@ -248,8 +242,7 @@ Result<std::shared_ptr<CacheData>> DiskCacheData::to_cpu() {
 
 Result<std::shared_ptr<CacheData>> DiskCacheData::to_disk() {
     // Already on disk
-    return Err<std::shared_ptr<CacheData>>(
-        Status::Invalid("Cannot convert DiskCacheData to Disk - use existing shared_ptr"));
+    return Status::Invalid("Cannot convert DiskCacheData to Disk - use existing shared_ptr");
 }
 
 void DiskCacheData::release() {

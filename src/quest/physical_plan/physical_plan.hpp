@@ -108,10 +108,10 @@ class ScanExec : public PhysicalPlan {
     auto sequence = data_source_->Scan(proj);
     for (auto iter = sequence.begin(); iter != sequence.end(); ++iter) {
       auto batch_result = *iter;
-      if (!batch_result.has_value()) {
-        return batch_result.error();
+      if (!batch_result) {
+        return std::unexpected(batch_result.error());
       }
-      callback(std::move(batch_result.value()));
+      callback(std::move(*batch_result));
     }
     return Status::OK();
   }
@@ -170,11 +170,11 @@ class SelectionExec : public PhysicalPlan {
  private:
   [[nodiscard]] Result<RecordBatch> FilterBatch(const RecordBatch& batch) const {
     auto mask_result = expr_->Evaluate(batch);
-    if (!mask_result.has_value()) {
+    if (!mask_result) {
       return std::unexpected(mask_result.error());
     }
 
-    auto& mask_col = *mask_result.value();
+    auto& mask_col = **mask_result;
     std::vector<size_t> indices;
     indices.reserve(batch.num_rows());
 
@@ -391,16 +391,16 @@ class ProjectionExec : public PhysicalPlan {
 
   if (const auto* binary = dynamic_cast<const BinaryExpr*>(&expr)) {
     auto left_result = CreatePhysicalExpr(binary->left(), input);
-    if (!left_result.has_value()) {
+    if (!left_result) {
       return std::unexpected(left_result.error());
     }
     auto right_result = CreatePhysicalExpr(binary->right(), input);
-    if (!right_result.has_value()) {
+    if (!right_result) {
       return std::unexpected(right_result.error());
     }
 
-    auto left = std::move(left_result.value());
-    auto right = std::move(right_result.value());
+    auto left = std::move(*left_result);
+    auto right = std::move(*right_result);
 
     if (dynamic_cast<const Eq*>(binary)) {
       return std::make_unique<EqExpression>(std::move(left), std::move(right));
@@ -444,21 +444,21 @@ class ProjectionExec : public PhysicalPlan {
 
   if (const auto* selection = dynamic_cast<const Selection*>(&plan)) {
     auto input_result = CreatePhysicalPlan(selection->input());
-    if (!input_result.has_value()) {
+    if (!input_result) {
       return std::unexpected(input_result.error());
     }
     auto filter_result =
         CreatePhysicalExpr(selection->condition(), selection->input());
-    if (!filter_result.has_value()) {
+    if (!filter_result) {
       return std::unexpected(filter_result.error());
     }
-    return std::make_unique<SelectionExec>(std::move(input_result.value()),
-                                           std::move(filter_result.value()));
+    return std::make_unique<SelectionExec>(std::move(*input_result),
+                                           std::move(*filter_result));
   }
 
   if (const auto* projection = dynamic_cast<const Projection*>(&plan)) {
     auto input_result = CreatePhysicalPlan(projection->input());
-    if (!input_result.has_value()) {
+    if (!input_result) {
       return std::unexpected(input_result.error());
     }
 
@@ -466,23 +466,23 @@ class ProjectionExec : public PhysicalPlan {
     exprs.reserve(projection->expressions().size());
     for (const auto& expr : projection->expressions()) {
       auto expr_result = CreatePhysicalExpr(*expr, projection->input());
-      if (!expr_result.has_value()) {
+      if (!expr_result) {
         return std::unexpected(expr_result.error());
       }
-      exprs.push_back(std::move(expr_result.value()));
+      exprs.push_back(std::move(*expr_result));
     }
 
     std::vector<Field> fields;
     fields.reserve(projection->expressions().size());
     for (const auto& expr : projection->expressions()) {
       auto field_result = expr->ToField(projection->input());
-      if (!field_result.has_value()) {
+      if (!field_result) {
         return std::unexpected(field_result.error());
       }
-      fields.push_back(field_result.value());
+      fields.push_back(*field_result);
     }
 
-    return std::make_unique<ProjectionExec>(std::move(input_result.value()),
+    return std::make_unique<ProjectionExec>(std::move(*input_result),
                                             Schema(std::move(fields)),
                                             std::move(exprs));
   }

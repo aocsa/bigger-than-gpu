@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <ranges>
 #include <string>
@@ -220,16 +221,16 @@ class BooleanExpression : public Expression {
   [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
       const RecordBatch& input) const override {
     auto left_result = left_->Evaluate(input);
-    if (!left_result.has_value()) {
+    if (!left_result) {
       return std::unexpected(left_result.error());
     }
     auto right_result = right_->Evaluate(input);
-    if (!right_result.has_value()) {
+    if (!right_result) {
       return std::unexpected(right_result.error());
     }
 
-    auto& left_col = *left_result.value();
-    auto& right_col = *right_result.value();
+    auto& left_col = **left_result;
+    auto& right_col = **right_result;
 
     std::vector<bool> result;
     result.reserve(input.num_rows());
@@ -374,6 +375,154 @@ class GtEqExpression : public BooleanExpression {
 };
 
 // =============================================================================
+// Arithmetic Expression Base Class
+// =============================================================================
+
+/// @brief Base class for binary arithmetic expressions.
+class ArithmeticExpression : public Expression {
+ public:
+  ArithmeticExpression(ExpressionPtr left, ExpressionPtr right)
+      : left_(std::move(left)), right_(std::move(right)) {}
+
+  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+      const RecordBatch& input) const override {
+    auto left_result = left_->Evaluate(input);
+    if (!left_result) {
+      return std::unexpected(left_result.error());
+    }
+    auto right_result = right_->Evaluate(input);
+    if (!right_result) {
+      return std::unexpected(right_result.error());
+    }
+
+    auto& left_col = **left_result;
+    auto& right_col = **right_result;
+
+    // Use double for all arithmetic operations
+    std::vector<double> result;
+    result.reserve(input.num_rows());
+
+    for (size_t i = 0; i < input.num_rows(); ++i) {
+      Value left_val = left_col.GetValue(i);
+      Value right_val = right_col.GetValue(i);
+      result.push_back(EvaluatePair(left_val, right_val));
+    }
+
+    return std::make_shared<MaterializedColumnVector>(
+        ColumnData{std::move(result)}, datasource::DoubleType{});
+  }
+
+ protected:
+  /// @brief Evaluates the arithmetic operation on a pair of values.
+  [[nodiscard]] virtual double EvaluatePair(const Value& left,
+                                            const Value& right) const = 0;
+
+  /// @brief Helper to convert Value to double.
+  [[nodiscard]] static double ToDouble(const Value& val) {
+    return std::visit(
+        [](const auto& v) -> double {
+          using T = std::decay_t<decltype(v)>;
+          if constexpr (std::is_arithmetic_v<T>) {
+            return static_cast<double>(v);
+          } else {
+            return 0.0;  // Non-numeric types return 0
+          }
+        },
+        val);
+  }
+
+  ExpressionPtr left_;
+  ExpressionPtr right_;
+};
+
+// =============================================================================
+// Arithmetic Expressions
+// =============================================================================
+
+class AddExpression : public ArithmeticExpression {
+ public:
+  using ArithmeticExpression::ArithmeticExpression;
+
+  [[nodiscard]] std::string ToString() const override {
+    return "(" + left_->ToString() + " + " + right_->ToString() + ")";
+  }
+
+ protected:
+  [[nodiscard]] double EvaluatePair(const Value& left,
+                                    const Value& right) const override {
+    return ToDouble(left) + ToDouble(right);
+  }
+};
+
+class SubtractExpression : public ArithmeticExpression {
+ public:
+  using ArithmeticExpression::ArithmeticExpression;
+
+  [[nodiscard]] std::string ToString() const override {
+    return "(" + left_->ToString() + " - " + right_->ToString() + ")";
+  }
+
+ protected:
+  [[nodiscard]] double EvaluatePair(const Value& left,
+                                    const Value& right) const override {
+    return ToDouble(left) - ToDouble(right);
+  }
+};
+
+class MultiplyExpression : public ArithmeticExpression {
+ public:
+  using ArithmeticExpression::ArithmeticExpression;
+
+  [[nodiscard]] std::string ToString() const override {
+    return "(" + left_->ToString() + " * " + right_->ToString() + ")";
+  }
+
+ protected:
+  [[nodiscard]] double EvaluatePair(const Value& left,
+                                    const Value& right) const override {
+    return ToDouble(left) * ToDouble(right);
+  }
+};
+
+class DivideExpression : public ArithmeticExpression {
+ public:
+  using ArithmeticExpression::ArithmeticExpression;
+
+  [[nodiscard]] std::string ToString() const override {
+    return "(" + left_->ToString() + " / " + right_->ToString() + ")";
+  }
+
+ protected:
+  [[nodiscard]] double EvaluatePair(const Value& left,
+                                    const Value& right) const override {
+    double r = ToDouble(right);
+    if (r == 0.0) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    return ToDouble(left) / r;
+  }
+};
+
+class ModuloExpression : public ArithmeticExpression {
+ public:
+  using ArithmeticExpression::ArithmeticExpression;
+
+  [[nodiscard]] std::string ToString() const override {
+    return "(" + left_->ToString() + " % " + right_->ToString() + ")";
+  }
+
+ protected:
+  [[nodiscard]] double EvaluatePair(const Value& left,
+                                    const Value& right) const override {
+    double r = ToDouble(right);
+    if (r == 0.0) {
+      return std::numeric_limits<double>::quiet_NaN();
+    }
+    return std::fmod(ToDouble(left), r);
+  }
+};
+
+// =============================================================================
 // Logical Expressions
 // =============================================================================
 
@@ -414,6 +563,242 @@ class OrExpression : public BooleanExpression {
       return *lhs || *rhs;
     }
     return false;
+  }
+};
+
+// =============================================================================
+// Aggregate Expressions
+// =============================================================================
+
+/// @brief Base class for aggregate expressions.
+/// @details Aggregates compute a single value from all rows in the batch.
+class AggregateExpression : public Expression {
+ public:
+  explicit AggregateExpression(ExpressionPtr input)
+      : input_(std::move(input)) {}
+
+ protected:
+  /// @brief Helper to convert Value to double.
+  [[nodiscard]] static double ToDouble(const Value& val) {
+    return std::visit(
+        [](const auto& v) -> double {
+          using T = std::decay_t<decltype(v)>;
+          if constexpr (std::is_arithmetic_v<T>) {
+            return static_cast<double>(v);
+          } else {
+            return 0.0;
+          }
+        },
+        val);
+  }
+
+  ExpressionPtr input_;
+};
+
+/// @brief SUM aggregate - sums all values.
+class SumExpression : public AggregateExpression {
+ public:
+  using AggregateExpression::AggregateExpression;
+
+  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+      const RecordBatch& input) const override {
+    auto input_result = input_->Evaluate(input);
+    if (!input_result) {
+      return std::unexpected(input_result.error());
+    }
+
+    auto& col = **input_result;
+    double sum = 0.0;
+
+    for (size_t i = 0; i < col.size(); ++i) {
+      if (!col.IsNull(i)) {
+        sum += ToDouble(col.GetValue(i));
+      }
+    }
+
+    // Return single-row result
+    std::vector<double> result{sum};
+    return std::make_shared<MaterializedColumnVector>(
+        ColumnData{std::move(result)}, datasource::DoubleType{});
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "SUM(" + input_->ToString() + ")";
+  }
+};
+
+/// @brief AVG aggregate - computes average of values.
+class AvgExpression : public AggregateExpression {
+ public:
+  using AggregateExpression::AggregateExpression;
+
+  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+      const RecordBatch& input) const override {
+    auto input_result = input_->Evaluate(input);
+    if (!input_result) {
+      return std::unexpected(input_result.error());
+    }
+
+    auto& col = **input_result;
+    double sum = 0.0;
+    size_t count = 0;
+
+    for (size_t i = 0; i < col.size(); ++i) {
+      if (!col.IsNull(i)) {
+        sum += ToDouble(col.GetValue(i));
+        ++count;
+      }
+    }
+
+    double avg = (count > 0) ? (sum / static_cast<double>(count)) : 0.0;
+
+    std::vector<double> result{avg};
+    return std::make_shared<MaterializedColumnVector>(
+        ColumnData{std::move(result)}, datasource::DoubleType{});
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "AVG(" + input_->ToString() + ")";
+  }
+};
+
+/// @brief COUNT aggregate - counts non-null values.
+class CountExpression : public AggregateExpression {
+ public:
+  using AggregateExpression::AggregateExpression;
+
+  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+      const RecordBatch& input) const override {
+    auto input_result = input_->Evaluate(input);
+    if (!input_result) {
+      return std::unexpected(input_result.error());
+    }
+
+    auto& col = **input_result;
+    int64_t count = 0;
+
+    for (size_t i = 0; i < col.size(); ++i) {
+      if (!col.IsNull(i)) {
+        ++count;
+      }
+    }
+
+    std::vector<int64_t> result{count};
+    return std::make_shared<MaterializedColumnVector>(
+        ColumnData{std::move(result)}, datasource::Int64Type{});
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "COUNT(" + input_->ToString() + ")";
+  }
+};
+
+/// @brief COUNT(*) aggregate - counts all rows including nulls.
+class CountStarExpression : public Expression {
+ public:
+  CountStarExpression() = default;
+
+  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+      const RecordBatch& input) const override {
+    std::vector<int64_t> result{static_cast<int64_t>(input.num_rows())};
+    return std::make_shared<MaterializedColumnVector>(
+        ColumnData{std::move(result)}, datasource::Int64Type{});
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "COUNT(*)";
+  }
+};
+
+/// @brief MIN aggregate - finds minimum value.
+class MinExpression : public AggregateExpression {
+ public:
+  using AggregateExpression::AggregateExpression;
+
+  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+      const RecordBatch& input) const override {
+    auto input_result = input_->Evaluate(input);
+    if (!input_result) {
+      return std::unexpected(input_result.error());
+    }
+
+    auto& col = **input_result;
+    if (col.size() == 0) {
+      std::vector<double> result{std::numeric_limits<double>::quiet_NaN()};
+      return std::make_shared<MaterializedColumnVector>(
+          ColumnData{std::move(result)}, datasource::DoubleType{});
+    }
+
+    double min_val = std::numeric_limits<double>::max();
+    bool found = false;
+
+    for (size_t i = 0; i < col.size(); ++i) {
+      if (!col.IsNull(i)) {
+        double val = ToDouble(col.GetValue(i));
+        if (!found || val < min_val) {
+          min_val = val;
+          found = true;
+        }
+      }
+    }
+
+    if (!found) {
+      min_val = std::numeric_limits<double>::quiet_NaN();
+    }
+
+    std::vector<double> result{min_val};
+    return std::make_shared<MaterializedColumnVector>(
+        ColumnData{std::move(result)}, datasource::DoubleType{});
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "MIN(" + input_->ToString() + ")";
+  }
+};
+
+/// @brief MAX aggregate - finds maximum value.
+class MaxExpression : public AggregateExpression {
+ public:
+  using AggregateExpression::AggregateExpression;
+
+  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+      const RecordBatch& input) const override {
+    auto input_result = input_->Evaluate(input);
+    if (!input_result) {
+      return std::unexpected(input_result.error());
+    }
+
+    auto& col = **input_result;
+    if (col.size() == 0) {
+      std::vector<double> result{std::numeric_limits<double>::quiet_NaN()};
+      return std::make_shared<MaterializedColumnVector>(
+          ColumnData{std::move(result)}, datasource::DoubleType{});
+    }
+
+    double max_val = std::numeric_limits<double>::lowest();
+    bool found = false;
+
+    for (size_t i = 0; i < col.size(); ++i) {
+      if (!col.IsNull(i)) {
+        double val = ToDouble(col.GetValue(i));
+        if (!found || val > max_val) {
+          max_val = val;
+          found = true;
+        }
+      }
+    }
+
+    if (!found) {
+      max_val = std::numeric_limits<double>::quiet_NaN();
+    }
+
+    std::vector<double> result{max_val};
+    return std::make_shared<MaterializedColumnVector>(
+        ColumnData{std::move(result)}, datasource::DoubleType{});
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "MAX(" + input_->ToString() + ")";
   }
 };
 

@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "column_vector.hpp"
+#include "compression.hpp"
 #include "encoding.hpp"
 #include "metadata.hpp"
 #include "page_reader.hpp"
@@ -45,15 +46,17 @@ class ColumnReader {
   /// @param field The schema field for this column.
   /// @param column_meta The column chunk metadata.
   /// @param data The raw bytes of the column chunk.
+  /// @param codec The compression codec for this column.
   ColumnReader(const Field& field, const ColumnChunkMetadata& column_meta,
-               std::span<const uint8_t> data)
+               std::span<const uint8_t> data,
+               std::unique_ptr<CompressionCodec> codec)
       : field_(field),
         column_meta_(column_meta),
         data_(data),
         page_reader_(data, column_meta.type,
                      field.IsNullable() ? 1 : 0,  // max def level
-                     0)                           // max rep level for flat schema
-  {}
+                     0),                          // max rep level for flat schema
+        codec_(std::move(codec)) {}
 
   /// @brief Reads all values from this column chunk into a column vector.
   /// @return The column vector on success, or decode error.
@@ -72,7 +75,14 @@ class ColumnReader {
       if (!page_data_result.has_value()) {
         return std::unexpected(page_data_result.error());
       }
-      auto page_data = page_data_result.value();
+      auto compressed_data = page_data_result.value();
+
+      // Decompress page data if needed.
+      auto decompressed_result = DecompressPageData(header, compressed_data);
+      if (!decompressed_result.has_value()) {
+        return std::unexpected(decompressed_result.error());
+      }
+      auto page_data = decompressed_result.value();
 
       switch (header.type) {
         case PageType::kDictionaryPage:
@@ -81,14 +91,14 @@ class ColumnReader {
         case PageType::kDataPage: {
           auto status = ReadDataPage(header, page_data, column.get());
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
         case PageType::kDataPageV2: {
           auto status = ReadDataPageV2(header, page_data, column.get());
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
@@ -102,6 +112,43 @@ class ColumnReader {
   }
 
  private:
+  // ===========================================================================
+  // Decompression
+  // ===========================================================================
+
+  /// @brief Decompresses page data if compression is enabled.
+  /// @param header The page header with size information.
+  /// @param compressed_data The potentially compressed page data.
+  /// @return Span to decompressed data (either original or buffer).
+  [[nodiscard]] Result<std::span<const uint8_t>> DecompressPageData(
+      const PageHeader& header, std::span<const uint8_t> compressed_data) {
+    // Check if decompression is needed.
+    bool needs_decompression =
+        (codec_->type() != CompressionType::kUncompressed) &&
+        (header.compressed_page_size != header.uncompressed_page_size);
+
+    // For DataPageV2, check the is_compressed flag.
+    if (header.type == PageType::kDataPageV2 && !header.is_compressed) {
+      needs_decompression = false;
+    }
+
+    if (!needs_decompression) {
+      return Result<std::span<const uint8_t>>{
+          std::in_place, compressed_data.data(), compressed_data.size()};
+    }
+
+    // Decompress the data.
+    auto result =
+        codec_->Decompress(compressed_data, header.uncompressed_page_size);
+    if (!result.has_value()) {
+      return std::unexpected(result.error());
+    }
+
+    decompression_buffer_ = std::move(result.value());
+    return Result<std::span<const uint8_t>>{
+        std::in_place, decompression_buffer_.data(), decompression_buffer_.size()};
+  }
+
   // ===========================================================================
   // Page Reading
   // ===========================================================================
@@ -135,7 +182,7 @@ class ColumnReader {
       auto levels_result = DecodeDefinitionLevelsRle(
           data.subspan(pos, def_level_length), max_def_level, header.num_values);
       if (!levels_result.has_value()) {
-        return levels_result.error();
+        return std::unexpected(levels_result.error());
       }
       def_levels = std::move(levels_result.value());
       pos += def_level_length;
@@ -165,7 +212,7 @@ class ColumnReader {
       auto levels_result =
           DecodeDefinitionLevelsRle(def_data, max_def_level, header.num_values);
       if (!levels_result.has_value()) {
-        return levels_result.error();
+        return std::unexpected(levels_result.error());
       }
       def_levels = std::move(levels_result.value());
       pos += header.definition_levels_byte_length;
@@ -192,9 +239,53 @@ class ColumnReader {
     decoder.SetData(data, num_values);
     auto status = decoder.ReadBatch(levels);
     if (!status.ok()) {
-      return std::unexpected(status);
+      return std::unexpected(status.error());
     }
     return levels;
+  }
+
+  // ===========================================================================
+  // Definition Level Processing Helper
+  // ===========================================================================
+
+  /// @brief Processes values with definition levels using provided callbacks.
+  /// @tparam ReadFn Callable: () -> Result<T> reads the next value.
+  /// @tparam AppendFn Callable: (T&&) -> void appends a value to the column.
+  /// @tparam AppendNullFn Callable: () -> void appends a null to the column.
+  /// @param num_values Number of non-null values to read (when def_levels empty).
+  /// @param def_levels Definition levels (empty if all values present).
+  /// @param read_fn Function to read the next value from decoder.
+  /// @param append_fn Function to append a value to the column.
+  /// @param append_null_fn Function to append a null to the column.
+  /// @return Status::OK() on success, or error from read_fn.
+  template <typename ReadFn, typename AppendFn, typename AppendNullFn>
+  [[nodiscard]] Status ProcessWithDefLevels(
+      size_t num_values, const std::vector<int32_t>& def_levels,
+      ReadFn&& read_fn, AppendFn&& append_fn, AppendNullFn&& append_null_fn) {
+    if (def_levels.empty()) {
+      // All values present.
+      for (size_t i = 0; i < num_values; ++i) {
+        auto result = read_fn();
+        if (!result.has_value()) {
+          return std::unexpected(result.error());
+        }
+        append_fn(std::move(result.value()));
+      }
+    } else {
+      // Check definition levels for nulls.
+      for (size_t i = 0; i < def_levels.size(); ++i) {
+        if (def_levels[i] == 1) {
+          auto result = read_fn();
+          if (!result.has_value()) {
+            return std::unexpected(result.error());
+          }
+          append_fn(std::move(result.value()));
+        } else {
+          append_null_fn();
+        }
+      }
+    }
+    return Status::OK();
   }
 
   // ===========================================================================
@@ -260,30 +351,11 @@ class ColumnReader {
     decoder.SetData(data);
     decoder.SetNumValues(num_values);
 
-    if (def_levels.empty()) {
-      // All values present.
-      for (size_t i = 0; i < num_values; ++i) {
-        auto result = decoder.ReadValue();
-        if (!result.has_value()) {
-          return result.error();
-        }
-        typed_col->Append(result.value());
-      }
-    } else {
-      // Check definition levels for nulls.
-      for (size_t i = 0; i < def_levels.size(); ++i) {
-        if (def_levels[i] == 1) {
-          auto result = decoder.ReadValue();
-          if (!result.has_value()) {
-            return result.error();
-          }
-          typed_col->Append(result.value());
-        } else {
-          typed_col->AppendNull();
-        }
-      }
-    }
-    return Status::OK();
+    return ProcessWithDefLevels(
+        num_values, def_levels,
+        [&decoder]() { return decoder.ReadValue(); },
+        [typed_col](bool val) { typed_col->Append(val); },
+        [typed_col]() { typed_col->AppendNull(); });
   }
 
   template <typename T>
@@ -305,28 +377,11 @@ class ColumnReader {
     PlainDecoder<T> decoder;
     decoder.SetData(data);
 
-    if (def_levels.empty()) {
-      for (size_t i = 0; i < num_values; ++i) {
-        auto result = decoder.ReadValue();
-        if (!result.has_value()) {
-          return result.error();
-        }
-        typed_col->Append(result.value());
-      }
-    } else {
-      for (size_t i = 0; i < def_levels.size(); ++i) {
-        if (def_levels[i] == 1) {
-          auto result = decoder.ReadValue();
-          if (!result.has_value()) {
-            return result.error();
-          }
-          typed_col->Append(result.value());
-        } else {
-          typed_col->AppendNull();
-        }
-      }
-    }
-    return Status::OK();
+    return ProcessWithDefLevels(
+        num_values, def_levels,
+        [&decoder]() { return decoder.ReadValue(); },
+        [typed_col](T val) { typed_col->Append(val); },
+        [typed_col]() { typed_col->AppendNull(); });
   }
 
   template <typename T>
@@ -354,36 +409,22 @@ class ColumnReader {
                             [](int32_t level) { return level == 1; });
     index_decoder.SetData(indices_data, non_null_count);
 
-    if (def_levels.empty()) {
-      for (size_t i = 0; i < num_values; ++i) {
-        auto idx_result = index_decoder.ReadValue();
-        if (!idx_result.has_value()) {
-          return idx_result.error();
-        }
-        int32_t idx = idx_result.value();
-        if (idx < 0 || static_cast<size_t>(idx) >= dictionary.size()) {
-          return Status::OutOfRange("Dictionary index out of range");
-        }
-        column->Append(dictionary[idx]);
-      }
-    } else {
-      for (size_t i = 0; i < def_levels.size(); ++i) {
-        if (def_levels[i] == 1) {
+    return ProcessWithDefLevels(
+        num_values, def_levels,
+        [&index_decoder, &dictionary]() -> Result<T> {
           auto idx_result = index_decoder.ReadValue();
           if (!idx_result.has_value()) {
-            return idx_result.error();
+            return std::unexpected(idx_result.error());
           }
           int32_t idx = idx_result.value();
           if (idx < 0 || static_cast<size_t>(idx) >= dictionary.size()) {
-            return Status::OutOfRange("Dictionary index out of range");
+            return std::unexpected(
+                Status::OutOfRange("Dictionary index out of range"));
           }
-          column->Append(dictionary[idx]);
-        } else {
-          column->AppendNull();
-        }
-      }
-    }
-    return Status::OK();
+          return dictionary[idx];
+        },
+        [column](T val) { column->Append(val); },
+        [column]() { column->AppendNull(); });
   }
 
   [[nodiscard]] Status DecodeBinaryValues(Encoding encoding,
@@ -406,28 +447,11 @@ class ColumnReader {
     PlainBinaryDecoder decoder;
     decoder.SetData(data);
 
-    if (def_levels.empty()) {
-      for (size_t i = 0; i < num_values; ++i) {
-        auto result = decoder.ReadValue();
-        if (!result.has_value()) {
-          return result.error();
-        }
-        str_col->Append(std::move(result.value()));
-      }
-    } else {
-      for (size_t i = 0; i < def_levels.size(); ++i) {
-        if (def_levels[i] == 1) {
-          auto result = decoder.ReadValue();
-          if (!result.has_value()) {
-            return result.error();
-          }
-          str_col->Append(std::move(result.value()));
-        } else {
-          str_col->AppendNull();
-        }
-      }
-    }
-    return Status::OK();
+    return ProcessWithDefLevels(
+        num_values, def_levels,
+        [&decoder]() { return decoder.ReadValue(); },
+        [str_col](std::string val) { str_col->Append(std::move(val)); },
+        [str_col]() { str_col->AppendNull(); });
   }
 
   [[nodiscard]] Status DecodeDictionaryBinaryValues(
@@ -441,7 +465,7 @@ class ColumnReader {
     for (size_t i = 0; i < static_cast<size_t>(dict_num_values_); ++i) {
       auto result = dict_decoder.ReadValue();
       if (!result.has_value()) {
-        return result.error();
+        return std::unexpected(result.error());
       }
       dictionary.push_back(std::move(result.value()));
     }
@@ -461,36 +485,22 @@ class ColumnReader {
                             [](int32_t level) { return level == 1; });
     index_decoder.SetData(indices_data, non_null_count);
 
-    if (def_levels.empty()) {
-      for (size_t i = 0; i < num_values; ++i) {
-        auto idx_result = index_decoder.ReadValue();
-        if (!idx_result.has_value()) {
-          return idx_result.error();
-        }
-        int32_t idx = idx_result.value();
-        if (idx < 0 || static_cast<size_t>(idx) >= dictionary.size()) {
-          return Status::OutOfRange("Dictionary index out of range");
-        }
-        column->Append(dictionary[idx]);
-      }
-    } else {
-      for (size_t i = 0; i < def_levels.size(); ++i) {
-        if (def_levels[i] == 1) {
+    return ProcessWithDefLevels(
+        num_values, def_levels,
+        [&index_decoder, &dictionary]() -> Result<std::string> {
           auto idx_result = index_decoder.ReadValue();
           if (!idx_result.has_value()) {
-            return idx_result.error();
+            return std::unexpected(idx_result.error());
           }
           int32_t idx = idx_result.value();
           if (idx < 0 || static_cast<size_t>(idx) >= dictionary.size()) {
-            return Status::OutOfRange("Dictionary index out of range");
+            return std::unexpected(
+                Status::OutOfRange("Dictionary index out of range"));
           }
-          column->Append(dictionary[idx]);
-        } else {
-          column->AppendNull();
-        }
-      }
-    }
-    return Status::OK();
+          return dictionary[idx];
+        },
+        [column](std::string val) { column->Append(std::move(val)); },
+        [column]() { column->AppendNull(); });
   }
 
   [[nodiscard]] Status DecodeFixedLenByteArrayValues(
@@ -504,34 +514,20 @@ class ColumnReader {
     int32_t type_length = field_.type_length.value_or(0);
     size_t pos = 0;
 
-    if (def_levels.empty()) {
-      for (size_t i = 0; i < num_values; ++i) {
-        if (pos + type_length > data.size()) {
-          return Status::PageDecodeError(
-              "Not enough data for fixed len byte array");
-        }
-        std::string value(reinterpret_cast<const char*>(data.data() + pos),
-                          type_length);
-        str_col->Append(std::move(value));
-        pos += type_length;
-      }
-    } else {
-      for (size_t i = 0; i < def_levels.size(); ++i) {
-        if (def_levels[i] == 1) {
+    return ProcessWithDefLevels(
+        num_values, def_levels,
+        [&data, &pos, type_length]() -> Result<std::string> {
           if (pos + type_length > data.size()) {
-            return Status::PageDecodeError(
-                "Not enough data for fixed len byte array");
+            return std::unexpected(Status::PageDecodeError(
+                "Not enough data for fixed len byte array"));
           }
           std::string value(reinterpret_cast<const char*>(data.data() + pos),
                             type_length);
-          str_col->Append(std::move(value));
           pos += type_length;
-        } else {
-          str_col->AppendNull();
-        }
-      }
-    }
-    return Status::OK();
+          return value;
+        },
+        [str_col](std::string val) { str_col->Append(std::move(val)); },
+        [str_col]() { str_col->AppendNull(); });
   }
 
   [[nodiscard]] Status DecodeInt96Values(
@@ -546,32 +542,20 @@ class ColumnReader {
     constexpr size_t INT96_SIZE = 12;
     size_t pos = 0;
 
-    if (def_levels.empty()) {
-      for (size_t i = 0; i < num_values; ++i) {
-        if (pos + INT96_SIZE > data.size()) {
-          return Status::PageDecodeError("Not enough data for INT96");
-        }
-        std::string value(reinterpret_cast<const char*>(data.data() + pos),
-                          INT96_SIZE);
-        str_col->Append(std::move(value));
-        pos += INT96_SIZE;
-      }
-    } else {
-      for (size_t i = 0; i < def_levels.size(); ++i) {
-        if (def_levels[i] == 1) {
+    return ProcessWithDefLevels(
+        num_values, def_levels,
+        [&data, &pos]() -> Result<std::string> {
           if (pos + INT96_SIZE > data.size()) {
-            return Status::PageDecodeError("Not enough data for INT96");
+            return std::unexpected(
+                Status::PageDecodeError("Not enough data for INT96"));
           }
           std::string value(reinterpret_cast<const char*>(data.data() + pos),
                             INT96_SIZE);
-          str_col->Append(std::move(value));
           pos += INT96_SIZE;
-        } else {
-          str_col->AppendNull();
-        }
-      }
-    }
-    return Status::OK();
+          return value;
+        },
+        [str_col](std::string val) { str_col->Append(std::move(val)); },
+        [str_col]() { str_col->AppendNull(); });
   }
 
   // ===========================================================================
@@ -582,11 +566,15 @@ class ColumnReader {
   ColumnChunkMetadata column_meta_;
   std::span<const uint8_t> data_;
   PageReader page_reader_;
+  std::unique_ptr<CompressionCodec> codec_;
 
   // Dictionary state.
   bool has_dictionary_ = false;
   std::vector<uint8_t> dictionary_data_;
   int32_t dict_num_values_ = 0;
+
+  // Decompression buffer (reused across pages).
+  std::vector<uint8_t> decompression_buffer_;
 };
 
 }  // namespace quest::datasource

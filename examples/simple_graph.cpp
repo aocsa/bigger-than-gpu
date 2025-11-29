@@ -1,10 +1,12 @@
 /// @file simple_graph.cpp
 /// @brief Example demonstrating the taskflow DSL for a simple query pipeline
 
+#include <format>
+#include <iostream>
 #include <quest/quest.hpp>
 #include <quest/taskflow/graph.hpp>
-#include <iostream>
-#include <format>
+
+#include "quest/datasource/data_source.hpp"
 
 using namespace quest;
 using namespace quest::taskflow;
@@ -17,46 +19,44 @@ using namespace quest::cache;
 /// @brief Table scan operator that generates sample data
 class TableScanOperator : public Operator {
 public:
-    TableScanOperator(std::uint32_t id, std::string table_name, std::size_t num_batches = 5)
+    TableScanOperator(std::uint32_t id, std::string table_name, std::shared_ptr<datasource::DataSource> data_source)
         : Operator(id, std::format("TableScan({})", table_name), OperatorType::TableScan)
         , table_name_(std::move(table_name))
-        , num_batches_(num_batches) {}
+        , data_source_(data_source) {}
     
     [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
     
     [[nodiscard]] ExecutionStatus run() override {
         std::cout << std::format("[{}] Starting scan of '{}'\n", id(), table_name_);
-        
-        for (std::size_t i = 0; i < num_batches_; ++i) {
-            // Generate sample batch (1KB of data, 100 rows, 4 columns)
-            auto data = std::make_shared<CPUCacheData>(
-                std::format("batch_{}_{}", id(), i),
-                std::vector<std::byte>(1024),
-                100,  // rows
-                4     // columns
-            );
-            
-            auto status = add_to_output(std::move(data));
-            if (!status.ok()) {
-                std::cerr << std::format("[{}] Failed to add batch: {}\n", 
-                    id(), status.message());
-                return ExecutionStatus::Stop;
-            }
-            
-            std::cout << std::format("[{}] Produced batch {}/{}\n", 
-                id(), i + 1, num_batches_);
-            
-            // Flow control
-            wait_if_output_saturated();
+      std::vector<std::string> proj;
+        for (const auto& field : data_source_->schema().fields()) {
+          proj.push_back(field.name);
         }
-        
+
+
+        auto sequence = data_source_->Scan(proj);
+
+      for (auto iter = sequence.begin(); iter != sequence.end(); ++iter) {
+        auto batch_result = *iter;
+        if (!batch_result) {
+          return ExecutionStatus::Stop;
+        }
+        // callback(std::move(*batch_result));
+        auto cache_data = std::move(batch_result.value());
+        auto add_status = add_to_output(std::move(cache_data));
+        if (!add_status.ok()) {
+          // Failed to add to output - stop execution.
+          return ExecutionStatus::Stop;
+        }
+      }
+
         std::cout << std::format("[{}] Scan complete\n", id());
         return ExecutionStatus::Proceed;
     }
 
 private:
     std::string table_name_;
-    std::size_t num_batches_;
+    std::shared_ptr<datasource::DataSource>  data_source_;
 };
 
 /// @brief Filter operator that passes through data

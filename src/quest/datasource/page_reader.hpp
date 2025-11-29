@@ -126,35 +126,35 @@ class PageHeaderParser {
         case 5: {  // data_page_header
           auto status = ParseDataPageHeader(decoder, header);
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
         case 6: {  // index_page_header
           auto status = decoder.SkipStruct();
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
         case 7: {  // dictionary_page_header
           auto status = ParseDictionaryPageHeader(decoder, header);
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
         case 8: {  // data_page_header_v2
           auto status = ParseDataPageHeaderV2(decoder, header);
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
         default: {
           auto status = decoder.SkipField(field->type);
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
@@ -170,7 +170,7 @@ class PageHeaderParser {
     while (true) {
       auto field_result = decoder.ReadFieldHeader(last_field_id);
       if (!field_result.has_value()) {
-        return field_result.error();
+        return std::unexpected(field_result.error());
       }
       auto field = field_result.value();
       if (!field) {
@@ -182,7 +182,7 @@ class PageHeaderParser {
         case 1: {  // num_values
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           header.num_values = result.value();
           break;
@@ -190,7 +190,7 @@ class PageHeaderParser {
         case 2: {  // encoding
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           header.encoding = static_cast<Encoding>(result.value());
           break;
@@ -198,7 +198,7 @@ class PageHeaderParser {
         case 3: {  // definition_level_encoding
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           header.definition_level_encoding =
               static_cast<Encoding>(result.value());
@@ -207,7 +207,7 @@ class PageHeaderParser {
         case 4: {  // repetition_level_encoding
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           header.repetition_level_encoding =
               static_cast<Encoding>(result.value());
@@ -232,7 +232,7 @@ class PageHeaderParser {
     while (true) {
       auto field_result = decoder.ReadFieldHeader(last_field_id);
       if (!field_result.has_value()) {
-        return field_result.error();
+        return std::unexpected(field_result.error());
       }
       auto field = field_result.value();
       if (!field) {
@@ -244,7 +244,7 @@ class PageHeaderParser {
         case 1: {  // num_values
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           header.num_values = result.value();
           break;
@@ -252,7 +252,7 @@ class PageHeaderParser {
         case 2: {  // num_nulls
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           header.num_nulls = result.value();
           break;
@@ -260,7 +260,7 @@ class PageHeaderParser {
         case 3: {  // num_rows
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           header.num_rows = result.value();
           break;
@@ -268,7 +268,7 @@ class PageHeaderParser {
         case 4: {  // encoding
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           header.encoding = static_cast<Encoding>(result.value());
           break;
@@ -276,7 +276,7 @@ class PageHeaderParser {
         case 5: {  // definition_levels_byte_length
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           header.definition_levels_byte_length = result.value();
           break;
@@ -284,7 +284,7 @@ class PageHeaderParser {
         case 6: {  // repetition_levels_byte_length
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           header.repetition_levels_byte_length = result.value();
           break;
@@ -312,7 +312,7 @@ class PageHeaderParser {
     while (true) {
       auto field_result = decoder.ReadFieldHeader(last_field_id);
       if (!field_result.has_value()) {
-        return field_result.error();
+        return std::unexpected(field_result.error());
       }
       auto field = field_result.value();
       if (!field) {
@@ -324,7 +324,7 @@ class PageHeaderParser {
         case 1: {  // num_values
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           header.num_dict_values = result.value();
           break;
@@ -332,7 +332,7 @@ class PageHeaderParser {
         case 2: {  // encoding
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           header.dict_encoding = static_cast<Encoding>(result.value());
           break;
@@ -448,7 +448,7 @@ class PageReader {
   decoder.SetData(data.subspan(4, rle_length), num_values);
   auto status = decoder.ReadBatch(levels);
   if (!status.ok()) {
-    return std::unexpected(status);
+    return std::unexpected(status.error());
   }
 
   return levels;

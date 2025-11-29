@@ -178,15 +178,29 @@ class Port {
   [[nodiscard]] auto end() const { return batch_holder_registry_.end(); }
 
  private:
+  // Type alias for the registry map
+  using RegistryMap = std::map<std::string, std::shared_ptr<cache::IBatchHolder>>;
+
   /// @brief Gets the default port name based on the owning operator's ID.
   [[nodiscard]] std::string default_port_name() const;
+
+  /// @brief Resolves the port name (uses default if empty) and returns the name.
+  [[nodiscard]] std::string resolve_port_name(const std::string& port_name) const;
+
+  /// @brief Looks up a port and returns an iterator. Throws if not found.
+  [[nodiscard]] RegistryMap::iterator find_port_or_throw(const std::string& port_name);
+
+  /// @brief Looks up a port and returns a const iterator. Throws if not found.
+  [[nodiscard]] RegistryMap::const_iterator find_port_or_throw(const std::string& port_name) const;
+
+  /// @brief Looks up a port and returns an iterator (no throw, may be end()).
+  [[nodiscard]] RegistryMap::const_iterator find_port(const std::string& port_name) const;
 
   // The operator that owns this port.
   Operator* owner_operator_;
 
   // Registry mapping port names to batch holders.
-  std::map<std::string, std::shared_ptr<cache::IBatchHolder>>
-      batch_holder_registry_;
+  RegistryMap batch_holder_registry_;
 };
 
 // =============================================================================

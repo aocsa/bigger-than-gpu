@@ -21,6 +21,7 @@
 #include <vector>
 
 #include "column_reader.hpp"
+#include "compression.hpp"
 #include "metadata.hpp"
 #include "quest/result.hpp"
 #include "record_batch.hpp"
@@ -55,8 +56,7 @@ class FileHandle {
     handle.path_ = path;
     handle.stream_.open(path, std::ios::binary | std::ios::ate);
     if (!handle.stream_) {
-      return std::unexpected(
-          Status::IOError("Failed to open file: " + path));
+      return Status::IOError("Failed to open file: " + path);
     }
     handle.file_size_ = handle.stream_.tellg();
     handle.stream_.seekg(0);
@@ -100,7 +100,7 @@ class FileHandle {
     std::vector<uint8_t> buffer;
     auto status = Read(offset, length, buffer);
     if (!status.ok()) {
-      return std::unexpected(status);
+      return std::unexpected(status.error());
     }
     return buffer;
   }
@@ -155,12 +155,12 @@ class ParquetFileReader {
     // Validate format and read metadata.
     auto validate_status = reader.ValidateFileFormat();
     if (!validate_status.ok()) {
-      return std::unexpected(validate_status);
+      return std::unexpected(validate_status.error());
     }
 
     auto metadata_status = reader.ReadMetadata();
     if (!metadata_status.ok()) {
-      return std::unexpected(metadata_status);
+      return std::unexpected(metadata_status.error());
     }
 
     return reader;
@@ -247,8 +247,15 @@ class ParquetFileReader {
         return std::unexpected(column_data_result.error());
       }
 
+      // Create compression codec for this column.
+      auto codec_result = CreateCodec(column_meta.codec);
+      if (!codec_result.has_value()) {
+        return std::unexpected(codec_result.error());
+      }
+
       ColumnReader reader(schema_.field(col_idx), column_meta,
-                          column_data_result.value());
+                          column_data_result.value(),
+                          std::move(codec_result.value()));
       auto column_result = reader.ReadAll();
       if (!column_result.has_value()) {
         return std::unexpected(column_result.error());
@@ -331,7 +338,7 @@ class ParquetFileReader {
     // Check magic at start.
     auto start_magic_result = file_.Read(0, kMagicSize);
     if (!start_magic_result.has_value()) {
-      return start_magic_result.error();
+      return std::unexpected(start_magic_result.error());
     }
     if (std::memcmp(start_magic_result.value().data(), kParquetMagic,
                     kMagicSize) != 0) {
@@ -342,7 +349,7 @@ class ParquetFileReader {
     // Check magic at end.
     auto end_magic_result = file_.Read(file_.size() - kMagicSize, kMagicSize);
     if (!end_magic_result.has_value()) {
-      return end_magic_result.error();
+      return std::unexpected(end_magic_result.error());
     }
     if (std::memcmp(end_magic_result.value().data(), kParquetMagic,
                     kMagicSize) != 0) {
@@ -357,7 +364,7 @@ class ParquetFileReader {
     // Read footer length (4 bytes before final magic).
     auto footer_len_result = file_.Read(file_.size() - kFooterSize, 4);
     if (!footer_len_result.has_value()) {
-      return footer_len_result.error();
+      return std::unexpected(footer_len_result.error());
     }
     uint32_t footer_length;
     std::memcpy(&footer_length, footer_len_result.value().data(), 4);
@@ -366,13 +373,13 @@ class ParquetFileReader {
     size_t footer_start = file_.size() - kFooterSize - footer_length;
     auto footer_data_result = file_.Read(footer_start, footer_length);
     if (!footer_data_result.has_value()) {
-      return footer_data_result.error();
+      return std::unexpected(footer_data_result.error());
     }
 
     // Parse Thrift-encoded metadata.
     auto metadata_result = MetadataParser::Parse(footer_data_result.value());
     if (!metadata_result.has_value()) {
-      return metadata_result.error();
+      return std::unexpected(metadata_result.error());
     }
     metadata_ = std::move(metadata_result.value());
 

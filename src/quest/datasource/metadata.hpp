@@ -51,6 +51,7 @@ struct ColumnChunkMetadata {
   PhysicalType type = PhysicalType::kBoolean;
   std::vector<Encoding> encodings;
   std::vector<std::string> path_in_schema;
+  CompressionType codec = CompressionType::kUncompressed;
   int64_t num_values = 0;
   int64_t total_uncompressed_size = 0;
   int64_t total_compressed_size = 0;
@@ -180,7 +181,7 @@ class MetadataParser {
         default: {
           auto status = decoder.SkipField(header->type);
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
@@ -282,7 +283,7 @@ class MetadataParser {
         default: {
           auto status = decoder.SkipField(header->type);
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
@@ -384,7 +385,7 @@ class MetadataParser {
         default: {
           auto status = decoder.SkipField(header->type);
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
@@ -454,14 +455,14 @@ class MetadataParser {
         case 3: {  // meta_data
           auto status = ParseColumnMetadata(decoder, cc);
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
         default: {
           auto status = decoder.SkipField(header->type);
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
@@ -477,7 +478,7 @@ class MetadataParser {
     while (true) {
       auto header_result = decoder.ReadFieldHeader(last_field_id);
       if (!header_result.has_value()) {
-        return header_result.error();
+        return std::unexpected(header_result.error());
       }
       auto header = header_result.value();
       if (!header) {
@@ -489,7 +490,7 @@ class MetadataParser {
         case 1: {  // type
           auto result = decoder.ReadI32();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           cc.type = static_cast<PhysicalType>(result.value());
           break;
@@ -497,7 +498,7 @@ class MetadataParser {
         case 2: {  // encodings
           auto result = ParseEncodings(decoder);
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           cc.encodings = std::move(result.value());
           break;
@@ -505,15 +506,23 @@ class MetadataParser {
         case 3: {  // path_in_schema
           auto result = ParseStringList(decoder);
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           cc.path_in_schema = std::move(result.value());
+          break;
+        }
+        case 4: {  // codec (compression)
+          auto result = decoder.ReadI32();
+          if (!result.has_value()) {
+            return std::unexpected(result.error());
+          }
+          cc.codec = static_cast<CompressionType>(result.value());
           break;
         }
         case 5: {  // num_values
           auto result = decoder.ReadI64();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           cc.num_values = result.value();
           break;
@@ -521,7 +530,7 @@ class MetadataParser {
         case 6: {  // total_uncompressed_size
           auto result = decoder.ReadI64();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           cc.total_uncompressed_size = result.value();
           break;
@@ -529,7 +538,7 @@ class MetadataParser {
         case 7: {  // total_compressed_size
           auto result = decoder.ReadI64();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           cc.total_compressed_size = result.value();
           break;
@@ -537,7 +546,7 @@ class MetadataParser {
         case 9: {  // data_page_offset
           auto result = decoder.ReadI64();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           cc.data_page_offset = result.value();
           break;
@@ -545,7 +554,7 @@ class MetadataParser {
         case 10: {  // index_page_offset
           auto result = decoder.ReadI64();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           cc.index_page_offset = result.value();
           break;
@@ -553,7 +562,7 @@ class MetadataParser {
         case 11: {  // dictionary_page_offset
           auto result = decoder.ReadI64();
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           cc.dictionary_page_offset = result.value();
           break;
@@ -561,7 +570,7 @@ class MetadataParser {
         case 12: {  // statistics
           auto result = ParseStatistics(decoder);
           if (!result.has_value()) {
-            return result.error();
+            return std::unexpected(result.error());
           }
           cc.statistics = std::move(result.value());
           break;
@@ -683,7 +692,7 @@ class MetadataParser {
           } else {
             auto status = decoder.SkipField(header->type);
             if (!status.ok()) {
-              return std::unexpected(status);
+              return std::unexpected(status.error());
             }
           }
           break;
@@ -698,7 +707,7 @@ class MetadataParser {
           } else {
             auto status = decoder.SkipField(header->type);
             if (!status.ok()) {
-              return std::unexpected(status);
+              return std::unexpected(status.error());
             }
           }
           break;
@@ -706,7 +715,7 @@ class MetadataParser {
         default: {
           auto status = decoder.SkipField(header->type);
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }
@@ -771,7 +780,7 @@ class MetadataParser {
         default: {
           auto status = decoder.SkipField(header->type);
           if (!status.ok()) {
-            return std::unexpected(status);
+            return std::unexpected(status.error());
           }
           break;
         }

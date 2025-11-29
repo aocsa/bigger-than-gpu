@@ -61,6 +61,18 @@ enum class PageType : int8_t {
   kDataPageV2 = 3
 };
 
+// Compression codecs supported by Parquet
+enum class CompressionType : int8_t {
+  kUncompressed = 0,
+  kSnappy = 1,
+  kGzip = 2,
+  kLzo = 3,
+  kBrotli = 4,
+  kLz4 = 5,
+  kZstd = 6,
+  kLz4Raw = 7
+};
+
 // Repetition levels
 enum class Repetition : int8_t { kRequired = 0, kOptional = 1, kRepeated = 2 };
 

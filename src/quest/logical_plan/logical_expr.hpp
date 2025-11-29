@@ -255,6 +255,226 @@ class LtEq : public BooleanBinaryExpr {
 };
 
 // =============================================================================
+// Arithmetic Operators
+// =============================================================================
+
+/// @brief Base class for arithmetic binary expressions.
+/// @details Arithmetic expressions derive their output type from the input types.
+class ArithmeticBinaryExpr : public BinaryExpr {
+ public:
+  using BinaryExpr::BinaryExpr;
+
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override {
+    auto left_field = left_->ToField(input);
+    if (!left_field.has_value()) {
+      return left_field;
+    }
+    // Use the left operand's type for the result (could be improved with type promotion)
+    return Field{left_->ToString() + " " + op_ + " " + right_->ToString(),
+                 left_field.value().data_type};
+  }
+};
+
+class Add : public ArithmeticBinaryExpr {
+ public:
+  Add(LogicalExprPtr left, LogicalExprPtr right)
+      : ArithmeticBinaryExpr(std::move(left), std::move(right), "+") {}
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
+    return std::make_unique<Add>(left_->Clone(), right_->Clone());
+  }
+};
+
+class Subtract : public ArithmeticBinaryExpr {
+ public:
+  Subtract(LogicalExprPtr left, LogicalExprPtr right)
+      : ArithmeticBinaryExpr(std::move(left), std::move(right), "-") {}
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
+    return std::make_unique<Subtract>(left_->Clone(), right_->Clone());
+  }
+};
+
+class Multiply : public ArithmeticBinaryExpr {
+ public:
+  Multiply(LogicalExprPtr left, LogicalExprPtr right)
+      : ArithmeticBinaryExpr(std::move(left), std::move(right), "*") {}
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
+    return std::make_unique<Multiply>(left_->Clone(), right_->Clone());
+  }
+};
+
+class Divide : public ArithmeticBinaryExpr {
+ public:
+  Divide(LogicalExprPtr left, LogicalExprPtr right)
+      : ArithmeticBinaryExpr(std::move(left), std::move(right), "/") {}
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
+    return std::make_unique<Divide>(left_->Clone(), right_->Clone());
+  }
+};
+
+class Modulo : public ArithmeticBinaryExpr {
+ public:
+  Modulo(LogicalExprPtr left, LogicalExprPtr right)
+      : ArithmeticBinaryExpr(std::move(left), std::move(right), "%") {}
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
+    return std::make_unique<Modulo>(left_->Clone(), right_->Clone());
+  }
+};
+
+// =============================================================================
+// Aggregate Expressions
+// =============================================================================
+
+/// @brief Base class for aggregate expressions.
+/// @details Aggregate expressions compute a single value from multiple rows.
+class AggregateExpr : public LogicalExpr {
+ public:
+  explicit AggregateExpr(LogicalExprPtr input, std::string op)
+      : input_(std::move(input)), op_(std::move(op)) {}
+
+  [[nodiscard]] const LogicalExpr& input() const { return *input_; }
+  [[nodiscard]] const std::string& op() const { return op_; }
+
+ protected:
+  LogicalExprPtr input_;
+  std::string op_;
+};
+
+/// @brief SUM aggregate - sums all values in a column.
+class Sum : public AggregateExpr {
+ public:
+  explicit Sum(LogicalExprPtr input)
+      : AggregateExpr(std::move(input), "SUM") {}
+
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override {
+    auto input_field = input_->ToField(input);
+    if (!input_field.has_value()) {
+      return input_field;
+    }
+    // SUM returns double for numeric types
+    return Field{"SUM(" + input_->ToString() + ")", datasource::DoubleType{}};
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "SUM(" + input_->ToString() + ")";
+  }
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
+    return std::make_unique<Sum>(input_->Clone());
+  }
+};
+
+/// @brief AVG aggregate - computes average of values in a column.
+class Avg : public AggregateExpr {
+ public:
+  explicit Avg(LogicalExprPtr input)
+      : AggregateExpr(std::move(input), "AVG") {}
+
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
+    // AVG always returns double
+    return Field{"AVG(" + input_->ToString() + ")", datasource::DoubleType{}};
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "AVG(" + input_->ToString() + ")";
+  }
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
+    return std::make_unique<Avg>(input_->Clone());
+  }
+};
+
+/// @brief COUNT aggregate - counts rows (or non-null values).
+class Count : public AggregateExpr {
+ public:
+  explicit Count(LogicalExprPtr input)
+      : AggregateExpr(std::move(input), "COUNT") {}
+
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
+    // COUNT always returns Int64
+    return Field{"COUNT(" + input_->ToString() + ")", datasource::Int64Type{}};
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "COUNT(" + input_->ToString() + ")";
+  }
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
+    return std::make_unique<Count>(input_->Clone());
+  }
+};
+
+/// @brief COUNT(*) aggregate - counts all rows including nulls.
+class CountStar : public LogicalExpr {
+ public:
+  CountStar() = default;
+
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
+    return Field{"COUNT(*)", datasource::Int64Type{}};
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "COUNT(*)";
+  }
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
+    return std::make_unique<CountStar>();
+  }
+};
+
+/// @brief MIN aggregate - finds minimum value in a column.
+class Min : public AggregateExpr {
+ public:
+  explicit Min(LogicalExprPtr input)
+      : AggregateExpr(std::move(input), "MIN") {}
+
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override {
+    auto input_field = input_->ToField(input);
+    if (!input_field.has_value()) {
+      return input_field;
+    }
+    // MIN preserves input type
+    return Field{"MIN(" + input_->ToString() + ")", input_field.value().data_type};
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "MIN(" + input_->ToString() + ")";
+  }
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
+    return std::make_unique<Min>(input_->Clone());
+  }
+};
+
+/// @brief MAX aggregate - finds maximum value in a column.
+class Max : public AggregateExpr {
+ public:
+  explicit Max(LogicalExprPtr input)
+      : AggregateExpr(std::move(input), "MAX") {}
+
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override {
+    auto input_field = input_->ToField(input);
+    if (!input_field.has_value()) {
+      return input_field;
+    }
+    // MAX preserves input type
+    return Field{"MAX(" + input_->ToString() + ")", input_field.value().data_type};
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "MAX(" + input_->ToString() + ")";
+  }
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
+    return std::make_unique<Max>(input_->Clone());
+  }
+};
+
+// =============================================================================
 // Logical Operators
 // =============================================================================
 
@@ -336,6 +556,65 @@ inline LogicalExprPtr and_expr(LogicalExprPtr left, LogicalExprPtr right) {
 /// @brief Create a logical OR expression.
 inline LogicalExprPtr or_expr(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<Or>(std::move(left), std::move(right));
+}
+
+/// @brief Create an addition expression.
+inline LogicalExprPtr add(LogicalExprPtr left, LogicalExprPtr right) {
+  return std::make_unique<Add>(std::move(left), std::move(right));
+}
+
+/// @brief Create a subtraction expression.
+inline LogicalExprPtr subtract(LogicalExprPtr left, LogicalExprPtr right) {
+  return std::make_unique<Subtract>(std::move(left), std::move(right));
+}
+
+/// @brief Create a multiplication expression.
+inline LogicalExprPtr multiply(LogicalExprPtr left, LogicalExprPtr right) {
+  return std::make_unique<Multiply>(std::move(left), std::move(right));
+}
+
+/// @brief Create a division expression.
+inline LogicalExprPtr divide(LogicalExprPtr left, LogicalExprPtr right) {
+  return std::make_unique<Divide>(std::move(left), std::move(right));
+}
+
+/// @brief Create a modulo expression.
+inline LogicalExprPtr modulo(LogicalExprPtr left, LogicalExprPtr right) {
+  return std::make_unique<Modulo>(std::move(left), std::move(right));
+}
+
+// =============================================================================
+// Aggregate Factory Functions
+// =============================================================================
+
+/// @brief Create a SUM aggregate expression.
+inline LogicalExprPtr sum(LogicalExprPtr input) {
+  return std::make_unique<Sum>(std::move(input));
+}
+
+/// @brief Create an AVG aggregate expression.
+inline LogicalExprPtr avg(LogicalExprPtr input) {
+  return std::make_unique<Avg>(std::move(input));
+}
+
+/// @brief Create a COUNT aggregate expression.
+inline LogicalExprPtr count(LogicalExprPtr input) {
+  return std::make_unique<Count>(std::move(input));
+}
+
+/// @brief Create a COUNT(*) aggregate expression.
+inline LogicalExprPtr count_star() {
+  return std::make_unique<CountStar>();
+}
+
+/// @brief Create a MIN aggregate expression.
+inline LogicalExprPtr min(LogicalExprPtr input) {
+  return std::make_unique<Min>(std::move(input));
+}
+
+/// @brief Create a MAX aggregate expression.
+inline LogicalExprPtr max(LogicalExprPtr input) {
+  return std::make_unique<Max>(std::move(input));
 }
 
 }  // namespace quest

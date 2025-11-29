@@ -1,14 +1,6 @@
 CompileFlags:
   Add:
-    - "-std=c++23"
-    - "-Wall"
-    - "-Wextra"
-    - "-Wpedantic"
     - "-Wno-gnu-statement-expression-from-macro-expansion"
-    - "-I${workspaceFolder}/src"
-    - "-I/opt/homebrew/opt/spdlog/include"
-    - "-I/opt/homebrew/opt/fmt/include"
-    - "-I/opt/homebrew/opt/googletest/include"
   CompilationDatabase: build
 
 Diagnostics:

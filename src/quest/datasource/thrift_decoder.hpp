@@ -244,8 +244,8 @@ class ThriftDecoder {
     uint32_t length = length_result.value();
 
     if (pos_ + length > data_.size()) {
-      return std::unexpected(Status::ThriftDecodeError(
-          "String length exceeds remaining buffer"));
+      return Status::ThriftDecodeError(
+          "String length exceeds remaining buffer");
     }
 
     std::string result(reinterpret_cast<const char*>(&data_[pos_]), length);
@@ -263,8 +263,8 @@ class ThriftDecoder {
     uint32_t length = length_result.value();
 
     if (pos_ + length > data_.size()) {
-      return std::unexpected(Status::ThriftDecodeError(
-          "Binary length exceeds remaining buffer"));
+      return Status::ThriftDecodeError(
+          "Binary length exceeds remaining buffer");
     }
 
     std::vector<uint8_t> result(data_.begin() + pos_,
@@ -381,7 +381,7 @@ class ThriftDecoder {
       case ThriftType::kI32: {
         auto result = ReadVarint32();
         if (!result.has_value()) {
-          return result.error();
+          return std::unexpected(result.error());
         }
         return Status::OK();
       }
@@ -389,7 +389,7 @@ class ThriftDecoder {
       case ThriftType::kI64: {
         auto result = ReadVarint64();
         if (!result.has_value()) {
-          return result.error();
+          return std::unexpected(result.error());
         }
         return Status::OK();
       }
@@ -405,7 +405,7 @@ class ThriftDecoder {
       case ThriftType::kBinary: {
         auto length_result = ReadUvarint32();
         if (!length_result.has_value()) {
-          return length_result.error();
+          return std::unexpected(length_result.error());
         }
         auto status = Skip(length_result.value());
         if (!status.ok()) {
@@ -418,7 +418,7 @@ class ThriftDecoder {
       case ThriftType::kSet: {
         auto header_result = ReadListHeader();
         if (!header_result.has_value()) {
-          return header_result.error();
+          return std::unexpected(header_result.error());
         }
         auto header = header_result.value();
 
@@ -435,14 +435,14 @@ class ThriftDecoder {
       case ThriftType::kMap: {
         auto size_result = ReadUvarint32();
         if (!size_result.has_value()) {
-          return size_result.error();
+          return std::unexpected(size_result.error());
         }
         uint32_t size = size_result.value();
 
         if (size > 0) {
           auto types_result = ReadByte();
           if (!types_result.has_value()) {
-            return types_result.error();
+            return std::unexpected(types_result.error());
           }
           uint8_t types = types_result.value();
 
@@ -480,7 +480,7 @@ class ThriftDecoder {
     while (true) {
       auto header_result = ReadFieldHeader(last_field_id);
       if (!header_result.has_value()) {
-        return header_result.error();
+        return std::unexpected(header_result.error());
       }
 
       auto header = header_result.value();

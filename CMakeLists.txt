@@ -11,6 +11,9 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Export compile commands for clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 # Build options
 option(QUEST_BUILD_TESTS "Build tests" ON)
 option(QUEST_BUILD_EXAMPLES "Build examples" ON)
@@ -22,6 +25,9 @@ add_compile_options(
     -Wpedantic
     -Werror=return-type
 )
+
+# Find Snappy compression library
+find_package(Snappy REQUIRED)
 
 # Library sources
 set(QUEST_SOURCES
@@ -47,6 +53,7 @@ target_include_directories(quest
 target_link_libraries(quest
     PUBLIC
         pthread
+        Snappy::snappy
 )
 
 # Examples

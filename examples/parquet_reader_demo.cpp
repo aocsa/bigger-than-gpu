@@ -85,6 +85,8 @@ int main(int argc, char* argv[]) {
   auto parquet_result = ParquetDataSource::Open(filename);
   if (!parquet_result.has_value()) {
     std::cerr << "Error: " << parquet_result.error().message() << "\n";
+    std::cerr << "Error code: " << static_cast<int>(parquet_result.error().code()) << "\n";
+    std::cerr << "ToString: " << parquet_result.error().ToString() << "\n";
     return 1;
   }
   auto& parquet = parquet_result.value();

@@ -29,34 +29,12 @@ void Port::register_batch_holder(
 // =============================================================================
 
 std::shared_ptr<cache::IBatchHolder>& Port::get(const std::string& port_name) {
-  // Resolve the port name (use default if empty).
-  std::string resolved_name =
-      port_name.empty() ? default_port_name() : port_name;
-
-  // Look up the port in the registry.
-  auto iterator = batch_holder_registry_.find(resolved_name);
-  if (iterator == batch_holder_registry_.end()) {
-    throw std::runtime_error(std::format(
-        "Port '{}' not found in operator {}", resolved_name, owner_operator_->id()));
-  }
-
-  return iterator->second;
+  return find_port_or_throw(port_name)->second;
 }
 
 const std::shared_ptr<cache::IBatchHolder>& Port::get(
     const std::string& port_name) const {
-  // Resolve the port name (use default if empty).
-  std::string resolved_name =
-      port_name.empty() ? default_port_name() : port_name;
-
-  // Look up the port in the registry.
-  auto iterator = batch_holder_registry_.find(resolved_name);
-  if (iterator == batch_holder_registry_.end()) {
-    throw std::runtime_error(std::format(
-        "Port '{}' not found in operator {}", resolved_name, owner_operator_->id()));
-  }
-
-  return iterator->second;
+  return find_port_or_throw(port_name)->second;
 }
 
 // =============================================================================
@@ -83,17 +61,11 @@ bool Port::all_finished() const {
 }
 
 bool Port::is_finished(const std::string& port_name) const {
-  // Resolve the port name (use default if empty).
-  std::string resolved_name =
-      port_name.empty() ? default_port_name() : port_name;
-
-  // Look up the port and check its status.
-  auto iterator = batch_holder_registry_.find(resolved_name);
+  auto iterator = find_port(port_name);
   if (iterator == batch_holder_registry_.end() || !iterator->second) {
     // Non-existent or empty ports are considered finished.
     return true;
   }
-
   return iterator->second->is_finished();
 }
 
@@ -128,16 +100,10 @@ std::size_t Port::total_rows_added() const {
 }
 
 std::size_t Port::rows_added(const std::string& port_name) const {
-  // Resolve the port name (use default if empty).
-  std::string resolved_name =
-      port_name.empty() ? default_port_name() : port_name;
-
-  // Look up the port and return its row count.
-  auto iterator = batch_holder_registry_.find(resolved_name);
+  auto iterator = find_port(port_name);
   if (iterator == batch_holder_registry_.end() || !iterator->second) {
     return 0;
   }
-
   return iterator->second->rows_added();
 }
 
@@ -151,6 +117,34 @@ std::string Port::default_port_name() const {
     return std::to_string(owner_operator_->id());
   }
   return "";
+}
+
+std::string Port::resolve_port_name(const std::string& port_name) const {
+  return port_name.empty() ? default_port_name() : port_name;
+}
+
+Port::RegistryMap::iterator Port::find_port_or_throw(const std::string& port_name) {
+  std::string resolved_name = resolve_port_name(port_name);
+  auto iterator = batch_holder_registry_.find(resolved_name);
+  if (iterator == batch_holder_registry_.end()) {
+    throw std::runtime_error(std::format(
+        "Port '{}' not found in operator {}", resolved_name, owner_operator_->id()));
+  }
+  return iterator;
+}
+
+Port::RegistryMap::const_iterator Port::find_port_or_throw(const std::string& port_name) const {
+  std::string resolved_name = resolve_port_name(port_name);
+  auto iterator = batch_holder_registry_.find(resolved_name);
+  if (iterator == batch_holder_registry_.end()) {
+    throw std::runtime_error(std::format(
+        "Port '{}' not found in operator {}", resolved_name, owner_operator_->id()));
+  }
+  return iterator;
+}
+
+Port::RegistryMap::const_iterator Port::find_port(const std::string& port_name) const {
+  return batch_holder_registry_.find(resolve_port_name(port_name));
 }
 
 }  // namespace quest::taskflow
