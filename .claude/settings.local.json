@@ -39,7 +39,9 @@
       "Bash(./tests/test_cache:*)",
       "Bash(./tests/test_cache_data:*)",
       "Bash(./tests/test_graph:*)",
-      "Bash(./examples/join_example:*)"
+      "Bash(./examples/join_example:*)",
+      "Bash(./build/tests/test_query_builder)",
+      "Bash(./build/tests/test_query_builder:*)"
     ],
     "deny": [],
     "ask": []

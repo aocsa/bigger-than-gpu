@@ -134,7 +134,7 @@ QUEST is composed of three main subsystems:
 └─────────────────────────────────────────────────────────┘
 ```
 
-For detailed architecture documentation, see [ARCHITECTURE.md](ARCHITECTURE.md).
+For detailed architecture documentation, see [ARQUITECTURE.md](docs/dev/ARQUITECTURE.md).
 
 ## Project Structure
 
