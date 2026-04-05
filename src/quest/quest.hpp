@@ -14,7 +14,7 @@
 
 // Cache system
 #include "quest/cache/blocking_queue.hpp"
-#include "quest/cache/cache_data.hpp"
+#include "quest/cache/data_block.hpp"
 #include "quest/cache/batch_holder.hpp"
 
 // Taskflow execution

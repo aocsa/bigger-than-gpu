@@ -1,4 +1,5 @@
-#pragma once
+#ifndef QUEST_TASKFLOW_GRAPH_HPP_
+#define QUEST_TASKFLOW_GRAPH_HPP_
 
 /// @file graph.hpp
 /// @brief Execution graph for the taskflow model.
@@ -338,3 +339,5 @@ class Graph : public std::enable_shared_from_this<Graph> {
 using ExecutionThread = std::jthread;
 
 }  // namespace quest::taskflow
+
+#endif  // QUEST_TASKFLOW_GRAPH_HPP_

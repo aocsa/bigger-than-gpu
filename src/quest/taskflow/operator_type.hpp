@@ -1,11 +1,12 @@
-#pragma once
+#ifndef QUEST_TASKFLOW_OPERATOR_TYPE_HPP_
+#define QUEST_TASKFLOW_OPERATOR_TYPE_HPP_
 
 /// @file operator_type.hpp
 /// @brief Defines operator types for the execution graph
 /// @note Modern C++23 implementation focused on CPU/Disk memory tiers
 
-#include <string_view>
 #include <cstdint>
+#include <string_view>
 
 namespace quest::taskflow {
 
@@ -99,3 +100,5 @@ enum class OperatorType : std::uint8_t {
 }
 
 }  // namespace quest::taskflow
+
+#endif  // QUEST_TASKFLOW_OPERATOR_TYPE_HPP_

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef QUEST_TASKFLOW_PORT_HPP_
+#define QUEST_TASKFLOW_PORT_HPP_
 
 /// @file port.hpp
 /// @brief Port class for managing operator input/output connections.
@@ -72,7 +73,7 @@ class Port {
   /// Used during graph construction to declare expected connections.
   ///
   /// @param port_name The unique name for this port.
-  void register_port(std::string port_name);
+  void RegisterPort(std::string port_name);
 
   /// @brief Associates a batch holder with a named port.
   ///
@@ -81,8 +82,8 @@ class Port {
   ///
   /// @param port_name The name of the port to connect.
   /// @param batch_holder The batch holder for data transfer.
-  void register_batch_holder(const std::string& port_name,
-                             std::shared_ptr<cache::IBatchHolder> batch_holder);
+  void RegisterBatchHolder(const std::string& port_name,
+                           std::shared_ptr<cache::IBatchHolder> batch_holder);
 
   // ===========================================================================
   // Port Access
@@ -139,33 +140,33 @@ class Port {
   ///
   /// Called when the owning operator completes execution to signal to
   /// downstream operators that no more data will be sent.
-  void finish();
+  void Finish();
 
   /// @brief Checks if all batch holders are finished.
   ///
   /// @return true if all ports are finished or have no batch holder.
-  [[nodiscard]] bool all_finished() const;
+  [[nodiscard]] bool AllFinished() const;
 
   /// @brief Checks if a specific port's batch holder is finished.
   ///
   /// @param port_name The port name (empty for default).
   /// @return true if finished or non-existent.
-  [[nodiscard]] bool is_finished(const std::string& port_name = "") const;
+  [[nodiscard]] bool IsFinished(const std::string& port_name = "") const;
 
   // ===========================================================================
   // Statistics
   // ===========================================================================
 
   /// @brief Gets total bytes added across all ports.
-  [[nodiscard]] std::size_t total_bytes_added() const;
+  [[nodiscard]] std::size_t TotalBytesAdded() const;
 
   /// @brief Gets total rows added across all ports.
-  [[nodiscard]] std::size_t total_rows_added() const;
+  [[nodiscard]] std::size_t TotalRowsAdded() const;
 
   /// @brief Gets rows added to a specific port.
   ///
   /// @param port_name The port name (empty for default).
-  [[nodiscard]] std::size_t rows_added(const std::string& port_name = "") const;
+  [[nodiscard]] std::size_t RowsAdded(const std::string& port_name = "") const;
 
   // ===========================================================================
   // Iteration Support
@@ -211,12 +212,12 @@ namespace detail {
 
 /// @brief Recursive helper for registering multiple ports.
 template <typename PortType, typename FirstName, typename... RestNames>
-void register_ports_impl(PortType& port,
-                         FirstName&& first,
-                         RestNames&&... rest) {
-  port.register_port(std::forward<FirstName>(first));
+void RegisterPortsImpl(PortType& port,
+                       FirstName&& first,
+                       RestNames&&... rest) {
+  port.RegisterPort(std::forward<FirstName>(first));
   if constexpr (sizeof...(rest) > 0) {
-    register_ports_impl(port, std::forward<RestNames>(rest)...);
+    RegisterPortsImpl(port, std::forward<RestNames>(rest)...);
   }
 }
 
@@ -234,10 +235,12 @@ void register_ports_impl(PortType& port,
 /// @param port The port to register names on.
 /// @param names The port names to register.
 template <typename... PortNames>
-void add_ports(Port& port, PortNames&&... names) {
+void AddPorts(Port& port, PortNames&&... names) {
   if constexpr (sizeof...(names) > 0) {
-    detail::register_ports_impl(port, std::forward<PortNames>(names)...);
+    detail::RegisterPortsImpl(port, std::forward<PortNames>(names)...);
   }
 }
 
 }  // namespace quest::taskflow
+
+#endif  // QUEST_TASKFLOW_PORT_HPP_

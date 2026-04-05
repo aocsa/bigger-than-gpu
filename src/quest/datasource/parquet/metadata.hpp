@@ -16,12 +16,12 @@
 #include <string>
 #include <vector>
 
+#include "quest/datasource/schema.hpp"
+#include "quest/datasource/types.hpp"
+#include "quest/datasource/parquet/thrift_decoder.hpp"
 #include "quest/result.hpp"
-#include "schema.hpp"
-#include "thrift_decoder.hpp"
-#include "types.hpp"
 
-namespace quest::datasource {
+namespace quest::datasource::parquet {
 
 // =============================================================================
 // Metadata Structures
@@ -821,6 +821,6 @@ inline Schema BuildSchema(const FileMetadata& metadata) {
   return Schema(std::move(fields));
 }
 
-}  // namespace quest::datasource
+}  // namespace quest::datasource::parquet
 
 #endif  // PARQUET_READER_METADATA_HPP

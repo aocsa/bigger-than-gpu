@@ -21,7 +21,7 @@
 
 #include "quest/result.hpp"
 
-namespace quest::datasource {
+namespace quest::datasource::parquet {
 
 // =============================================================================
 // Thrift Protocol Types
@@ -504,6 +504,6 @@ class ThriftDecoder {
   size_t pos_;                     ///< Current read position.
 };
 
-}  // namespace quest::datasource
+}  // namespace quest::datasource::parquet
 
 #endif  // PARQUET_READER_THRIFT_DECODER_HPP

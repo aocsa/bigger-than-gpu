@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <quest/cache/blocking_queue.hpp>
-#include <quest/cache/cache_data.hpp>
+#include <quest/cache/data_block.hpp>
 
 #include <chrono>
 #include <thread>

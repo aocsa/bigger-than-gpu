@@ -1,4 +1,5 @@
-#pragma once
+#ifndef QUEST_TASKFLOW_KPAIR_HPP_
+#define QUEST_TASKFLOW_KPAIR_HPP_
 
 /// @file kpair.hpp
 /// @brief KPair (Kernel Pair) for linking operators in the execution graph.
@@ -52,7 +53,7 @@ using OperatorPortPair = std::pair<Operator*, std::string>;
 /// - Flow control: Backpressure thresholds to prevent memory exhaustion
 struct EdgeConfig {
   // Type of batch holder (affects how data is delivered to consumers).
-  cache::BatchHolderType type{cache::BatchHolderType::Simple};
+  cache::BatchHolderType type{cache::BatchHolderType::kSimple};
 
   // Number of partitions for parallel processing patterns.
   // Values > 1 create multiple batch holders for the FOR_EACH pattern.
@@ -72,7 +73,7 @@ struct EdgeConfig {
   ///
   /// Each batch is delivered individually to the consumer.
   [[nodiscard]] static EdgeConfig Simple() {
-    return EdgeConfig{.type = cache::BatchHolderType::Simple};
+    return EdgeConfig{.type = cache::BatchHolderType::kSimple};
   }
 
   /// @brief Creates a configuration for concatenating delivery.
@@ -80,7 +81,7 @@ struct EdgeConfig {
   /// All batches are merged into a single result before delivery.
   /// Useful for operators that need all data at once (like sorts).
   [[nodiscard]] static EdgeConfig Concatenating() {
-    return EdgeConfig{.type = cache::BatchHolderType::Concatenating};
+    return EdgeConfig{.type = cache::BatchHolderType::kConcatenating};
   }
 
   /// @brief Creates a configuration for partitioned parallel outputs.
@@ -90,7 +91,7 @@ struct EdgeConfig {
   ///
   /// @param partition_count Number of partitions to create.
   [[nodiscard]] static EdgeConfig Partitioned(std::size_t partition_count) {
-    return EdgeConfig{.type = cache::BatchHolderType::Simple,
+    return EdgeConfig{.type = cache::BatchHolderType::kSimple,
                       .num_partitions = partition_count};
   }
 
@@ -325,3 +326,5 @@ class KPair {
 }
 
 }  // namespace quest::taskflow
+
+#endif  // QUEST_TASKFLOW_KPAIR_HPP_

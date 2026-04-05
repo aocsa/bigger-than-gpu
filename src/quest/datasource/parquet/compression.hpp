@@ -20,7 +20,7 @@
 #include "quest/datasource/types.hpp"
 #include "quest/result.hpp"
 
-namespace quest::datasource {
+namespace quest::datasource::parquet {
 
 /// @brief Abstract base class for compression codecs.
 class CompressionCodec {
@@ -140,6 +140,6 @@ class SnappyCodec : public CompressionCodec {
   return "UNKNOWN";
 }
 
-}  // namespace quest::datasource
+}  // namespace quest::datasource::parquet
 
 #endif  // PARQUET_READER_COMPRESSION_HPP

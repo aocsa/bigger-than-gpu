@@ -16,12 +16,19 @@
 #include <span>
 #include <vector>
 
-#include "encoding.hpp"
+#include "quest/datasource/parquet/encoding.hpp"
+#include "quest/datasource/parquet/thrift_decoder.hpp"
+#include "quest/datasource/types.hpp"
 #include "quest/result.hpp"
-#include "thrift_decoder.hpp"
-#include "types.hpp"
 
 namespace quest::datasource {
+
+// Import parquet-specific types into this namespace for convenience
+using parquet::ThriftDecoder;
+using parquet::ThriftType;
+using parquet::RleBitPackingDecoder;
+using parquet::PlainDecoder;
+using parquet::ComputeBitWidth;
 
 // =============================================================================
 // Page Header Structure

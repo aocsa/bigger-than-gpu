@@ -20,14 +20,23 @@
 #include <string>
 #include <vector>
 
-#include "column_reader.hpp"
-#include "compression.hpp"
-#include "metadata.hpp"
+#include "quest/datasource/column_reader.hpp"
+#include "quest/datasource/parquet/compression.hpp"
+#include "quest/datasource/parquet/metadata.hpp"
+#include "quest/datasource/record_batch.hpp"
+#include "quest/datasource/schema.hpp"
 #include "quest/result.hpp"
-#include "record_batch.hpp"
-#include "schema.hpp"
 
 namespace quest::datasource {
+
+// Import parquet-specific types into this namespace for convenience
+using parquet::CompressionCodec;
+using parquet::CreateCodec;
+using parquet::FileMetadata;
+using parquet::RowGroupMetadata;
+using parquet::ColumnChunkMetadata;
+using parquet::MetadataParser;
+using parquet::BuildSchema;
 
 // =============================================================================
 // Constants

@@ -151,7 +151,7 @@ bigger-than-gpu/
 │   │   └── port.hpp            # Input/output ports
 │   ├── cache/
 │   │   ├── batch_holder.hpp    # Data transfer between operators
-│   │   ├── cache_data.hpp      # CPU/Disk data representations
+│   │   ├── data_block.hpp      # CPU/Disk data representations
 │   │   └── blocking_queue.hpp  # Thread-safe queue
 │   └── memory/
 │       └── memory_resource.hpp # CPU/Disk memory management

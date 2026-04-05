@@ -17,16 +17,25 @@
 #include <span>
 #include <vector>
 
-#include "column_vector.hpp"
-#include "compression.hpp"
-#include "encoding.hpp"
-#include "metadata.hpp"
-#include "page_reader.hpp"
+#include "quest/datasource/column_vector.hpp"
+#include "quest/datasource/page_reader.hpp"
+#include "quest/datasource/parquet/compression.hpp"
+#include "quest/datasource/parquet/encoding.hpp"
+#include "quest/datasource/parquet/metadata.hpp"
+#include "quest/datasource/schema.hpp"
+#include "quest/datasource/types.hpp"
 #include "quest/result.hpp"
-#include "schema.hpp"
-#include "types.hpp"
 
 namespace quest::datasource {
+
+// Import parquet-specific types into this namespace for convenience
+using parquet::ColumnChunkMetadata;
+using parquet::CompressionCodec;
+using parquet::ComputeBitWidth;
+using parquet::PlainDecoder;
+using parquet::PlainBinaryDecoder;
+using parquet::RleBitPackingDecoder;
+using parquet::DictionaryDecoder;
 
 // Forward declaration
 class ParquetFileReader;

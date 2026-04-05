@@ -9,7 +9,7 @@
 #include <filesystem>
 
 #include "quest/datasource/data_source.hpp"
-#include "quest/datasource/parquet_reader.hpp"
+#include "quest/datasource/parquet/parquet_reader.hpp"
 #include "quest/tests/utils.hpp"
 
 using namespace quest;

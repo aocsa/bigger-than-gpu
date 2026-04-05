@@ -57,7 +57,7 @@ class ColumnVector {
 
 // Typed column vector implementation for fixed-width types
 template <typename T>
-class TypedColumnVector : public ColumnVector {
+class TypedColumnVector : public  ColumnVector {
  public:
   TypedColumnVector(DataType type, size_t capacity)
       : type_(std::move(type)), values_(capacity), null_bitmap_() {

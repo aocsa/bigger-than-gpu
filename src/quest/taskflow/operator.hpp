@@ -1,4 +1,5 @@
-#pragma once
+#ifndef QUEST_TASKFLOW_OPERATOR_HPP_
+#define QUEST_TASKFLOW_OPERATOR_HPP_
 
 /// @file operator.hpp
 /// @brief Base Operator class representing a computation unit in the execution graph.
@@ -25,8 +26,8 @@
 ///         : SimpleOperator(id, predicate, OperatorType::Filter) {}
 ///
 ///   protected:
-///     Result<std::shared_ptr<CacheData>> process_batch(
-///         std::shared_ptr<CacheData> input) override {
+///     Result<std::shared_ptr<DataBlock>> ProcessBatch(
+///         std::shared_ptr<DataBlock> input) override {
 ///       // Apply filter predicate to input batch
 ///       return filtered_batch;
 ///     }
@@ -142,7 +143,7 @@ class Operator {
   ///
   /// @return Pair of (is_estimate_available, estimated_row_count).
   [[nodiscard]] virtual std::pair<bool, std::uint64_t>
-  get_estimated_output_num_rows() const;
+  GetEstimatedOutputNumRows() const;
 
   // ===========================================================================
   // Identity and Type
@@ -165,7 +166,7 @@ class Operator {
   /// @brief Generates a unique message identifier for logging and debugging.
   ///
   /// Format: "{operator_type}_{operator_id}"
-  [[nodiscard]] std::string message_id() const;
+  [[nodiscard]] std::string MessageId() const;
 
   // ===========================================================================
   // Port Access
@@ -199,12 +200,12 @@ class Operator {
   ///
   /// For single-input operators, this returns the primary input cache.
   /// Multi-input operators should use input()["port_name"] instead.
-  [[nodiscard]] std::shared_ptr<cache::IBatchHolder> input_cache();
+  [[nodiscard]] std::shared_ptr<cache::IBatchHolder> InputCache();
 
   /// @brief Gets an output batch holder by cache identifier.
   ///
   /// @param cache_id The cache identifier (empty for default output).
-  [[nodiscard]] std::shared_ptr<cache::IBatchHolder> output_cache(
+  [[nodiscard]] std::shared_ptr<cache::IBatchHolder> OutputCache(
       const std::string& cache_id = "");
 
   /// @brief Adds processed data to the output cache.
@@ -212,8 +213,8 @@ class Operator {
   /// @param data The cache data to send downstream.
   /// @param cache_id The cache identifier (empty for default output).
   /// @return Status::OK() on success, error status on failure.
-  [[nodiscard]] Status add_to_output(std::shared_ptr<cache::CacheData> data,
-                                     const std::string& cache_id = "");
+  [[nodiscard]] Status AddToOutput(std::shared_ptr<cache::DataBlock> data,
+                                    const std::string& cache_id = "");
 
   /// @brief Blocks if the output cache is saturated (flow control).
   ///
@@ -221,7 +222,7 @@ class Operator {
   /// operators have consumed enough data to make room for more output.
   ///
   /// @param cache_id The cache identifier (empty for default output).
-  void wait_if_output_saturated(const std::string& cache_id = "");
+  void WaitIfOutputSaturated(const std::string& cache_id = "");
 
   // ===========================================================================
   // Input Status
@@ -231,28 +232,28 @@ class Operator {
   ///
   /// An input is finished when the upstream operator has completed and
   /// called finish() on its output port.
-  [[nodiscard]] bool input_all_finished() const {
-    return input_port_.all_finished();
+  [[nodiscard]] bool InputAllFinished() const {
+    return input_port_.AllFinished();
   }
 
   /// @brief Gets the total number of rows received across all input ports.
-  [[nodiscard]] std::size_t total_input_rows_added() const {
-    return input_port_.total_rows_added();
+  [[nodiscard]] std::size_t TotalInputRowsAdded() const {
+    return input_port_.TotalRowsAdded();
   }
 
   /// @brief Checks if a specific input port's cache is finished.
   ///
   /// @param port_name The name of the input port to check.
-  [[nodiscard]] bool input_cache_finished(const std::string& port_name) const {
-    return input_port_.is_finished(port_name);
+  [[nodiscard]] bool InputCacheFinished(const std::string& port_name) const {
+    return input_port_.IsFinished(port_name);
   }
 
   /// @brief Gets the number of rows added to a specific input port.
   ///
   /// @param port_name The name of the input port.
-  [[nodiscard]] std::size_t input_cache_num_rows_added(
+  [[nodiscard]] std::size_t InputCacheNumRowsAdded(
       const std::string& port_name) const {
-    return input_port_.rows_added(port_name);
+    return input_port_.RowsAdded(port_name);
   }
 
   // ===========================================================================
@@ -365,7 +366,7 @@ class Operator {
 ///
 /// SimpleOperator provides a standard run() implementation that:
 /// - Pulls batches from the input port
-/// - Calls process_batch() for each batch
+/// - Calls ProcessBatch() for each batch
 /// - Pushes results to the output port
 /// - Handles flow control automatically
 ///
@@ -382,8 +383,8 @@ class Operator {
 ///         : SimpleOperator(id, predicate, OperatorType::Filter) {}
 ///
 ///   protected:
-///     Result<std::shared_ptr<CacheData>> process_batch(
-///         std::shared_ptr<CacheData> input) override {
+///     Result<std::shared_ptr<DataBlock>> ProcessBatch(
+///         std::shared_ptr<DataBlock> input) override {
 ///       // Filter implementation
 ///     }
 ///   };
@@ -397,7 +398,7 @@ class SimpleOperator : public Operator {
 
   /// @brief Standard batch processing loop.
   ///
-  /// Pulls batches from input, processes each via process_batch(),
+  /// Pulls batches from input, processes each via ProcessBatch(),
   /// and pushes results to output with flow control.
   [[nodiscard]] ExecutionStatus run() override;
 
@@ -408,8 +409,10 @@ class SimpleOperator : public Operator {
   ///
   /// @param input The input cache data batch.
   /// @return The transformed cache data, or an error status.
-  [[nodiscard]] virtual Result<std::shared_ptr<cache::CacheData>> process_batch(
-      std::shared_ptr<cache::CacheData> input) = 0;
+  [[nodiscard]] virtual Result<std::shared_ptr<cache::DataBlock>> ProcessBatch(
+      std::shared_ptr<cache::DataBlock> input) = 0;
 };
 
 }  // namespace quest::taskflow
+
+#endif  // QUEST_TASKFLOW_OPERATOR_HPP_

@@ -29,7 +29,7 @@ using quest::Status;
 
 template <typename T>
 concept HasId = requires(const T& msg) {
-    { msg.id() } -> std::convertible_to<std::string_view>;
+  { msg.id() } -> std::convertible_to<std::string_view>;
 };
 
 // =============================================================================
@@ -37,9 +37,9 @@ concept HasId = requires(const T& msg) {
 // =============================================================================
 
 struct QueueConfig {
-    std::chrono::milliseconds timeout{0};  // 0 means no timeout (wait forever)
-    std::size_t max_bytes{0};              // 0 means unlimited
-    std::size_t max_batches{0};            // 0 means unlimited
+  std::chrono::milliseconds timeout{0};  // 0 means no timeout (wait forever)
+  std::size_t max_bytes{0};              // 0 means unlimited
+  std::size_t max_batches{0};            // 0 means unlimited
 };
 
 // =============================================================================
@@ -47,233 +47,236 @@ struct QueueConfig {
 // =============================================================================
 
 template <typename T>
-    requires HasId<std::remove_pointer_t<typename T::element_type>>
+  requires HasId<std::remove_pointer_t<typename T::element_type>>
 class BlockingQueue {
-public:
-    explicit BlockingQueue(QueueConfig config = {}) : config_(config) {}
+ public:
+  explicit BlockingQueue(QueueConfig config = {}) : config_(config) {}
 
-    ~BlockingQueue() { Finish(); }
+  ~BlockingQueue() { Finish(); }
 
-    // Non-copyable, non-movable for thread safety
-    BlockingQueue(const BlockingQueue&) = delete;
-    BlockingQueue& operator=(const BlockingQueue&) = delete;
-    BlockingQueue(BlockingQueue&&) = delete;
-    BlockingQueue& operator=(BlockingQueue&&) = delete;
+  // Non-copyable, non-movable for thread safety
+  BlockingQueue(const BlockingQueue&) = delete;
+  BlockingQueue& operator=(const BlockingQueue&) = delete;
+  BlockingQueue(BlockingQueue&&) = delete;
+  BlockingQueue& operator=(BlockingQueue&&) = delete;
 
-    // =========================================================================
-    // Producer Operations
-    // =========================================================================
+  // ===========================================================================
+  // Producer Operations
+  // ===========================================================================
 
-    [[nodiscard]] Status Put(T item) {
-        if (!item) {
-            return Status::Invalid("Cannot enqueue null message");
-        }
-
-        {
-            std::lock_guard lock(mutex_);
-
-            if (finished_) {
-                return Status::Invalid("Cannot enqueue to finished queue");
-            }
-
-            queue_.push_back(std::move(item));
-            ++batches_count_;
-        }
-
-        not_empty_.notify_one();
-        return Status::OK();
+  [[nodiscard]] Status Put(T item) {
+    if (!item) {
+      return Status::Invalid("Cannot enqueue null message");
     }
 
-    void Finish() {
-        {
-            std::lock_guard lock(mutex_);
-            if (finished_) {
-                return;
-            }
-            finished_ = true;
-        }
-        not_empty_.notify_all();
+    {
+      std::lock_guard lock(mutex_);
+
+      if (finished_) {
+        return Status::Invalid("Cannot enqueue to finished queue");
+      }
+
+      queue_.push_back(std::move(item));
+      ++batches_count_;
     }
 
-    // =========================================================================
-    // Consumer Operations
-    // =========================================================================
+    not_empty_.notify_one();
+    return Status::OK();
+  }
 
-    [[nodiscard]] Result<T> Pop() {
-        std::unique_lock lock(mutex_);
+  void Finish() {
+    {
+      std::lock_guard lock(mutex_);
+      if (finished_) {
+        return;
+      }
+      finished_ = true;
+    }
+    not_empty_.notify_all();
+  }
 
-        if (!WaitFor(lock, [this] { return !queue_.empty() || finished_; })) {
-            return quest::Status::IOError("Pop operation timed out");
-        }
+  // ===========================================================================
+  // Consumer Operations
+  // ===========================================================================
 
-        if (queue_.empty()) {
-            return Status::Invalid("Queue finished and empty");
-        }
+  [[nodiscard]] Result<T> Pop() {
+    std::unique_lock lock(mutex_);
 
-        return PopFront();
+    if (!WaitFor(lock, [this] { return !queue_.empty() || finished_; })) {
+      return quest::Status::IOError("Pop operation timed out");
     }
 
-    [[nodiscard]] Result<T> TryPop() {
-        std::lock_guard lock(mutex_);
-
-        if (queue_.empty()) {
-            if (finished_) {
-                return Status::Invalid("Queue finished");
-            }
-            return Status::Invalid("Queue empty");
-        }
-
-        return PopFront();
+    if (queue_.empty()) {
+      return Status::Invalid("Queue finished and empty");
     }
 
-    [[nodiscard]] Result<T> PopWithTimeout(std::chrono::milliseconds timeout) {
-        std::unique_lock lock(mutex_);
+    return PopFront();
+  }
 
-        auto deadline = std::chrono::steady_clock::now() + timeout;
-        if (!not_empty_.wait_until(lock, deadline,
-                [this] { return !queue_.empty() || finished_; })) {
-            return Status::IOError(
-                std::format("Pop timed out after {}ms", timeout.count()));
-        }
+  [[nodiscard]] Result<T> TryPop() {
+    std::lock_guard lock(mutex_);
 
-        if (queue_.empty()) {
-            return Status::Invalid("Queue finished and empty");
-        }
-
-        return PopFront();
+    if (queue_.empty()) {
+      if (finished_) {
+        return Status::Invalid("Queue finished");
+      }
+      return Status::Invalid("Queue empty");
     }
 
-    [[nodiscard]] Result<std::vector<T>> PopAll() {
-        std::unique_lock lock(mutex_);
+    return PopFront();
+  }
 
-        if (!WaitFor(lock, [this] { return !queue_.empty() || finished_; })) {
-            return Status::IOError("PopAll operation timed out");
-        }
+  [[nodiscard]] Result<T> PopWithTimeout(std::chrono::milliseconds timeout) {
+    std::unique_lock lock(mutex_);
 
-        std::vector<T> result;
-        result.reserve(queue_.size());
-
-        while (!queue_.empty()) {
-            result.push_back(std::move(queue_.front()));
-            queue_.pop_front();
-        }
-        batches_count_ = 0;
-
-        return result;
+    auto deadline = std::chrono::steady_clock::now() + timeout;
+    if (!not_empty_.wait_until(
+            lock, deadline,
+            [this] { return !queue_.empty() || finished_; })) {
+      return Status::IOError(
+          std::format("Pop timed out after {}ms", timeout.count()));
     }
 
-    // =========================================================================
-    // ID-based Operations
-    // =========================================================================
-
-    [[nodiscard]] Result<T> PopById(std::string_view msg_id) {
-        std::unique_lock lock(mutex_);
-
-        if (!WaitFor(lock, [this, msg_id] { return ContainsId(msg_id) || finished_; })) {
-            return Status::IOError(
-                std::format("PopById timed out waiting for id: {}", msg_id));
-        }
-
-        auto iter = std::ranges::find_if(queue_, 
-            [msg_id](const auto& item) { return item->id() == msg_id; });
-
-        if (iter == queue_.end()) {
-            return Status::NotFound(
-                std::format("Message with id '{}' not found", msg_id));
-        }
-
-        auto item = std::move(*iter);
-        queue_.erase(iter);
-        --batches_count_;
-        return item;
+    if (queue_.empty()) {
+      return Status::Invalid("Queue finished and empty");
     }
 
-    // =========================================================================
-    // Status Queries
-    // =========================================================================
+    return PopFront();
+  }
 
-    [[nodiscard]] bool IsFinished() const {
-        std::lock_guard lock(mutex_);
-        return finished_;
+  [[nodiscard]] Result<std::vector<T>> PopAll() {
+    std::unique_lock lock(mutex_);
+
+    if (!WaitFor(lock, [this] { return !queue_.empty() || finished_; })) {
+      return Status::IOError("PopAll operation timed out");
     }
 
-    [[nodiscard]] bool Empty() const {
-        std::lock_guard lock(mutex_);
-        return queue_.empty();
+    std::vector<T> result;
+    result.reserve(queue_.size());
+
+    while (!queue_.empty()) {
+      result.push_back(std::move(queue_.front()));
+      queue_.pop_front();
+    }
+    batches_count_ = 0;
+
+    return result;
+  }
+
+  // ===========================================================================
+  // ID-based Operations
+  // ===========================================================================
+
+  [[nodiscard]] Result<T> PopById(std::string_view msg_id) {
+    std::unique_lock lock(mutex_);
+
+    if (!WaitFor(lock,
+                 [this, msg_id] { return ContainsId(msg_id) || finished_; })) {
+      return Status::IOError(
+          std::format("PopById timed out waiting for id: {}", msg_id));
     }
 
-    [[nodiscard]] std::size_t Size() const {
-        std::lock_guard lock(mutex_);
-        return queue_.size();
+    auto iter = std::ranges::find_if(
+        queue_, [msg_id](const auto& item) { return item->id() == msg_id; });
+
+    if (iter == queue_.end()) {
+      return Status::NotFound(
+          std::format("Message with id '{}' not found", msg_id));
     }
 
-    [[nodiscard]] bool HasNext() const {
-        std::lock_guard lock(mutex_);
-        return !queue_.empty();
+    auto item = std::move(*iter);
+    queue_.erase(iter);
+    --batches_count_;
+    return item;
+  }
+
+  // ===========================================================================
+  // Status Queries
+  // ===========================================================================
+
+  [[nodiscard]] bool IsFinished() const {
+    std::lock_guard lock(mutex_);
+    return finished_;
+  }
+
+  [[nodiscard]] bool Empty() const {
+    std::lock_guard lock(mutex_);
+    return queue_.empty();
+  }
+
+  [[nodiscard]] std::size_t Size() const {
+    std::lock_guard lock(mutex_);
+    return queue_.size();
+  }
+
+  [[nodiscard]] bool HasNext() const {
+    std::lock_guard lock(mutex_);
+    return !queue_.empty();
+  }
+
+  [[nodiscard]] Status WaitForNext() {
+    std::unique_lock lock(mutex_);
+
+    if (!WaitFor(lock, [this] { return !queue_.empty() || finished_; })) {
+      return Status::IOError("WaitForNext timed out");
     }
 
-    [[nodiscard]] Status WaitForNext() {
-        std::unique_lock lock(mutex_);
-
-        if (!WaitFor(lock, [this] { return !queue_.empty() || finished_; })) {
-            return Status::IOError("WaitForNext timed out");
-        }
-
-        if (queue_.empty() && finished_) {
-            return Status::Invalid("Queue finished and empty");
-        }
-
-        return Status::OK();
+    if (queue_.empty() && finished_) {
+      return Status::Invalid("Queue finished and empty");
     }
 
-    [[nodiscard]] Status WaitUntilFinished() {
-        std::unique_lock lock(mutex_);
+    return Status::OK();
+  }
 
-        if (!WaitFor(lock, [this] { return finished_; })) {
-            return Status::IOError("WaitUntilFinished timed out");
-        }
+  [[nodiscard]] Status WaitUntilFinished() {
+    std::unique_lock lock(mutex_);
 
-        return Status::OK();
+    if (!WaitFor(lock, [this] { return finished_; })) {
+      return Status::IOError("WaitUntilFinished timed out");
     }
 
-    [[nodiscard]] const QueueConfig& Config() const { return config_; }
+    return Status::OK();
+  }
 
-    [[nodiscard]] std::size_t BatchesCount() const {
-        std::lock_guard lock(mutex_);
-        return batches_count_;
+  [[nodiscard]] const QueueConfig& Config() const { return config_; }
+
+  [[nodiscard]] std::size_t BatchesCount() const {
+    std::lock_guard lock(mutex_);
+    return batches_count_;
+  }
+
+ private:
+  // Helper: Pop front element (caller must hold lock and ensure queue
+  // non-empty)
+  T PopFront() {
+    auto item = std::move(queue_.front());
+    queue_.pop_front();
+    --batches_count_;
+    return item;
+  }
+
+  // Helper: Check if queue contains message with given ID
+  [[nodiscard]] bool ContainsId(std::string_view msg_id) const {
+    return std::ranges::any_of(
+        queue_, [msg_id](const auto& item) { return item->id() == msg_id; });
+  }
+
+  // Helper: Wait for predicate with optional timeout
+  template <typename Predicate>
+  bool WaitFor(std::unique_lock<std::mutex>& lock, Predicate predicate) {
+    if (config_.timeout.count() > 0) {
+      return not_empty_.wait_for(lock, config_.timeout, predicate);
     }
+    not_empty_.wait(lock, predicate);
+    return true;
+  }
 
-private:
-    // Helper: Pop front element (caller must hold lock and ensure queue non-empty)
-    T PopFront() {
-        auto item = std::move(queue_.front());
-        queue_.pop_front();
-        --batches_count_;
-        return item;
-    }
-
-    // Helper: Check if queue contains message with given ID
-    [[nodiscard]] bool ContainsId(std::string_view msg_id) const {
-        return std::ranges::any_of(queue_,
-            [msg_id](const auto& item) { return item->id() == msg_id; });
-    }
-
-    // Helper: Wait for predicate with optional timeout
-    template <typename Predicate>
-    bool WaitFor(std::unique_lock<std::mutex>& lock, Predicate predicate) {
-        if (config_.timeout.count() > 0) {
-            return not_empty_.wait_for(lock, config_.timeout, predicate);
-        }
-        not_empty_.wait(lock, predicate);
-        return true;
-    }
-
-    mutable std::mutex mutex_;
-    std::condition_variable not_empty_;
-    std::deque<T> queue_;
-    bool finished_{false};
-    std::size_t batches_count_{0};
-    QueueConfig config_;
+  mutable std::mutex mutex_;
+  std::condition_variable not_empty_;
+  std::deque<T> queue_;
+  bool finished_{false};
+  std::size_t batches_count_{0};
+  QueueConfig config_;
 };
 
 // =============================================================================

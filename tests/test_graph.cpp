@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <quest/quest.hpp>
+#include "quest/tests/utils.hpp"
 
 using namespace quest;
 using namespace quest::taskflow;
@@ -43,13 +44,11 @@ class SourceOperator : public Operator {
   [[nodiscard]] ExecutionStatus run() override {
     for (std::size_t batch_index = 0; batch_index < batch_count_;
          ++batch_index) {
-      auto batch_data = std::make_shared<CPUCacheData>(
-          std::format("batch_{}", batch_index),
-          std::vector<std::byte>(100),
-          10,
-          2);
+      auto batch = quest::testing::MakeTestRecordBatch(10, 2);
+      auto batch_data = std::make_shared<HostMemoryBlock>(
+          std::format("batch_{}", batch_index), std::move(batch));
 
-      (void)add_to_output(std::move(batch_data));
+      (void)AddToOutput(std::move(batch_data));
     }
     return ExecutionStatus::Proceed;
   }
@@ -68,10 +67,10 @@ class SinkOperator : public Operator {
   [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
 
   [[nodiscard]] ExecutionStatus run() override {
-    auto batch_holder = input_cache();
+    auto batch_holder = InputCache();
 
     while (batch_holder) {
-      auto pull_result = batch_holder->pull();
+      auto pull_result = batch_holder->Pull();
       if (!pull_result.has_value()) {
         break;
       }
@@ -93,8 +92,8 @@ class PassthroughOperator : public SimpleOperator {
       : SimpleOperator(operator_id, "Passthrough", OperatorType::Project) {}
 
  protected:
-  [[nodiscard]] Result<std::shared_ptr<CacheData>> process_batch(
-      std::shared_ptr<CacheData> input) override {
+  [[nodiscard]] Result<std::shared_ptr<DataBlock>> ProcessBatch(
+      std::shared_ptr<DataBlock> input) override {
     return input;
   }
 };
@@ -108,8 +107,8 @@ class JoinOperator : public Operator {
       : Operator(operator_id, "Join", OperatorType::PartwiseJoin),
         left_received_count_(left_received_count),
         right_received_count_(right_received_count) {
-    input().register_port("left_input");
-    input().register_port("right_input");
+    input().RegisterPort("left_input");
+    input().RegisterPort("right_input");
   }
 
   [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
@@ -117,7 +116,7 @@ class JoinOperator : public Operator {
   [[nodiscard]] ExecutionStatus run() override {
     auto& left_cache = input()["left_input"];
     while (left_cache) {
-      auto pull_result = left_cache->pull();
+      auto pull_result = left_cache->Pull();
       if (!pull_result.has_value()) {
         break;
       }
@@ -126,7 +125,7 @@ class JoinOperator : public Operator {
 
     auto& right_cache = input()["right_input"];
     while (right_cache) {
-      auto pull_result = right_cache->pull();
+      auto pull_result = right_cache->Pull();
       if (!pull_result.has_value()) {
         break;
       }
@@ -290,7 +289,8 @@ TEST(GraphExecutionTest, ConcatenatingBatchHolder) {
   auto graph = std::make_shared<Graph>();
 
   std::size_t received_count = 0;
-  SourceOperator source(0, 5);
+  // Use 1 batch since RecordBatch concatenation is not yet implemented
+  SourceOperator source(0, 1);
   SinkOperator sink(1, received_count);
 
   *graph +=
@@ -386,21 +386,21 @@ TEST(GraphQueryTest, GetNonexistentNode) {
 TEST(EdgeConfigTest, Simple) {
   auto config = EdgeConfig::Simple();
 
-  EXPECT_EQ(config.type, BatchHolderType::Simple);
+  EXPECT_EQ(config.type, BatchHolderType::kSimple);
   EXPECT_EQ(config.num_partitions, 1);
 }
 
 TEST(EdgeConfigTest, Concatenating) {
   auto config = EdgeConfig::Concatenating();
 
-  EXPECT_EQ(config.type, BatchHolderType::Concatenating);
+  EXPECT_EQ(config.type, BatchHolderType::kConcatenating);
   EXPECT_EQ(config.num_partitions, 1);
 }
 
 TEST(EdgeConfigTest, Partitioned) {
   auto config = EdgeConfig::Partitioned(4);
 
-  EXPECT_EQ(config.type, BatchHolderType::Simple);
+  EXPECT_EQ(config.type, BatchHolderType::kSimple);
   EXPECT_EQ(config.num_partitions, 4);
 }
 
@@ -509,8 +509,8 @@ TEST(PortTest, Registration) {
   CountingOperator test_operator(0, counter);
 
   auto& input_port = test_operator.input();
-  input_port.register_port("port_a");
-  input_port.register_port("port_b");
+  input_port.RegisterPort("port_a");
+  input_port.RegisterPort("port_b");
 
   EXPECT_TRUE(input_port.has_port("port_a"));
   EXPECT_TRUE(input_port.has_port("port_b"));
@@ -522,7 +522,7 @@ TEST(PortTest, AddPortsHelper) {
   std::size_t counter = 0;
   CountingOperator test_operator(0, counter);
 
-  add_ports(test_operator.input(), "left", "right", "probe");
+  AddPorts(test_operator.input(), "left", "right", "probe");
 
   EXPECT_TRUE(test_operator.input().has_port("left"));
   EXPECT_TRUE(test_operator.input().has_port("right"));

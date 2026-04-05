@@ -50,7 +50,7 @@ QUEST is a dataflow execution framework designed for batch processing of large d
 │  │ BatchHolder │  │ BatchHolder │  │ BatchHolder │                 │
 │  │             │  │             │  │             │                 │
 │  │ [Queue of   │  │ [Queue of   │  │ [Queue of   │                 │
-│  │  CacheData] │  │  CacheData] │  │  CacheData] │                 │
+│  │  DataBlock] │  │  DataBlock] │  │  DataBlock] │                 │
 │  └─────────────┘  └─────────────┘  └─────────────┘                 │
 └──────────────────────────────┬──────────────────────────────────────┘
                                │
@@ -115,11 +115,11 @@ class IBatchHolder {
 };
 ```
 
-### CacheData
+### DataBlock
 
-**CacheData** represents data that can be stored in different memory tiers:
-- **CPUCacheData** - Data in RAM (vector of bytes)
-- **DiskCacheData** - Data on disk (file reference)
+**DataBlock** represents data that can be stored in different memory tiers:
+- **HostMemoryBlock** - Data in RAM (vector of bytes)
+- **DiskBlock** - Data on disk (file reference)
 
 Both can convert between tiers via `to_cpu()` and `to_disk()` methods.
 
@@ -244,7 +244,7 @@ Producer Operator                              Consumer Operator
 ```cpp
 class CacheMessage {
     std::string message_id_;           // Unique identifier
-    std::shared_ptr<CacheData> data_;  // The actual data
+    std::shared_ptr<DataBlock> data_;  // The actual data
 };
 ```
 
@@ -516,7 +516,7 @@ Query: SELECT name, email FROM customers WHERE age > 21
 │ + can_you_throttle_my_input(): bool {abstract}                 │
 │ + input_cache(): shared_ptr<IBatchHolder>                      │
 │ + output_cache(string): shared_ptr<IBatchHolder>               │
-│ + add_to_output(CacheData): Status                             │
+│ + add_to_output(DataBlock): Status                             │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               │ has
@@ -562,14 +562,14 @@ Query: SELECT name, email FROM customers WHERE age > 21
 
 ┌─────────────────────────────────────────────────────────────────┐
 │                      <<abstract>>                                │
-│                        CacheData                                 │
+│                        DataBlock                                 │
 ├─────────────────────────────────────────────────────────────────┤
 │ + id(): string_view                                             │
 │ + tier(): MemoryTier                                            │
 │ + size_in_bytes(): size_t                                       │
 │ + num_rows(): size_t                                            │
-│ + to_cpu(): Result<shared_ptr<CacheData>>                      │
-│ + to_disk(): Result<shared_ptr<CacheData>>                     │
+│ + to_cpu(): Result<shared_ptr<DataBlock>>                      │
+│ + to_disk(): Result<shared_ptr<DataBlock>>                     │
 │ + release(): void                                               │
 └─────────────────────────────────────────────────────────────────┘
                     △                     △
@@ -577,7 +577,7 @@ Query: SELECT name, email FROM customers WHERE age > 21
          ┌─────────┴─────────┐   ┌───────┴────────┐
          │                   │   │                │
 ┌────────┴────────┐  ┌───────┴───────────┐
-│  CPUCacheData   │  │   DiskCacheData   │
+│  HostMemoryBlock   │  │   DiskBlock   │
 ├─────────────────┤  ├───────────────────┤
 │ - data_: vector │  │ - file_path_: path│
 │   <byte>        │  │ - size_bytes_     │
@@ -625,8 +625,8 @@ graph += a >> b >> c;
 
 ### 5. RAII for Resource Management
 
-- `CPUCacheData` tracks allocations and deallocations
-- `DiskCacheData` deletes files on destruction
+- `HostMemoryBlock` tracks allocations and deallocations
+- `DiskBlock` deletes files on destruction
 - `DiskMemoryResource` cleans up cache directory on destruction
 
 ---
@@ -656,17 +656,17 @@ public:
 };
 ```
 
-### Creating Custom CacheData
+### Creating Custom DataBlock
 
 ```cpp
-class NetworkCacheData : public CacheData {
+class NetworkDataBlock : public DataBlock {
 public:
     MemoryTier tier() const override {
         return MemoryTier::Disk;  // Treat as remote storage
     }
     
-    Result<shared_ptr<CacheData>> to_cpu() override {
-        // Fetch from network, create CPUCacheData
+    Result<shared_ptr<DataBlock>> to_cpu() override {
+        // Fetch from network, create HostMemoryBlock
     }
 };
 ```
@@ -710,7 +710,7 @@ enum class MemoryTier : uint8_t {
 
 ## Future Enhancements
 
-1. **GPU Memory Tier** - Add CUDA-based GPUCacheData
+1. **GPU Memory Tier** - Add CUDA-based GPUDataBlock
 2. **Network Tier** - Distributed execution support
 3. **Compression** - Compress data before spilling to disk
 4. **Memory Pools** - Reduce allocation overhead

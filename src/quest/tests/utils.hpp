@@ -2,10 +2,60 @@
 #include <gtest/gtest.h>
 #include <utility> // for std::move
 
+#include "quest/datasource/column_vector.hpp"
+#include "quest/datasource/record_batch.hpp"
+#include "quest/datasource/schema.hpp"
+#include "quest/datasource/types.hpp"
+
 // Helper macro to generate unique variable names
 #define _QUEST_GTEST_CONCAT_IMPL(x, y) x##y
 #define _QUEST_GTEST_CONCAT(x, y) _QUEST_GTEST_CONCAT_IMPL(x, y)
 #define _QUEST_GTEST_NAME(x) _QUEST_GTEST_CONCAT(x, __LINE__)
+
+namespace quest::testing {
+
+/// @brief Creates a simple RecordBatch with a single int32 column for testing
+/// @param num_rows Number of rows to generate (values will be 0, 1, 2, ...)
+/// @return A RecordBatch with one column named "value"
+inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows) {
+  using namespace quest::datasource;
+
+  std::vector<Field> fields = {Field("value", Int32Type{})};
+  Schema schema(fields);
+
+  auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, num_rows);
+  for (size_t i = 0; i < num_rows; ++i) {
+    col->Append(static_cast<int32_t>(i));
+  }
+
+  return RecordBatch(schema, {col});
+}
+
+/// @brief Creates a RecordBatch with multiple columns for testing
+/// @param num_rows Number of rows
+/// @param num_columns Number of int32 columns to create
+/// @return A RecordBatch with columns named "col0", "col1", etc.
+inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows,
+                                                    size_t num_columns) {
+  using namespace quest::datasource;
+
+  std::vector<Field> fields;
+  std::vector<std::shared_ptr<ColumnVector>> columns;
+
+  for (size_t c = 0; c < num_columns; ++c) {
+    fields.emplace_back("col" + std::to_string(c), Int32Type{});
+    auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, num_rows);
+    for (size_t r = 0; r < num_rows; ++r) {
+      col->Append(static_cast<int32_t>(r * num_columns + c));
+    }
+    columns.push_back(col);
+  }
+
+  Schema schema(fields);
+  return RecordBatch(schema, columns);
+}
+
+}  // namespace quest::testing
 
 // ---------------------------------------------------------
 // ASSERT_OK

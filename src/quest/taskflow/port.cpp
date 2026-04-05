@@ -11,13 +11,13 @@ namespace quest::taskflow {
 // Port Registration
 // =============================================================================
 
-void Port::register_port(std::string port_name) {
+void Port::RegisterPort(std::string port_name) {
   // Create an empty slot for this port name.
   // The batch holder will be assigned later when edges are created.
   batch_holder_registry_[std::move(port_name)] = nullptr;
 }
 
-void Port::register_batch_holder(
+void Port::RegisterBatchHolder(
     const std::string& port_name,
     std::shared_ptr<cache::IBatchHolder> batch_holder) {
   // Associate the batch holder with the named port.
@@ -41,39 +41,39 @@ const std::shared_ptr<cache::IBatchHolder>& Port::get(
 // Lifecycle Management
 // =============================================================================
 
-void Port::finish() {
+void Port::Finish() {
   // Signal completion on all batch holders.
   for (auto& [port_name, batch_holder] : batch_holder_registry_) {
     if (batch_holder) {
-      batch_holder->finish();
+      batch_holder->Finish();
     }
   }
 }
 
-bool Port::all_finished() const {
+bool Port::AllFinished() const {
   // Check if all batch holders report finished status.
   for (const auto& [port_name, batch_holder] : batch_holder_registry_) {
-    if (batch_holder && !batch_holder->is_finished()) {
+    if (batch_holder && !batch_holder->IsFinished()) {
       return false;
     }
   }
   return true;
 }
 
-bool Port::is_finished(const std::string& port_name) const {
+bool Port::IsFinished(const std::string& port_name) const {
   auto iterator = find_port(port_name);
   if (iterator == batch_holder_registry_.end() || !iterator->second) {
     // Non-existent or empty ports are considered finished.
     return true;
   }
-  return iterator->second->is_finished();
+  return iterator->second->IsFinished();
 }
 
 // =============================================================================
 // Statistics
 // =============================================================================
 
-std::size_t Port::total_bytes_added() const {
+std::size_t Port::TotalBytesAdded() const {
   std::size_t total_bytes = 0;
 
   // Sum bytes across all batch holders.
@@ -86,7 +86,7 @@ std::size_t Port::total_bytes_added() const {
   return total_bytes;
 }
 
-std::size_t Port::total_rows_added() const {
+std::size_t Port::TotalRowsAdded() const {
   std::size_t total_rows = 0;
 
   // Sum rows across all batch holders.
@@ -99,7 +99,7 @@ std::size_t Port::total_rows_added() const {
   return total_rows;
 }
 
-std::size_t Port::rows_added(const std::string& port_name) const {
+std::size_t Port::RowsAdded(const std::string& port_name) const {
   auto iterator = find_port(port_name);
   if (iterator == batch_holder_registry_.end() || !iterator->second) {
     return 0;

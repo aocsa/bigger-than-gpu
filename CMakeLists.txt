@@ -32,7 +32,7 @@ find_package(Snappy REQUIRED)
 # Library sources
 set(QUEST_SOURCES
     src/quest/memory/memory_resource.cpp
-    src/quest/cache/cache_data.cpp
+    src/quest/cache/data_block.cpp
     src/quest/cache/batch_holder.cpp
     src/quest/taskflow/port.cpp
     src/quest/taskflow/operator.cpp

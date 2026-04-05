@@ -18,11 +18,11 @@
 #include <string>
 #include <vector>
 
-#include "column_vector.hpp"
+#include "quest/datasource/column_vector.hpp"
+#include "quest/datasource/types.hpp"
 #include "quest/result.hpp"
-#include "types.hpp"
 
-namespace quest::datasource {
+namespace quest::datasource::parquet {
 
 // =============================================================================
 // Base Value Decoder
@@ -418,6 +418,6 @@ class DictionaryDecoder {
   return std::bit_width(static_cast<unsigned>(max_value));
 }
 
-}  // namespace quest::datasource
+}  // namespace quest::datasource::parquet
 
 #endif  // PARQUET_READER_ENCODING_HPP

@@ -106,16 +106,16 @@ void Graph::AddEdge(Operator* source_operator,
       auto output_port_name = std::format("output_{}", partition_index);
       auto input_port_name = std::format("input_{}", partition_index);
 
-      source_operator->output().register_batch_holder(
+      source_operator->output().RegisterBatchHolder(
           output_port_name, batch_holders[partition_index]);
-      target_operator->input().register_batch_holder(
+      target_operator->input().RegisterBatchHolder(
           input_port_name, batch_holders[partition_index]);
     }
   } else {
     // Simple mode: single batch holder connecting the ports directly.
-    source_operator->output().register_batch_holder(
+    source_operator->output().RegisterBatchHolder(
         source_port_name, batch_holders[0]);
-    target_operator->input().register_batch_holder(
+    target_operator->input().RegisterBatchHolder(
         target_port_name, batch_holders[0]);
   }
 
@@ -145,7 +145,7 @@ std::vector<std::shared_ptr<cache::IBatchHolder>> Graph::CreateBatchHolders(
   // Create the requested number of batch holders.
   for (std::size_t partition = 0; partition < edge_config.num_partitions;
        ++partition) {
-    holders.push_back(cache::make_batch_holder(GenerateNextBatchHolderId(),
+    holders.push_back(cache::MakeBatchHolder(GenerateNextBatchHolderId(),
                                                edge_config.type,
                                                holder_config,
                                                memory_resource_manager_));
@@ -258,7 +258,7 @@ Status Graph::Execute() {
 
             if (execution_status == ExecutionStatus::Proceed) {
               // Signal completion to downstream operators.
-              current_operator->output().finish();
+              current_operator->output().Finish();
               current_operator->mark_done();
             } else if (target >= 0) {
               std::println(stderr,
@@ -335,8 +335,8 @@ std::pair<bool, std::uint64_t> Graph::EstimateInputRowCount(
   }
 
   // If all inputs are complete, return the actual count.
-  if (target_operator->input_all_finished()) {
-    return {true, target_operator->total_input_rows_added()};
+  if (target_operator->InputAllFinished()) {
+    return {true, target_operator->TotalInputRowsAdded()};
   }
 
   // Try to estimate from upstream operators.
@@ -345,7 +345,7 @@ std::pair<bool, std::uint64_t> Graph::EstimateInputRowCount(
     auto* source_operator =
         GetNode(upstream_edges.begin()->source_operator_id);
     if (source_operator != nullptr) {
-      return source_operator->get_estimated_output_num_rows();
+      return source_operator->GetEstimatedOutputNumRows();
     }
   }
 
@@ -361,8 +361,8 @@ std::pair<bool, std::uint64_t> Graph::EstimateInputRowCountForPort(
   }
 
   // If the specific port is complete, return the actual count.
-  if (target_operator->input_cache_finished(port_name)) {
-    return {true, target_operator->input_cache_num_rows_added(port_name)};
+  if (target_operator->InputCacheFinished(port_name)) {
+    return {true, target_operator->InputCacheNumRowsAdded(port_name)};
   }
 
   // Find the upstream operator connected to this specific port.
@@ -371,7 +371,7 @@ std::pair<bool, std::uint64_t> Graph::EstimateInputRowCountForPort(
     if (edge.target_port_name == port_name) {
       auto* source_operator = GetNode(edge.source_operator_id);
       if (source_operator != nullptr) {
-        return source_operator->get_estimated_output_num_rows();
+        return source_operator->GetEstimatedOutputNumRows();
       }
     }
   }

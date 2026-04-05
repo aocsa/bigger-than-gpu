@@ -18,6 +18,12 @@
   "editor.tabSize": 4,
   "editor.insertSpaces": true,
 
+  // Folding settings
+  "editor.folding": true,
+  "editor.foldingStrategy": "auto",
+  "editor.foldingHighlight": true,
+  "editor.showFoldingControls": "always",
+
   // File associations
   "files.associations": {
     "*.cpp": "cpp",

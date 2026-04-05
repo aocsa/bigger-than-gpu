@@ -9,9 +9,37 @@
 #include <iostream>
 #include <format>
 
+#include "quest/datasource/column_vector.hpp"
+#include "quest/datasource/record_batch.hpp"
+#include "quest/datasource/schema.hpp"
+#include "quest/datasource/types.hpp"
+
 using namespace quest;
 using namespace quest::taskflow;
 using namespace quest::cache;
+using namespace quest::datasource;
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/// @brief Creates a simple RecordBatch for testing
+RecordBatch MakeTestBatch(std::size_t num_rows, std::size_t num_columns) {
+    std::vector<Field> fields;
+    std::vector<std::shared_ptr<ColumnVector>> columns;
+
+    for (std::size_t c = 0; c < num_columns; ++c) {
+        fields.emplace_back("col" + std::to_string(c), Int32Type{});
+        auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, num_rows);
+        for (std::size_t r = 0; r < num_rows; ++r) {
+            col->Append(static_cast<int32_t>(r * num_columns + c));
+        }
+        columns.push_back(col);
+    }
+
+    Schema schema(fields);
+    return RecordBatch(schema, columns);
+}
 
 // =============================================================================
 // Example Operators
@@ -24,28 +52,27 @@ public:
         : Operator(id, std::format("TableScan({})", table_name), OperatorType::TableScan)
         , table_name_(std::move(table_name))
         , num_batches_(num_batches) {}
-    
+
     [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
-    
+
     [[nodiscard]] ExecutionStatus run() override {
         std::cout << std::format("[{}] Scanning table '{}'\n", id(), table_name_);
-        
+
         for (std::size_t i = 0; i < num_batches_; ++i) {
-            auto data = std::make_shared<CPUCacheData>(
+            auto batch = MakeTestBatch(50, 3);
+            auto data = std::make_shared<HostMemoryBlock>(
                 std::format("{}_{}", table_name_, i),
-                std::vector<std::byte>(512),
-                50,
-                3
+                std::move(batch)
             );
-            
-            auto status = add_to_output(std::move(data));
+
+            auto status = AddToOutput(std::move(data));
             if (!status.ok()) {
                 return ExecutionStatus::Stop;
             }
-            
+
             std::cout << std::format("[{}] {} batch {}\n", id(), table_name_, i + 1);
         }
-        
+
         return ExecutionStatus::Proceed;
     }
 
@@ -61,8 +88,8 @@ public:
         : Operator(id, std::format("PartwiseJoin({})", condition), OperatorType::PartwiseJoin)
         , condition_(std::move(condition)) {
         // Register named input ports
-        input().register_port("input_a");
-        input().register_port("input_b");
+        input().RegisterPort("input_a");
+        input().RegisterPort("input_b");
     }
     
     [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
@@ -79,24 +106,24 @@ public:
         }
         
         // Collect all batches from both sides
-        std::vector<std::shared_ptr<CacheData>> batches_a;
-        std::vector<std::shared_ptr<CacheData>> batches_b;
+        std::vector<std::shared_ptr<DataBlock>> batches_a;
+        std::vector<std::shared_ptr<DataBlock>> batches_b;
         
         // Read from input_a
         while (true) {
-            auto result = cache_a->pull();
+            auto result = cache_a->Pull();
             if (!result.has_value()) break;
-            if (result.value() && result.value()->data()) {
-                batches_a.push_back(result.value()->data());
+            if (result.value() && result.value()) {
+                batches_a.push_back(result.value());
             }
         }
         
         // Read from input_b
         while (true) {
-            auto result = cache_b->pull();
+            auto result = cache_b->Pull();
             if (!result.has_value()) break;
-            if (result.value() && result.value()->data()) {
-                batches_b.push_back(result.value()->data());
+            if (result.value() && result.value()) {
+                batches_b.push_back(result.value());
             }
         }
         
@@ -107,19 +134,20 @@ public:
         std::size_t join_count = 0;
         for (const auto& a : batches_a) {
             for (const auto& b : batches_b) {
-                // Create joined batch
-                auto joined = std::make_shared<CPUCacheData>(
+                // Create joined batch with combined columns
+                auto joined_rows = a->num_rows() * b->num_rows();
+                auto joined_cols = a->num_columns() + b->num_columns();
+                auto batch = MakeTestBatch(joined_rows, joined_cols);
+                auto joined = std::make_shared<HostMemoryBlock>(
                     std::format("joined_{}_{}", id(), join_count),
-                    std::vector<std::byte>(1024),
-                    a->num_rows() * b->num_rows(),  // Cartesian product
-                    a->num_columns() + b->num_columns()
+                    std::move(batch)
                 );
-                
-                auto status = add_to_output(std::move(joined));
+
+                auto status = AddToOutput(std::move(joined));
                 if (!status.ok()) {
                     return ExecutionStatus::Stop;
                 }
-                
+
                 ++join_count;
             }
         }
@@ -145,13 +173,13 @@ public:
         std::size_t total_rows = 0;
         std::size_t batch_count = 0;
         
-        auto input_holder = input_cache();
+        auto input_holder = InputCache();
         while (input_holder) {
-            auto result = input_holder->pull();
+            auto result = input_holder->Pull();
             if (!result.has_value()) break;
             
-            if (result.value() && result.value()->data()) {
-                total_rows += result.value()->data()->num_rows();
+            if (result.value() && result.value()) {
+                total_rows += result.value()->num_rows();
                 ++batch_count;
             }
         }
