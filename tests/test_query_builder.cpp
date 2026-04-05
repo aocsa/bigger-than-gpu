@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 /// @file test_query_builder.cpp
-/// @brief Unit tests for QueryBuilder DSL.
+/// @brief Unit tests for QueryBuilder (synchronous execution).
 
 #include <gtest/gtest.h>
 
@@ -16,136 +16,6 @@ using namespace quest;
 using namespace quest::datasource;
 
 // =============================================================================
-// ExprBuilder Tests
-// =============================================================================
-
-TEST(ExprBuilderTest, ColumnReference) {
-  auto expr = Col("name");
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-  EXPECT_NE(built->ToString().find("name"), std::string::npos);
-}
-
-TEST(ExprBuilderTest, LiteralInt) {
-  auto expr = Lit(42);
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-  EXPECT_NE(built->ToString().find("42"), std::string::npos);
-}
-
-TEST(ExprBuilderTest, LiteralDouble) {
-  auto expr = Lit(3.14);
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-}
-
-TEST(ExprBuilderTest, LiteralString) {
-  auto expr = Lit(std::string("hello"));
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-}
-
-TEST(ExprBuilderTest, LiteralBool) {
-  auto expr_true = Lit(true);
-  auto expr_false = Lit(false);
-
-  EXPECT_NE(expr_true.Build(), nullptr);
-  EXPECT_NE(expr_false.Build(), nullptr);
-}
-
-// =============================================================================
-// Comparison Operators
-// =============================================================================
-
-TEST(ExprBuilderTest, Equality) {
-  auto expr = Col("id") == Lit(10);
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-  auto str = built->ToString();
-  EXPECT_NE(str.find("=="), std::string::npos);
-}
-
-TEST(ExprBuilderTest, NotEqual) {
-  auto expr = Col("status") != Lit(0);
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-  auto str = built->ToString();
-  EXPECT_NE(str.find("!="), std::string::npos);
-}
-
-TEST(ExprBuilderTest, LessThan) {
-  auto expr = Col("age") < Lit(18);
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-  auto str = built->ToString();
-  EXPECT_NE(str.find("<"), std::string::npos);
-}
-
-TEST(ExprBuilderTest, LessOrEqual) {
-  auto expr = Col("score") <= Lit(100);
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-  auto str = built->ToString();
-  EXPECT_NE(str.find("<="), std::string::npos);
-}
-
-TEST(ExprBuilderTest, GreaterThan) {
-  auto expr = Col("salary") > Lit(50000);
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-  auto str = built->ToString();
-  EXPECT_NE(str.find(">"), std::string::npos);
-}
-
-TEST(ExprBuilderTest, GreaterOrEqual) {
-  auto expr = Col("level") >= Lit(5);
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-  auto str = built->ToString();
-  EXPECT_NE(str.find(">="), std::string::npos);
-}
-
-// =============================================================================
-// Logical Operators
-// =============================================================================
-
-TEST(ExprBuilderTest, LogicalAnd) {
-  auto expr = (Col("age") >= Lit(18)) && (Col("age") < Lit(65));
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-  auto str = built->ToString();
-  EXPECT_NE(str.find("AND"), std::string::npos);
-}
-
-TEST(ExprBuilderTest, LogicalOr) {
-  auto expr = (Col("status") == Lit(1)) || (Col("status") == Lit(2));
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-  auto str = built->ToString();
-  EXPECT_NE(str.find("OR"), std::string::npos);
-}
-
-TEST(ExprBuilderTest, ComplexLogical) {
-  auto expr = ((Col("a") > Lit(0)) && (Col("b") < Lit(100))) ||
-              (Col("c") == Lit(0));
-  auto built = expr.Build();
-
-  EXPECT_NE(built, nullptr);
-}
-
-// =============================================================================
 // QueryBuilder Tests with Mock DataSource
 // =============================================================================
 
@@ -157,7 +27,6 @@ class MockDataSource : public DataSource {
 
   [[nodiscard]] RecordBatchSequence Scan(
       const std::vector<std::string>& /*projection*/) override {
-    // Return empty sequence for testing
     return RecordBatchSequence(nullptr, {});
   }
 
@@ -280,7 +149,6 @@ TEST_F(QueryBuilderParquetTest, ExecuteCollect) {
 // =============================================================================
 
 TEST_F(QueryBuilderTest, SelectAll) {
-  // Select all columns
   auto plan = QueryBuilder::From(data_source_, "test")
                   .Select({"id", "name", "department", "salary"})
                   .BuildLogicalPlan();
@@ -306,4 +174,74 @@ TEST_F(QueryBuilderTest, ChainedOperations) {
   EXPECT_NE(plan, nullptr);
   auto str = plan->Pretty(0);
   EXPECT_FALSE(str.empty());
+}
+
+// =============================================================================
+// QueryBuilder Move Semantics Tests
+// =============================================================================
+
+TEST_F(QueryBuilderTest, MoveConstruction) {
+  auto builder1 = QueryBuilder::From(data_source_, "test");
+  auto str1 = builder1.ToString();
+
+  QueryBuilder builder2(std::move(builder1));  // Move constructor
+
+  EXPECT_EQ(builder2.ToString(), str1);
+}
+
+TEST_F(QueryBuilderTest, SchemaAccess) {
+  auto builder = QueryBuilder::From(data_source_, "test");
+  auto schema = builder.schema();
+
+  EXPECT_EQ(schema.num_fields(), 4);
+  EXPECT_EQ(schema.field(0).name, "id");
+}
+
+TEST_F(QueryBuilderTest, BoolConversion) {
+  auto builder = QueryBuilder::From(data_source_, "test");
+  EXPECT_TRUE(static_cast<bool>(builder));
+}
+
+// =============================================================================
+// ExecuteWithControl Tests (Early Termination)
+// =============================================================================
+
+TEST_F(QueryBuilderParquetTest, ExecuteWithControlContinue) {
+  if (!std::filesystem::exists(employees_file())) {
+    GTEST_SKIP() << "Test file not found: " << employees_file();
+  }
+
+  auto builder_result = QueryBuilder::FromParquet(employees_file().string());
+  ASSERT_TRUE(builder_result.has_value());
+
+  int batch_count = 0;
+  auto status = std::move(builder_result.value())
+                    .ExecuteWithControl([&batch_count](RecordBatch /*batch*/) {
+                      ++batch_count;
+                      return true;  // Continue
+                    });
+
+  EXPECT_TRUE(status.ok());
+  EXPECT_GT(batch_count, 0);
+}
+
+TEST_F(QueryBuilderParquetTest, ExecuteWithControlStop) {
+  if (!std::filesystem::exists(employees_file())) {
+    GTEST_SKIP() << "Test file not found: " << employees_file();
+  }
+
+  auto builder_result = QueryBuilder::FromParquet(employees_file().string());
+  ASSERT_TRUE(builder_result.has_value());
+
+  int batch_count = 0;
+  auto status = std::move(builder_result.value())
+                    .ExecuteWithControl([&batch_count](RecordBatch /*batch*/) {
+                      ++batch_count;
+                      return false;  // Stop after first batch
+                    });
+
+  // Should be cancelled after first batch
+  EXPECT_FALSE(status.ok());
+  EXPECT_EQ(status.code(), ErrorCode::Cancelled);
+  EXPECT_EQ(batch_count, 1);  // Only processed one batch
 }

@@ -5,10 +5,14 @@
 #define QUEST_QUERY_BUILDER_HPP
 
 /// @file query_builder.hpp
-/// @brief Fluent query builder DSL for constructing query plans.
+/// @brief Synchronous query builder with push-based execution.
 ///
-/// This file provides a fluent interface for building query plans,
-/// similar to DataFrame APIs in other data processing frameworks.
+/// Provides three execution modes:
+/// 1. **Callback**: Execute() - push-based, caller provides callback
+/// 2. **Early termination**: ExecuteWithControl() - callback returns bool to stop
+/// 3. **Collect all**: ExecuteCollect() - collects all results into memory
+///
+/// For pull-based streaming with backpressure, see streaming_query_builder.hpp.
 
 #include <functional>
 #include <initializer_list>
@@ -17,193 +21,179 @@
 #include <utility>
 #include <vector>
 
-#include "quest/datasource/data_source.hpp"
-#include "quest/logical_plan/logical_expr.hpp"
-#include "quest/logical_plan/logical_plan.hpp"
-#include "quest/physical_plan/physical_plan.hpp"
-#include "quest/result.hpp"
+#include "quest/builder/expr_builder.hpp"
+#include "quest/builder/query_plan.hpp"
 
 namespace quest {
 
 // =============================================================================
-// Expression Builder
+// Query Builder (Synchronous Execution)
 // =============================================================================
 
-/// @brief Expression builder for fluent expression construction.
-class ExprBuilder {
- public:
-  explicit ExprBuilder(LogicalExprPtr expr) : expr_(std::move(expr)) {}
-
-  // Comparison operators
-  [[nodiscard]] ExprBuilder operator==(const ExprBuilder& other) const {
-    return ExprBuilder(eq(expr_->Clone(), other.expr_->Clone()));
-  }
-
-  [[nodiscard]] ExprBuilder operator!=(const ExprBuilder& other) const {
-    return ExprBuilder(neq(expr_->Clone(), other.expr_->Clone()));
-  }
-
-  [[nodiscard]] ExprBuilder operator<(const ExprBuilder& other) const {
-    return ExprBuilder(lt(expr_->Clone(), other.expr_->Clone()));
-  }
-
-  [[nodiscard]] ExprBuilder operator<=(const ExprBuilder& other) const {
-    return ExprBuilder(lte(expr_->Clone(), other.expr_->Clone()));
-  }
-
-  [[nodiscard]] ExprBuilder operator>(const ExprBuilder& other) const {
-    return ExprBuilder(gt(expr_->Clone(), other.expr_->Clone()));
-  }
-
-  [[nodiscard]] ExprBuilder operator>=(const ExprBuilder& other) const {
-    return ExprBuilder(gte(expr_->Clone(), other.expr_->Clone()));
-  }
-
-  // Logical operators
-  [[nodiscard]] ExprBuilder operator&&(const ExprBuilder& other) const {
-    return ExprBuilder(and_expr(expr_->Clone(), other.expr_->Clone()));
-  }
-
-  [[nodiscard]] ExprBuilder operator||(const ExprBuilder& other) const {
-    return ExprBuilder(or_expr(expr_->Clone(), other.expr_->Clone()));
-  }
-
-  [[nodiscard]] LogicalExprPtr Build() const { return expr_->Clone(); }
-
-  [[nodiscard]] const LogicalExpr& GetExpr() const { return *expr_; }
-
- private:
-  LogicalExprPtr expr_;
-};
-
-/// @brief Column reference for DSL.
-[[nodiscard]] inline ExprBuilder Col(const std::string& name) {
-  return ExprBuilder(col(name));
-}
-
-/// @brief Literal value for DSL.
-template <typename T>
-[[nodiscard]] ExprBuilder Lit(T value) {
-  return ExprBuilder(lit(value));
-}
-
-// =============================================================================
-// Query Builder
-// =============================================================================
-
-/// @brief Query builder for fluent query construction.
+/// @brief Synchronous query builder for push-based execution.
+///
+/// Example:
+/// @code
+///   auto result = QueryBuilder::FromParquet("file.parquet");
+///   if (!result) { /* handle error */ }
+///
+///   auto batches = std::move(result.value())
+///       .Where(Col("salary") > Lit(50000))
+///       .Select({"id", "name", "salary"})
+///       .ExecuteCollect();
+/// @endcode
 class QueryBuilder {
  public:
+  // Rule of Five: Move-only (plan ownership)
+  QueryBuilder(QueryBuilder&&) noexcept = default;
+  QueryBuilder& operator=(QueryBuilder&&) noexcept = default;
+  QueryBuilder(const QueryBuilder&) = delete;
+  QueryBuilder& operator=(const QueryBuilder&) = delete;
+  ~QueryBuilder() = default;
+
+  // ===========================================================================
+  // Factory Methods
+  // ===========================================================================
+
   /// @brief Start with a Parquet data source.
-  /// @param filename Path to the Parquet file.
-  /// @return Result containing QueryBuilder or error.
   [[nodiscard]] static Result<QueryBuilder> FromParquet(
       const std::string& filename) {
-    auto source_result = datasource::ParquetDataSource::Open(filename);
-    if (!source_result) {
-      return std::unexpected(source_result.error());
+    auto plan_result = QueryPlan::FromParquet(filename);
+    if (!plan_result) {
+      return std::unexpected(plan_result.error());
     }
-    // Move the ParquetDataSource into a shared_ptr
-    auto source = std::make_shared<datasource::ParquetDataSource>(
-        std::move(*source_result));
-    return QueryBuilder(
-        std::make_unique<Scan>(filename, std::move(source), std::nullopt));
+    return QueryBuilder(std::move(*plan_result));
   }
 
   /// @brief Start with a generic data source.
-  /// @param source The data source.
-  /// @param name A name for the data source.
-  /// @return QueryBuilder instance.
   [[nodiscard]] static QueryBuilder From(std::shared_ptr<DataSource> source,
-                                         const std::string& name) {
-    return QueryBuilder(
-        std::make_unique<Scan>(name, std::move(source), std::nullopt));
+                                          const std::string& name) {
+    return QueryBuilder(QueryPlan::From(std::move(source), name));
   }
 
-  /// @brief Add a filter/selection.
+  // ===========================================================================
+  // Query Building (Fluent Interface)
+  // ===========================================================================
+
+  /// @brief Add a filter/selection condition.
   [[nodiscard]] QueryBuilder Where(const ExprBuilder& condition) && {
-    return QueryBuilder(
-        std::make_unique<Selection>(std::move(plan_), condition.Build()));
+    return QueryBuilder(std::move(plan_).Where(condition));
   }
 
   /// @brief Add a projection with column names.
   [[nodiscard]] QueryBuilder Select(
       std::initializer_list<std::string> columns) && {
-    std::vector<LogicalExprPtr> exprs;
-    exprs.reserve(columns.size());
-    for (const auto& name : columns) {
-      exprs.push_back(col(name));
-    }
-    return QueryBuilder(
-        std::make_unique<Projection>(std::move(plan_), std::move(exprs)));
+    return QueryBuilder(std::move(plan_).Select(columns));
   }
 
   /// @brief Add a projection with expressions.
   [[nodiscard]] QueryBuilder Select(
       std::initializer_list<ExprBuilder> exprs) && {
-    std::vector<LogicalExprPtr> expr_list;
-    expr_list.reserve(exprs.size());
-    for (const auto& expr : exprs) {
-      expr_list.push_back(expr.Build());
-    }
-    return QueryBuilder(
-        std::make_unique<Projection>(std::move(plan_), std::move(expr_list)));
+    return QueryBuilder(std::move(plan_).Select(exprs));
   }
 
+  /// @brief Add a projection with a vector of expressions.
+  [[nodiscard]] QueryBuilder Select(const std::vector<ExprBuilder>& exprs) && {
+    return QueryBuilder(std::move(plan_).Select(exprs));
+  }
+
+  // ===========================================================================
+  // Plan Building
+  // ===========================================================================
+
   /// @brief Build and return the logical plan.
-  [[nodiscard]] LogicalPlanPtr BuildLogicalPlan() && { return std::move(plan_); }
+  [[nodiscard]] LogicalPlanPtr BuildLogicalPlan() && {
+    return std::move(plan_).BuildLogicalPlan();
+  }
 
   /// @brief Build and return the physical plan.
   [[nodiscard]] Result<PhysicalPlanPtr> BuildPhysicalPlan() && {
-    return CreatePhysicalPlan(*plan_);
+    return std::move(plan_).BuildPhysicalPlan();
   }
 
-  /// @brief Execute the query and call callback for each batch.
-  [[nodiscard]] Status Execute(const ResultCallback& callback) && {
-    auto physical_result = CreatePhysicalPlan(*plan_);
+  // ===========================================================================
+  // Execution Methods (Synchronous / Push-based)
+  // ===========================================================================
+
+  /// @brief Execute the query with a callback for each batch (push-based).
+  /// @tparam F Callback type (must satisfy BatchCallback concept).
+  /// @param callback Function called for each result batch.
+  /// @return Status indicating success or failure.
+  template <BatchCallback F>
+  [[nodiscard]] Status Execute(F&& callback) && {
+    auto physical_result = CreatePhysicalPlan(plan_.plan());
     if (!physical_result) {
       return std::unexpected(physical_result.error());
     }
-    return physical_result.value()->Execute(callback);
+    return physical_result.value()->Execute(std::forward<F>(callback));
   }
 
-  /// @brief Execute and collect all results.
-  [[nodiscard]] Result<std::vector<RecordBatch>> ExecuteCollect() && {
-    std::vector<RecordBatch> results;
-    auto physical_result = CreatePhysicalPlan(*plan_);
+  /// @brief Execute with early termination support (callback returns bool).
+  /// @tparam F Callback type (must satisfy BatchCallbackWithControl concept).
+  /// @param callback Function returning false to stop execution.
+  /// @return Status indicating success, failure, or cancellation.
+  template <BatchCallbackWithControl F>
+  [[nodiscard]] Status ExecuteWithControl(F&& callback) && {
+    auto physical_result = CreatePhysicalPlan(plan_.plan());
+    if (!physical_result) {
+      return std::unexpected(physical_result.error());
+    }
+
+    bool cancelled = false;
+    auto status = physical_result.value()->Execute(
+        [&callback, &cancelled](datasource::RecordBatch batch) {
+          if (!cancelled) {
+            if (!std::forward<F>(callback)(std::move(batch))) {
+              cancelled = true;
+            }
+          }
+        });
+
+    if (cancelled) {
+      return Status::Cancelled("Query execution cancelled by callback");
+    }
+    return status;
+  }
+
+  /// @brief Execute and collect all results into memory.
+  /// @return Vector of RecordBatches or error.
+  /// @note For large datasets, consider StreamingQueryBuilder::ExecuteStream().
+  [[nodiscard]] Result<std::vector<datasource::RecordBatch>> ExecuteCollect() && {
+    std::vector<datasource::RecordBatch> results;
+    auto physical_result = CreatePhysicalPlan(plan_.plan());
     if (!physical_result) {
       return std::unexpected(physical_result.error());
     }
     auto status = physical_result.value()->Execute(
-        [&results](RecordBatch batch) { results.push_back(std::move(batch)); });
+        [&results](datasource::RecordBatch batch) {
+          results.push_back(std::move(batch));
+        });
     if (!status) {
       return std::unexpected(status.error());
     }
     return results;
   }
 
+  // ===========================================================================
+  // Utility Methods
+  // ===========================================================================
+
   /// @brief Get string representation of the logical plan.
-  [[nodiscard]] std::string ToString() const { return plan_->Pretty(); }
+  [[nodiscard]] std::string ToString() const { return plan_.ToString(); }
+
+  /// @brief Check if the builder has a valid plan.
+  [[nodiscard]] explicit operator bool() const noexcept {
+    return static_cast<bool>(plan_);
+  }
+
+  /// @brief Get the output schema of the query.
+  [[nodiscard]] datasource::Schema schema() const { return plan_.schema(); }
 
  private:
-  explicit QueryBuilder(LogicalPlanPtr plan) : plan_(std::move(plan)) {}
+  explicit QueryBuilder(QueryPlan plan) noexcept : plan_(std::move(plan)) {}
 
-  LogicalPlanPtr plan_;
+  QueryPlan plan_;
 };
-
-/// @brief Macro-based DSL for query definition.
-///
-/// Usage:
-/// @code
-///   QUEST_QUERY(my_query) {
-///     auto result = QueryBuilder::FromParquet("file.parquet");
-///     if (!result.has_value()) { /* handle error */ }
-///     return std::move(result.value())
-///         .Where(Col("salary") == Lit(200))
-///         .Select({"id", "name"});
-///   }
-/// @endcode
-#define QUEST_QUERY(name) inline auto name() -> quest::QueryBuilder
 
 }  // namespace quest
 

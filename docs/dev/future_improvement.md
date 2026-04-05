@@ -8,7 +8,7 @@
 - **TaskFlow Engine**: BFS-scheduled parallel execution with one thread per operator, flow control via saturation thresholds
 - **Cache Layer**: `BatchHolder` (FIFO) and `ConcatenatingBatchHolder` with `BlockingQueue`, backpressure, and auto-spill to disk
 - **Memory Management**: Two-tier CPU/Disk with `MemoryResourceManager`, saturation tracking, and spill recommendations
-- **Query Builder**: Fluent API — `FromParquet().Where().Select().Execute()` with coroutine-based `BatchGenerator`
+- **Query Builder**: Split into `QueryBuilder` (sync: Execute, ExecuteCollect, ExecuteWithControl) and `StreamingQueryBuilder` (coroutine: ExecuteStream), sharing a `QueryPlan` fluent API
 - **Logical Plan**: `Scan`, `Selection`, `Projection` nodes with expression trees (comparisons, arithmetic, aggregates)
 - **Physical Plan**: `ScanExec`, `SelectionExec`, `ProjectionExec` with row-by-row evaluation
 - **RecordBatch Serializer**: Binary format ("QRBT") for efficient batch I/O to disk
@@ -18,7 +18,7 @@
 | Metric | Status |
 |--------|--------|
 | Build | Success |
-| Tests | 456 passed, 1 skipped, 0 failed |
+| Tests | 473 passed, 1 skipped, 0 failed |
 | Raw new/delete | Zero |
 | Ownership issues | None detected |
 

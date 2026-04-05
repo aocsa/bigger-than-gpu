@@ -50,9 +50,21 @@ add_executable(test_memory_resource test_memory_resource.cpp)
 target_link_libraries(test_memory_resource PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_memory_resource)
 
+add_executable(test_expr_builder test_expr_builder.cpp)
+target_link_libraries(test_expr_builder PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_expr_builder)
+
+add_executable(test_generator test_generator.cpp)
+target_link_libraries(test_generator PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_generator)
+
 add_executable(test_query_builder test_query_builder.cpp)
 target_link_libraries(test_query_builder PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_query_builder)
+
+add_executable(test_streaming_query_builder test_streaming_query_builder.cpp)
+target_link_libraries(test_streaming_query_builder PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_streaming_query_builder)
 
 add_executable(test_logical_plan test_logical_plan.cpp)
 target_link_libraries(test_logical_plan PRIVATE quest::quest GTest::gtest GTest::gtest_main)
