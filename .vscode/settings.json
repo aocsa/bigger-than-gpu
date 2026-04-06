@@ -15,7 +15,7 @@
 
   // Editor settings for C++
   "editor.formatOnSave": true,
-  "editor.tabSize": 4,
+  "editor.tabSize": 2,
   "editor.insertSpaces": true,
 
   // Folding settings

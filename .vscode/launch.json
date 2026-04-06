@@ -2,12 +2,25 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "(lldb) Launch",
+      "name": "Run Example",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/btree",
+      "program": "${workspaceFolder}/build/examples/simple_graph",
       "args": [],
-      "stopAtEnQTRY": false,
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "lldb",
+      "preLaunchTask": "CMake: Build"
+    },
+    {
+      "name": "Run Test (graph)",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/tests/test_graph",
+      "args": [],
+      "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "environment": [],
       "externalConsole": false,

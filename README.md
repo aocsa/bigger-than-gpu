@@ -115,8 +115,40 @@ This project includes slash commands for [Claude Code](https://claude.ai/code) t
 | `/test` | Run a specific test by name or pattern | `/test graph` or `/test "*Join*"` |
 | `/run` | Build and run an example | `/run parquet_reader_demo` |
 | `/format` | Run clang-format on changed files | `/format` or `/format src/quest/cache/*.hpp` |
+| `/commit` | Create a conventional commit from staged changes | `/commit` or `/commit "fix: race in scheduler"` |
 
-Commands accept optional arguments. Without arguments, they'll ask what you need.
+Commands require the `/project:` prefix since they are project-scoped. Without arguments, they'll ask what you need.
+
+### Examples
+
+```bash
+# Scaffold a new operator (asks stateless/stateful, port count)
+/project:new-op Limit
+
+# Run a specific test
+/project:test graph
+
+# Run with GTest filter
+/project:test "*Join*"
+
+# Build and run an example
+/project:run parquet_reader_demo
+
+# Format all changed C++ files
+/project:format
+
+# Create a commit (analyzes staged changes, drafts message)
+/project:commit
+
+# Create a commit with a specific message
+/project:commit "refactor(cache): simplify BatchHolder spill logic"
+
+# Review memory safety on uncommitted changes
+/project:review-mem
+
+# Trace a query through all 6 QUEST layers
+/project:trace Where(Col("age") > Lit(21))
+```
 
 ## Contributing
 

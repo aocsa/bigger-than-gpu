@@ -44,7 +44,9 @@
       "Bash(./build/tests/test_query_builder:*)",
       "Bash(eza --tree .claude/commands/)",
       "Bash(eza --tree .claude/skills/)",
-      "Bash(eza tasks/)"
+      "Bash(eza tasks/)",
+      "Bash(git status:*)",
+      "Bash(eza:*)"
     ],
     "deny": [],
     "ask": []
