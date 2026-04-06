@@ -300,6 +300,6 @@ while (auto batch_opt = stream.next()) {
 | Parquet reader | `src/quest/datasource/parquet/` |
 | Memory management | `src/quest/memory/memory_resource.hpp` |
 | Future improvements | `docs/dev/future_improvement.md` |
-| Architecture reference | `docs/dev/ARQUITECTURE.md` |
+| Architecture reference | `docs/dev/ARCHITECTURE.md` |
 | Contributing guide | `docs/dev/CONTRIBUTING.md` |
 | Tests CMakeLists | `tests/CMakeLists.txt` |

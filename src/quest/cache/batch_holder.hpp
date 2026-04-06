@@ -1,4 +1,5 @@
-#pragma once
+#ifndef QUEST_CACHE_BATCH_HOLDER_HPP_
+#define QUEST_CACHE_BATCH_HOLDER_HPP_
 
 /// @file batch_holder.hpp
 /// @brief BatchHolder - the cache machine for holding data batches between
@@ -211,3 +212,5 @@ class ConcatenatingBatchHolder final : public BatchHolderBase {
     std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr);
 
 }  // namespace quest::cache
+
+#endif  // QUEST_CACHE_BATCH_HOLDER_HPP_

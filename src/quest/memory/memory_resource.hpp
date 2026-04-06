@@ -1,4 +1,5 @@
-#pragma once
+#ifndef QUEST_MEMORY_MEMORY_RESOURCE_HPP_
+#define QUEST_MEMORY_MEMORY_RESOURCE_HPP_
 
 /// @file memory_resource.hpp
 /// @brief Memory resource interfaces for CPU and Disk memory tiers
@@ -226,3 +227,5 @@ private:
 };
 
 }  // namespace quest::memory
+
+#endif  // QUEST_MEMORY_MEMORY_RESOURCE_HPP_

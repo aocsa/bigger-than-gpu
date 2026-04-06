@@ -1,107 +1,116 @@
-# QUEST — Bigger Than GPU
+# QUEST — C++23 Batch Processing Framework
 
-C++23 batch processing framework with two-tier memory (CPU/Disk) and declarative dataflow execution.
-Inspired by BlazingSQL's "Bigger than GPU" architecture, refocused for CPU -> Disk tiers.
+Two-tier memory (CPU/Disk) batch processing engine inspired by BlazingSQL.
+
+## Mandatory Rules
+
+### Ownership Model
+- `unique_ptr`: expression trees, plan nodes, compression codecs, column vectors
+- `shared_ptr`: IBatchHolder, MemoryResourceManager, DataSource, ColumnVector, DataBlock
+- `weak_ptr`: operator → Graph back-references
+- ZERO raw `new`/`delete`. Use `make_unique`/`make_shared` EXCLUSIVELY.
+
+### Error Handling
+- Use `std::expected` (Result/Status types). NEVER throw exceptions.
+- Propagate errors with early returns, not nested if-chains.
+
+### Naming Conventions
+- Classes/Structs: PascalCase (`BatchHolder`, `DataBlock`)
+- Methods: PascalCase (`Execute`, `ProcessBatch`)
+- Private members: snake_case with trailing `_` (`plan_`, `input_port_`)
+- Namespaces: snake_case (`quest::taskflow`, `quest::cache`)
+- Files: snake_case (`batch_holder.hpp`, `operator_type.hpp`)
+- Type aliases: PascalCase + Ptr/Type suffix (`LogicalPlanPtr`, `DataBlockPtr`)
+- Constants: `k`-prefix PascalCase (`kGraphEntryPointId`)
+- Enum values: PascalCase for execution layer, `k`-prefix for Parquet/datasource layer
+
+### Code Format & Quality
+- Style: `.clang-format` (Google-based, 100 col, 2-space indent)
+- `[[nodiscard]]` on: getters, query methods, factory functions, Result-returning functions
+- `noexcept` on: trivial getters, identity methods
+- `const`-qualify all methods that don't mutate state
+
+### Header Guards
+- Use `#ifndef`/`#define`/`#endif` — NOT `#pragma once`
+- Pattern: `QUEST_{SUBSYSTEM}_{FILENAME}_HPP_`
+
+### Documentation
+- Public API: Doxygen `///` with `@brief`, `@param`, `@return`
+- Section separators: `// ====...====` banners
+- New files MUST use Doxygen. Don't reformat existing `//` comments unless touching that code.
+
+### Copyright
+- New files: `// Copyright 2024 Quest Authors` + `// SPDX-License-Identifier: Apache-2.0`
+
+### Before Writing Code
+1. Check ownership conventions match the model above
+2. New operators MUST implement `run()` AND `can_you_throttle_my_input()`
+3. Every new file gets a test in `tests/` registered in `tests/CMakeLists.txt`
+4. `QueryBuilder` methods are rvalue-qualified (`&&`) — chain with `std::move`
+
+## Workflow
+
+### Plan Mode Default
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately — don't keep pushing
+- Use plan mode for verification steps, not just building
+- Write detailed specs upfront to reduce ambiguity
+
+### Subagent Strategy
+- Use subagents liberally to keep main context window clean
+- Offload research, exploration, and parallel analysis to subagents
+- For complex problems, throw more compute at it via subagents
+- One task per subagent for focused execution
+
+### Self-Improvement Loop
+- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- Write rules for yourself that prevent the same mistake
+- Ruthlessly iterate on these lessons until mistake rate drops
+- Review lessons at session start for relevant project
+
+### Verification Before Done
+- Never mark a task complete without proving it works
+- Diff behavior between main and your changes when relevant
+- Ask yourself: "Would a staff engineer approve this?"
+- Run tests, check logs, demonstrate correctness
+
+### Demand Elegance (Balanced)
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution"
+- Skip this for simple, obvious fixes — don't over-engineer
+- Challenge your own work before presenting it
+
+### Autonomous Bug Fixing
+- When given a bug report: just fix it. Don't ask for hand-holding
+- Point at logs, errors, failing tests — then resolve them
+- Zero context switching required from the user
+- Go fix failing CI tests without being told how
+
+## Task Management
+
+1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
+2. **Verify Plan**: Check in before starting implementation
+3. **Track Progress**: Mark items complete as you go
+4. **Explain Changes**: High-level summary at each step
+5. **Document Results**: Add review section to `tasks/todo.md`
+6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+
+## Core Principles
+
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
+- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
 
 ## Build & Test
 
-```bash
-# Dependencies (macOS): brew install cmake googletest snappy
-mkdir -p build && cd build && cmake .. && make
-ctest --output-on-failure                          # all tests
-./tests/test_graph --gtest_filter="*Join*"         # specific tests
-```
+- Build: `cmake --build build`
+- Test all: `ctest --test-dir build --output-on-failure`
+- Test one: `./build/tests/test_{name}`
+- Test filter: `./build/tests/test_{name} --gtest_filter="*Pattern*"`
+- Clean build (after CMake changes): `rm -rf build && cmake -B build && cmake --build build`
 
-## Architecture Layers
+## Context
 
-```
-QueryBuilder          src/quest/builder/query_builder.hpp    (fluent DSL entry point)
-    |
-Logical Plan          src/quest/logical_plan/                (Scan, Selection, Projection)
-    |
-Physical Plan         src/quest/physical_plan/               (executable operators)
-    |
-TaskFlow Graph        src/quest/taskflow/                    (parallel execution, BFS scheduling)
-    |
-Cache Layer           src/quest/cache/                       (BatchHolder + BlockingQueue)
-    |
-Memory Management     src/quest/memory/memory_resource.hpp   (CPU RAM <-> Disk spilling)
-```
-
-## Key Directories
-
-| Area | Path |
-|------|------|
-| Query builder DSL | `src/quest/builder/query_builder.hpp` |
-| Logical plan nodes & expressions | `src/quest/logical_plan/` |
-| Physical plan & expressions | `src/quest/physical_plan/` |
-| Graph, operators, ports, DSL (`>>`, `+=`) | `src/quest/taskflow/` |
-| Cache (BatchHolder, DataBlock, BlockingQueue) | `src/quest/cache/` |
-| Parquet reader, data sources, column vectors | `src/quest/datasource/` |
-| Memory tiers (CPU/Disk) | `src/quest/memory/` |
-| Tests (Google Test) | `tests/` |
-| Examples | `examples/` |
-| Detailed architecture & contributing docs | `docs/dev/` |
-
-## Ownership Conventions
-
-- `unique_ptr` for exclusive ownership: expression trees (`LogicalExprPtr`), plan nodes (`LogicalPlanPtr`, `PhysicalPlanPtr`), compression codecs, column vectors.
-- `shared_ptr` for shared resources: `IBatchHolder` (shared between source/target operators), `MemoryResourceManager` (one per graph), `DataSource` (shared across plan layers), `ColumnVector` in `RecordBatch` (zero-copy slicing), `DataBlock` (multi-consumer cache).
-- `weak_ptr` for back-references: operators reference their owning `Graph`.
-- Zero raw `new`/`delete`. Use `make_unique`/`make_shared` exclusively.
-
-## Adding a New Operator
-
-1. Subclass `Operator` in `src/quest/taskflow/operator.hpp`
-2. Set `OperatorType` enum in `operator_type.hpp`
-3. Implement `run()` and `can_you_throttle_my_input()`
-4. Wire it into the graph with the DSL: `graph += scan >> my_op >> output;`
-5. Add tests in `tests/`
-
-## Adding a New Test
-
-1. Create `tests/test_feature.cpp`
-2. Register in `tests/CMakeLists.txt`:
-```cmake
-add_executable(test_feature test_feature.cpp)
-target_link_libraries(test_feature PRIVATE quest::quest GTest::gtest GTest::gtest_main)
-gtest_discover_tests(test_feature)
-```
-
-## Query Engine Usage
-
-```cpp
-#include "quest/builder/query_builder.hpp"
-using namespace quest;
-
-auto result = QueryBuilder::FromParquet("data.parquet");
-auto batches = std::move(result.value())
-    .Where(Col("age") > Lit(21))
-    .Select({"id", "name"})
-    .ExecuteCollect();
-```
-
-- `QueryBuilder` methods are rvalue-qualified (`&&`) — chain with `std::move`
-- `ExecuteCollect()` gathers all results; `Execute(callback)` streams batch-by-batch
-- `BuildLogicalPlan()` / `BuildPhysicalPlan()` for plan inspection without execution
-
-## C++ Standards Used
-
-`std::expected` for error handling (Result/Status types), concepts for type constraints,
-ranges for iteration, `std::format` for formatting. Requires GCC 13+ or Clang 17+.
-
-## Library Target
-
-`quest::quest` — link via `target_link_libraries(your_target PRIVATE quest::quest)`.
-Public includes rooted at `src/`, main header: `#include "quest/quest.hpp"`.
-
-## Data Flow Pattern
-
-Operators produce/consume `DataBlock`s through `BatchHolder`s (thread-safe `BlockingQueue`).
-Two `BatchHolder` types: **Simple** (FIFO pull) and **Concatenating** (merge all into one).
-Memory manager auto-spills from CPU to disk at 85% saturation. Disk cleanup on destruction.
-
-## Debugging Trace Order
-
-query_builder.hpp -> logical_plan/ -> physical_plan/ -> taskflow/graph.hpp ->
-taskflow/operator.hpp -> cache/batch_holder.hpp -> memory/memory_resource.hpp
+For architecture, class diagrams, and design patterns: `docs/dev/ARCHITECTURE.md`
+For build commands, directory map, and debugging trace: `docs/dev/CONTRIBUTING.md`
+For known bugs and roadmap: `docs/dev/future_improvement.md`

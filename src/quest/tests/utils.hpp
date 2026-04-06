@@ -1,4 +1,6 @@
-#pragma once
+#ifndef QUEST_TESTS_UTILS_HPP_
+#define QUEST_TESTS_UTILS_HPP_
+
 #include <gtest/gtest.h>
 #include <utility> // for std::move
 
@@ -88,3 +90,5 @@ inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows,
                                                                            \
   /* 3. Assign/Move the value to the user's variable */                    \
   lhs = std::move(*_QUEST_GTEST_NAME(_result));
+
+#endif  // QUEST_TESTS_UTILS_HPP_

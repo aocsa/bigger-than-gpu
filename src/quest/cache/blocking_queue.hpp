@@ -1,4 +1,5 @@
-#pragma once
+#ifndef QUEST_CACHE_BLOCKING_QUEUE_HPP_
+#define QUEST_CACHE_BLOCKING_QUEUE_HPP_
 
 /// @file blocking_queue.hpp
 /// @brief Thread-safe blocking queue for message passing between operators
@@ -287,3 +288,5 @@ template <typename T>
 using FifoQueue = BlockingQueue<T>;
 
 }  // namespace quest::cache
+
+#endif  // QUEST_CACHE_BLOCKING_QUEUE_HPP_

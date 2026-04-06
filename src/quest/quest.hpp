@@ -1,4 +1,5 @@
-#pragma once
+#ifndef QUEST_QUEST_HPP_
+#define QUEST_QUEST_HPP_
 
 /// @file quest.hpp
 /// @brief Main include header for Bigger Than GPU library
@@ -39,3 +40,5 @@ make_default_memory_manager() {
 }
 
 }  // namespace quest
+
+#endif  // QUEST_QUEST_HPP_

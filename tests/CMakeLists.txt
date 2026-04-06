@@ -1,5 +1,4 @@
-# Google Test configuration
-list(INSERT CMAKE_PREFIX_PATH 0 "/opt/homebrew")
+# Google Test configuration (Homebrew prefix set in root CMakeLists.txt)
 find_package(GTest REQUIRED)
 
 enable_testing()

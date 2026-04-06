@@ -1,4 +1,5 @@
-#pragma once
+#ifndef QUEST_RESULT_HPP_
+#define QUEST_RESULT_HPP_
 
 /// @file result.hpp
 /// @brief Result and Status types for error handling using C++23 std::expected.
@@ -515,3 +516,5 @@ template <typename T>
         }                                                                      \
     } while (false)
 
+
+#endif  // QUEST_RESULT_HPP_

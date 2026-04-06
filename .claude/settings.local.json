@@ -41,9 +41,16 @@
       "Bash(./tests/test_graph:*)",
       "Bash(./examples/join_example:*)",
       "Bash(./build/tests/test_query_builder)",
-      "Bash(./build/tests/test_query_builder:*)"
+      "Bash(./build/tests/test_query_builder:*)",
+      "Bash(eza --tree .claude/commands/)",
+      "Bash(eza --tree .claude/skills/)",
+      "Bash(eza tasks/)"
     ],
     "deny": [],
     "ask": []
+  },
+  "sandbox": {
+    "enabled": false,
+    "autoAllowBashIfSandboxed": false
   }
 }
