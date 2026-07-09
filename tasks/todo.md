@@ -37,10 +37,14 @@ Executing [docs/dev/pipeline-execution-plan.md](../docs/dev/pipeline-execution-p
 - [x] REVIEW GATE: user committed f9108cd, then requested an independent review pass
 - [x] Hardening follow-up (P1–P4 from the independent review; see review log): 512 passed / 0 failed / 1 skipped
 
-## Stage 4 — PipelineExecutor
-- [ ] Worker pool, runnable set, completion events, claim-under-lock, teardown order
-- [ ] `Graph::ExecutePipelined()`; old `Execute()` untouched
-- [ ] Tests: FULL gating, PIPELINE overlap, completion race stress, error propagation, 2-worker bound
+## Stage 4 — PipelineExecutor ✅ (code review passed, awaiting commit approval)
+- [x] Worker pool (one worker drains one pipeline at a time; intra-pipeline task parallelism deferred per plan §6), runnable set (`FullBarrierProducers()` all finished), completion events (edge-triggered via `OnPipelineFinished`, nothing polls), claim-under-lock (`pipeline.status_lock()` around claim + `MarkTaskCreated()`), teardown order (`RecordError` stops new scheduling; already-dispatched pipelines drain; `jthread`s joined before `pipelines_` is torn down)
+- [x] `ClaimNextBatch`: `GetNextBatch()` role vs blocking-`Pull()` on the source's own default input holder (Stage 3's kept holders-in-`AddEdge` deviation); `Pull()`'s finished+empty error mapped to EOS-as-value
+- [x] `FinalizeSink()` trigger gated on `IsSink() && !IsSource() && !FullBarrierProducers().empty()` — not just `IsSink()`, so a Pipeline-barrier-only source is never touched
+- [x] `Graph::ExecutePipelined()`; old `Execute()` untouched
+- [x] Tests (7 `PipelineExecutorTest`): FULL gating via an ordered event log (no sleeps); PIPELINE overlap via an explicit release-gate (no timing); many independent pipelines racing to complete; error propagation + Full-barrier-gated downstream never running; a Full-barrier cycle among a subset of pipelines failing instead of hanging; 2-worker bound; `Graph::ExecutePipelined()` smoke test
+- [x] Build green: **519 passed / 0 failed / 1 skipped** (512 baseline + 7 new); 30x shuffled repeat clean
+- [x] Self code review (code-reviewer subagent) — found + fixed one critical deadlock and one test-hang-on-regression risk before commit; see review log
 - [ ] REVIEW GATE
 
 ## Stage 5 — Parity + benchmark
@@ -53,6 +57,62 @@ Executing [docs/dev/pipeline-execution-plan.md](../docs/dev/pipeline-execution-p
 - [ ] REVIEW GATE
 
 ## Review log
+
+### 2026-07-08/09 — Stage 4 (uncommitted, pending REVIEW GATE)
+- New: `pipeline_executor.{hpp,cpp}`, `tests/test_pipeline_executor.cpp` (7 tests). Modified:
+  `graph.{hpp,cpp}` (+`ExecutePipelined()`), `CMakeLists.txt`, `tests/CMakeLists.txt`.
+  519 passed / 0 failed / 1 skipped.
+- Design: one worker drains one pipeline fully (claim -> `RunTask` -> repeat until source
+  exhausted) rather than batch-granular tasks across workers — matches the plan's own
+  "deliberately minimal" framing for this stage (§2.5); intra-pipeline parallelism is the
+  next phase's job, not this one's.
+- `ClaimNextBatch` had to resolve an ambiguity the plan doesn't spell out: how does a
+  pipeline whose source is fed by a real cross-pipeline `BatchHolder` (Stage 3's kept
+  "holders stay in `AddEdge`" deviation) differ from one whose source is a genuine
+  `GetNextBatch()`-role operator? Resolved via `source.IsSource()`: true -> role-based
+  claim; false -> blocking-`Pull()` on the source's own default input port. Symmetric with
+  `Pipeline::PublishOutput`'s existing default-port-only limitation for partitioned sinks
+  (documented, not fixed here — Stage 4 doesn't execute partitioned pipelines either).
+- Self-caught bug (before external review): `DrainPipeline` never finished a pipeline's
+  sink's output holder(s) once its source was exhausted, so a Pipeline-barrier consumer
+  blocked in `Pull()` waited forever for an EOS that never came. Fixed with an RAII guard
+  (`FinishOnExit`) that finishes the sink's output ports and marks the pipeline finished on
+  every exit path (success or error) — caught via the `PipelineBarrierConsumerOverlaps...`
+  test hanging during development, not by inspection.
+- Code-reviewed via the code-reviewer subagent, which found and I fixed two more issues
+  before commit:
+  1. **Critical — real deadlock, reproduced and fixed.** The only "no progress possible"
+     check ran once, at the very start of `Execute()` (empty initial ready queue). A
+     Full-barrier cycle among a *subset* of hand-assembled pipelines (bypassing
+     `MetaPipeline::Build`'s own cycle detection, which never runs on such input) — while
+     at least one *other* pipeline was independently runnable — passed that initial check
+     but then hung every worker forever: the cyclic pipelines could never satisfy
+     "all `FullBarrierProducers()` finished," so `outstanding_` never reached 0 and
+     `stop_scheduling_` never got set (no error had occurred). Fixed by tracking a new
+     `in_flight_` counter (pipelines popped from the queue but not yet finished) and
+     detecting the stall inside `OnPipelineFinished`: queue empty + nothing in flight +
+     pipelines still outstanding = no further progress is possible, ever — record it as an
+     error and stop scheduling instead of waiting. New regression test
+     `FullBarrierCycleAmongSubsetOfPipelinesFailsInsteadOfHanging` (guarded by a detachable
+     background thread + bounded `wait_for`, not `.get()`, so a *future* regression here
+     fails the test instead of hanging the binary).
+  2. **Test-hang-on-regression risk.** The PIPELINE-overlap test originally ran `Execute()`
+     via `std::async`; per the standard, that future's destructor blocks until the task
+     completes, so a real regression would have converted "one test fails" into "the whole
+     binary hangs," defeating the point of the bounded `wait_for` right above it. Replaced
+     with a plain `std::thread` + `std::promise<Status>` and an explicit `detach()` on
+     timeout (deliberately leaks the thread rather than blocking further) — applied to both
+     concurrency tests that launch `Execute()` in the background.
+  3. Documented-not-fixed: `pipeline.status_lock()` is held across the holder-pull branch's
+     unbounded `Pull()`. Harmless today (Stage 4 is strictly one active drain per pipeline,
+     so nothing else contends for that lock while it's held) but flagged with a code comment
+     for whoever builds intra-pipeline task parallelism next, since that phase will need
+     this same lock available for a concurrent completion check.
+  4. Minor hygiene: `scheduled_`/`full_dependents_` now cleared at the end of `Execute()`
+     too (previously only at the top of the next call); `MarkFinished()` now fires
+     unconditionally via the same RAII guard as the holder `Finish()` call, so a failed
+     pipeline isn't left in a permanently ambiguous state.
+- Regression tests added beyond the original 6: `FullBarrierCycleAmongSubsetOfPipelinesFailsInsteadOfHanging`.
 
 ### 2026-07-08 — Stage 3 hardening (review session, follow-up commit on top of f9108cd)
 Independent review of the staged Stage 3 diff by a second session (the one that wrote the

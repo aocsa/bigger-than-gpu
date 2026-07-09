@@ -4,6 +4,10 @@
 #include <format>
 #include <mutex>
 #include <print>
+#include <utility>
+
+#include "quest/taskflow/meta_pipeline.hpp"
+#include "quest/taskflow/pipeline_executor.hpp"
 
 namespace quest::taskflow {
 
@@ -263,6 +267,16 @@ Status Graph::Execute() {
   }
 
   return Status::OK();
+}
+
+Status Graph::ExecutePipelined() {
+  auto build_result = MetaPipeline::Build(*this);
+  if (!build_result.has_value()) {
+    return std::unexpected(build_result.error());
+  }
+
+  PipelineExecutor executor;
+  return executor.Execute(std::move(build_result.value()));
 }
 
 // =============================================================================

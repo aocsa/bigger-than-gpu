@@ -174,6 +174,22 @@ class Graph : public std::enable_shared_from_this<Graph> {
   /// @return Status::OK() on successful completion, error status otherwise.
   [[nodiscard]] Status Execute();
 
+  /// @brief Executes the graph via the pipelined engine (Stage 4 of
+  /// docs/dev/pipeline-execution-plan.md): `MetaPipeline::Build(*this)`
+  /// followed by `PipelineExecutor::Execute(...)` on a default-sized
+  /// worker pool.
+  ///
+  /// Coexists with `Execute()` — the same `*graph +=` DSL builds a graph
+  /// usable by either path; this one does not read `FinalizeWorkflow()`'s
+  /// sentinel edges, so calling it does not require (or preclude) calling
+  /// `FinalizeWorkflow()` first. Replaces `Execute()` as the default in
+  /// Stage 6.
+  ///
+  /// @return Status::OK() if every pipeline finished without error, or the
+  ///         first error encountered (building the pipelines, or running
+  ///         them).
+  [[nodiscard]] Status ExecutePipelined();
+
   /// @brief Finalizes the graph structure before execution.
   ///
   /// This method identifies terminal operators (those with no outgoing edges)

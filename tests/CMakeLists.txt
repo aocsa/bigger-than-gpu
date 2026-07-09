@@ -96,3 +96,7 @@ gtest_discover_tests(test_operator_roles)
 add_executable(test_meta_pipeline test_meta_pipeline.cpp)
 target_link_libraries(test_meta_pipeline PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_meta_pipeline)
+
+add_executable(test_pipeline_executor test_pipeline_executor.cpp)
+target_link_libraries(test_pipeline_executor PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_pipeline_executor)

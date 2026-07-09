@@ -59,6 +59,7 @@ set(QUEST_SOURCES
     src/quest/taskflow/graph.cpp
     src/quest/taskflow/pipeline.cpp
     src/quest/taskflow/meta_pipeline.cpp
+    src/quest/taskflow/pipeline_executor.cpp
 )
 
 # Create library
