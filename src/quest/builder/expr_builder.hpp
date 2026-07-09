@@ -99,6 +99,30 @@ class ExprBuilder {
   }
 
   // ===========================================================================
+  // Arithmetic Operators
+  // ===========================================================================
+
+  [[nodiscard]] ExprBuilder operator+(const ExprBuilder& other) const {
+    return ExprBuilder(add(expr_->Clone(), other.expr_->Clone()));
+  }
+
+  [[nodiscard]] ExprBuilder operator-(const ExprBuilder& other) const {
+    return ExprBuilder(subtract(expr_->Clone(), other.expr_->Clone()));
+  }
+
+  [[nodiscard]] ExprBuilder operator*(const ExprBuilder& other) const {
+    return ExprBuilder(multiply(expr_->Clone(), other.expr_->Clone()));
+  }
+
+  [[nodiscard]] ExprBuilder operator/(const ExprBuilder& other) const {
+    return ExprBuilder(divide(expr_->Clone(), other.expr_->Clone()));
+  }
+
+  [[nodiscard]] ExprBuilder operator%(const ExprBuilder& other) const {
+    return ExprBuilder(modulo(expr_->Clone(), other.expr_->Clone()));
+  }
+
+  // ===========================================================================
   // Build Methods
   // ===========================================================================
 

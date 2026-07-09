@@ -1,0 +1,60 @@
+// Copyright 2024 Quest Authors
+// SPDX-License-Identifier: Apache-2.0
+
+#ifndef QUEST_TASKFLOW_OPERATORS_FILTER_OPERATOR_HPP_
+#define QUEST_TASKFLOW_OPERATORS_FILTER_OPERATOR_HPP_
+
+/// @file filter_operator.hpp
+/// @brief Pipeline-role Filter that evaluates a pre-built physical expression.
+
+#include <cstdint>
+#include <format>
+#include <memory>
+#include <utility>
+
+#include "quest/cache/data_block.hpp"
+#include "quest/execution/batch_kernels.hpp"
+#include "quest/physical_plan/expressions/physical_expr.hpp"
+#include "quest/result.hpp"
+#include "quest/taskflow/operator.hpp"
+
+namespace quest::taskflow {
+
+/// @brief Streaming filter: mask + gather inside ProcessBatch.
+class FilterOperator : public SimpleOperator {
+ public:
+  FilterOperator(std::uint32_t operator_id, ExpressionPtr predicate)
+      : SimpleOperator(operator_id, "Filter", OperatorType::Filter),
+        predicate_(std::move(predicate)) {}
+
+  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
+
+ protected:
+  [[nodiscard]] Result<cache::DataBlockPtr> ProcessBatch(cache::DataBlockPtr input) override {
+    auto host_result = execution::EnsureHostBlock(std::move(input));
+    if (!host_result) {
+      return std::unexpected(host_result.error());
+    }
+    auto host = std::move(*host_result);
+    const auto* batch = host->record_batch();
+    if (!batch) {
+      return Status::Invalid("FilterOperator: empty record batch");
+    }
+
+    auto filtered = execution::FilterRecordBatch(*batch, *predicate_);
+    if (!filtered) {
+      return std::unexpected(filtered.error());
+    }
+
+    auto out = std::make_shared<cache::HostMemoryBlock>(std::format("filter_{}", id()),
+                                                        std::move(*filtered));
+    return out;
+  }
+
+ private:
+  ExpressionPtr predicate_;
+};
+
+}  // namespace quest::taskflow
+
+#endif  // QUEST_TASKFLOW_OPERATORS_FILTER_OPERATOR_HPP_

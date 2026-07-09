@@ -1,7 +1,9 @@
 # Session Handoff — Pipeline Execution (resume at Stage 3)
 
-> **For the next Claude Code session.** Read this + [`tasks/todo.md`](../todo.md) +
-> [`docs/dev/pipeline-execution-plan.md`](../../docs/dev/pipeline-execution-plan.md) before writing code.
+> **SUPERSEDED.** Pipeline Stages 0–6 are complete. Use
+> [`session-handoff-next.md`](session-handoff-next.md) for the next session
+> (replication Phase 3 / Phase 1 bridge). Kept for historical Stage 3 context only.
+>
 > Written 2026-07-08 on branch `feature/refactor`.
 
 ## What this work is

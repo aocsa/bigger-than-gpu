@@ -81,8 +81,7 @@ class ScanExec : public PhysicalPlan {
  public:
   ScanExec(std::shared_ptr<DataSource> data_source,
            std::optional<std::vector<std::string>> projection)
-      : data_source_(std::move(data_source)),
-        projection_(std::move(projection)) {}
+      : data_source_(std::move(data_source)), projection_(std::move(projection)) {}
 
   [[nodiscard]] Schema schema() const override {
     if (projection_) {
@@ -91,9 +90,7 @@ class ScanExec : public PhysicalPlan {
     return data_source_->schema();
   }
 
-  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override {
-    return {};
-  }
+  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override { return {}; }
 
   [[nodiscard]] Status Execute(const ResultCallback& callback) override {
     std::vector<std::string> proj;
@@ -204,8 +201,7 @@ class SelectionExec : public PhysicalPlan {
   }
 
   [[nodiscard]] std::shared_ptr<datasource::ColumnVector> FilterColumn(
-      const datasource::ColumnVector& col,
-      const std::vector<size_t>& indices) const {
+      const datasource::ColumnVector& col, const std::vector<size_t>& indices) const {
     std::vector<Value> filtered_values;
     filtered_values.reserve(indices.size());
     for (size_t idx : indices) {
@@ -228,8 +224,8 @@ class SelectionExec : public PhysicalPlan {
                 data.push_back(false);
               }
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, type_tag);
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              type_tag);
           } else if constexpr (std::is_same_v<TypeTag, datasource::Int32Type>) {
             std::vector<int32_t> data;
             data.reserve(filtered_values.size());
@@ -240,8 +236,8 @@ class SelectionExec : public PhysicalPlan {
                 data.push_back(0);
               }
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, type_tag);
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              type_tag);
           } else if constexpr (std::is_same_v<TypeTag, datasource::Int64Type>) {
             std::vector<int64_t> data;
             data.reserve(filtered_values.size());
@@ -252,8 +248,8 @@ class SelectionExec : public PhysicalPlan {
                 data.push_back(0);
               }
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, type_tag);
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              type_tag);
           } else if constexpr (std::is_same_v<TypeTag, datasource::FloatType>) {
             std::vector<float> data;
             data.reserve(filtered_values.size());
@@ -264,8 +260,8 @@ class SelectionExec : public PhysicalPlan {
                 data.push_back(0.0f);
               }
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, type_tag);
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              type_tag);
           } else if constexpr (std::is_same_v<TypeTag, datasource::DoubleType>) {
             std::vector<double> data;
             data.reserve(filtered_values.size());
@@ -276,8 +272,8 @@ class SelectionExec : public PhysicalPlan {
                 data.push_back(0.0);
               }
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, type_tag);
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              type_tag);
           } else if constexpr (std::is_same_v<TypeTag, datasource::StringType>) {
             std::vector<std::string> data;
             data.reserve(filtered_values.size());
@@ -288,8 +284,8 @@ class SelectionExec : public PhysicalPlan {
                 data.emplace_back();
               }
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, type_tag);
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              type_tag);
           } else {
             // Default: create string column
             std::vector<std::string> data;
@@ -297,8 +293,8 @@ class SelectionExec : public PhysicalPlan {
             for (const auto& val : filtered_values) {
               data.push_back(datasource::ValueToString(val));
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, datasource::StringType{});
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              datasource::StringType{});
           }
         },
         col.GetType());
@@ -315,8 +311,7 @@ class SelectionExec : public PhysicalPlan {
 /// @brief Projection execution node - selects/transforms columns.
 class ProjectionExec : public PhysicalPlan {
  public:
-  ProjectionExec(PhysicalPlanPtr input, Schema schema,
-                 std::vector<ExpressionPtr> expressions)
+  ProjectionExec(PhysicalPlanPtr input, Schema schema, std::vector<ExpressionPtr> expressions)
       : input_(std::move(input)),
         schema_(std::move(schema)),
         expressions_(std::move(expressions)) {}
@@ -370,8 +365,8 @@ class ProjectionExec : public PhysicalPlan {
 /// @param expr The logical expression.
 /// @param input The input logical plan (for schema context).
 /// @return The physical expression, or error.
-[[nodiscard]] inline Result<ExpressionPtr> CreatePhysicalExpr(
-    const LogicalExpr& expr, const LogicalPlan& input) {
+[[nodiscard]] inline Result<ExpressionPtr> CreatePhysicalExpr(const LogicalExpr& expr,
+                                                              const LogicalPlan& input) {
   if (const auto* literal = dynamic_cast<const Literal*>(&expr)) {
     return std::make_unique<LiteralExpression>(literal->value());
   }
@@ -383,8 +378,7 @@ class ProjectionExec : public PhysicalPlan {
   if (const auto* col = dynamic_cast<const Column*>(&expr)) {
     auto index = input.schema().GetFieldIndex(col->name());
     if (!index) {
-      return std::unexpected(
-          Status::SchemaError("No column named: " + col->name()));
+      return std::unexpected(Status::SchemaError("No column named: " + col->name()));
     }
     return std::make_unique<ColumnExpression>(*index);
   }
@@ -426,18 +420,31 @@ class ProjectionExec : public PhysicalPlan {
     if (dynamic_cast<const Or*>(binary)) {
       return std::make_unique<OrExpression>(std::move(left), std::move(right));
     }
+    if (dynamic_cast<const Add*>(binary)) {
+      return std::make_unique<AddExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Subtract*>(binary)) {
+      return std::make_unique<SubtractExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Multiply*>(binary)) {
+      return std::make_unique<MultiplyExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Divide*>(binary)) {
+      return std::make_unique<DivideExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Modulo*>(binary)) {
+      return std::make_unique<ModuloExpression>(std::move(left), std::move(right));
+    }
   }
 
   return std::unexpected(
-      Status::PhysicalPlanError("Cannot create physical expression from: " +
-                                expr.ToString()));
+      Status::PhysicalPlanError("Cannot create physical expression from: " + expr.ToString()));
 }
 
 /// @brief Creates a physical plan from a logical plan.
 /// @param plan The logical plan.
 /// @return The physical plan, or error.
-[[nodiscard]] inline Result<PhysicalPlanPtr> CreatePhysicalPlan(
-    const LogicalPlan& plan) {
+[[nodiscard]] inline Result<PhysicalPlanPtr> CreatePhysicalPlan(const LogicalPlan& plan) {
   if (const auto* scan = dynamic_cast<const Scan*>(&plan)) {
     return std::make_unique<ScanExec>(scan->data_source(), scan->projection());
   }
@@ -447,13 +454,11 @@ class ProjectionExec : public PhysicalPlan {
     if (!input_result) {
       return std::unexpected(input_result.error());
     }
-    auto filter_result =
-        CreatePhysicalExpr(selection->condition(), selection->input());
+    auto filter_result = CreatePhysicalExpr(selection->condition(), selection->input());
     if (!filter_result) {
       return std::unexpected(filter_result.error());
     }
-    return std::make_unique<SelectionExec>(std::move(*input_result),
-                                           std::move(*filter_result));
+    return std::make_unique<SelectionExec>(std::move(*input_result), std::move(*filter_result));
   }
 
   if (const auto* projection = dynamic_cast<const Projection*>(&plan)) {
@@ -482,13 +487,11 @@ class ProjectionExec : public PhysicalPlan {
       fields.push_back(*field_result);
     }
 
-    return std::make_unique<ProjectionExec>(std::move(*input_result),
-                                            Schema(std::move(fields)),
+    return std::make_unique<ProjectionExec>(std::move(*input_result), Schema(std::move(fields)),
                                             std::move(exprs));
   }
 
-  return std::unexpected(
-      Status::PhysicalPlanError("Unsupported logical plan type"));
+  return std::unexpected(Status::PhysicalPlanError("Unsupported logical plan type"));
 }
 
 }  // namespace quest

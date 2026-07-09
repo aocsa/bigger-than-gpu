@@ -401,6 +401,32 @@ Sirius); errors stop new scheduling, drain queued work, then join.
 Measured on 10M rows / 10k batches (`test_execution_parity.cpp`): fused
 pipeline ~5x faster than thread-per-operator on pure per-batch overhead.
 
+### How a real query enters the push pipeline (Phase 1 bridge)
+
+Production queries historically ran only through Engine A
+(`QueryBuilder` → `CreatePhysicalPlan` → recursive callbacks). Phase 1 of
+`docs/dev/sirius-replication-plan.md` adds a Sirius-style **create_plan gate**:
+
+```
+LogicalPlan (Scan / Selection / Projection)
+        │
+        ▼
+execution::CreateGraph(...)          // or QueryBuilder::ExecuteOnGraph()
+        │  translates to role-based Operators
+        ▼
+ExecutableGraph  (owns ops + Graph)
+        │
+        ▼
+Graph::Execute() → MetaPipeline → PipelineExecutor   // push path (unchanged)
+```
+
+- Supported nodes become `TableScanOperator` / `FilterOperator` /
+  `ProjectOperator` / `CollectorOperator` under `src/quest/taskflow/operators/`.
+- Unsupported nodes return an error; `ExecuteOnGraph` falls back to the
+  callback physical engine (Sirius throw→CPU fallback at CPU scale).
+- Default `QueryBuilder::Execute` / `ExecuteCollect` are unchanged.
+- MetaPipeline / PipelineExecutor semantics are not modified by the bridge.
+
 ### Flow control
 
 Cross-pipeline BatchHolders keep their saturation thresholds

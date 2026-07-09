@@ -174,8 +174,8 @@ Before building anything, ground the mental model in real code. Read in this ord
 
 | Phase | Landed | Flagship proof |
 |---|---|---|
-| 1 — Bridge | ☐ | first real query that spills and returns correct results |
-| 2 — Pipelines | ☐ | fused pipeline beats thread-per-operator benchmark |
+| 1 — Bridge | ☑ | real Parquet scan→filter→project via CreateGraph; spill under tiny CPU budget (`test_graph_bridge`) |
+| 2 — Pipelines | ☑ | fused pipeline ~5× faster than thread-per-operator (21 ms → 4 ms, 10k batches × 1k rows, Debug) |
 | 3 — Tasks | ☐ | 4-worker pool, barrier ordering test |
 | 4 — Reservations | ☐ | 500 MB query under 100 MB budget: spill or clean error |
 | 5 — Downgrade | ☐ | spills idle-only, stops when reservation fits |

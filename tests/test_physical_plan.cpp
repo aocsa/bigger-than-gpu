@@ -12,7 +12,10 @@
 
 #include "quest/datasource/column_vector.hpp"
 #include "quest/datasource/record_batch.hpp"
+#include "quest/logical_plan/logical_expr.hpp"
+#include "quest/logical_plan/logical_plan.hpp"
 #include "quest/physical_plan/expressions/physical_expr.hpp"
+#include "quest/physical_plan/physical_plan.hpp"
 #include "quest/tests/utils.hpp"
 
 using namespace quest;
@@ -507,4 +510,60 @@ TEST(PhysicalExprEdgeCaseTest, NegativeNumbers) {
 
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
   EXPECT_NEAR(std::get<double>(result->GetValue(0)), -10.0, 0.001);
+}
+
+// =============================================================================
+// CreatePhysicalExpr arithmetic wiring (Phase 1)
+// =============================================================================
+
+namespace {
+
+class SchemaOnlyPlan : public LogicalPlan {
+ public:
+  explicit SchemaOnlyPlan(Schema s) : schema_(std::move(s)) {}
+  [[nodiscard]] Schema schema() const override { return schema_; }
+  [[nodiscard]] std::vector<const LogicalPlan*> Children() const override { return {}; }
+  [[nodiscard]] std::string ToString() const override { return "SchemaOnly"; }
+
+ private:
+  Schema schema_;
+};
+
+}  // namespace
+
+TEST(CreatePhysicalExprTest, ArithmeticOpsRoundTripEvaluate) {
+  SchemaOnlyPlan input(Schema({Field("a", Int32Type{}), Field("b", DoubleType{})}));
+  auto batch = MakeTestBatch();
+
+  {
+    Add add_expr(col("a"), lit(5));
+    ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(add_expr, input));
+    ASSERT_NE(dynamic_cast<AddExpression*>(phys.get()), nullptr);
+    ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
+    EXPECT_NEAR(std::get<double>(result->GetValue(0)), 15.0, 0.001);
+  }
+  {
+    Subtract sub_expr(col("a"), lit(5));
+    ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(sub_expr, input));
+    ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
+    EXPECT_NEAR(std::get<double>(result->GetValue(0)), 5.0, 0.001);
+  }
+  {
+    Multiply mul_expr(col("a"), lit(2));
+    ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(mul_expr, input));
+    ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
+    EXPECT_NEAR(std::get<double>(result->GetValue(0)), 20.0, 0.001);
+  }
+  {
+    Divide div_expr(col("a"), lit(10));
+    ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(div_expr, input));
+    ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
+    EXPECT_NEAR(std::get<double>(result->GetValue(0)), 1.0, 0.001);
+  }
+  {
+    Modulo mod_expr(col("a"), lit(15));
+    ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(mod_expr, input));
+    ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
+    EXPECT_NEAR(std::get<double>(result->GetValue(0)), 10.0, 0.001);
+  }
 }

@@ -1,14 +1,15 @@
 #include "quest/cache/batch_holder.hpp"
 
+#include "quest/execution/batch_kernels.hpp"
+
 namespace quest::cache {
 
 // =============================================================================
 // BatchHolderBase Implementation
 // =============================================================================
 
-BatchHolderBase::BatchHolderBase(
-    std::uint64_t id, BatchHolderConfig config,
-    std::shared_ptr<memory::MemoryResourceManager> memory_manager)
+BatchHolderBase::BatchHolderBase(std::uint64_t id, BatchHolderConfig config,
+                                 std::shared_ptr<memory::MemoryResourceManager> memory_manager)
     : id_(id),
       config_(config),
       queue_(QueueConfig{.timeout = config_.timeout}),
@@ -23,10 +24,14 @@ bool BatchHolderBase::IsFinished() const {
   return queue_.IsFinished() && queue_.Empty();
 }
 
-std::size_t BatchHolderBase::batch_count() const { return queue_.Size(); }
+std::size_t BatchHolderBase::batch_count() const {
+  return queue_.Size();
+}
 
 void BatchHolderBase::NotifySaturationWaiters() {
-  { std::lock_guard lock(saturation_mutex_); }
+  {
+    std::lock_guard lock(saturation_mutex_);
+  }
   saturation_cv_.notify_all();
 }
 
@@ -39,9 +44,8 @@ void BatchHolderBase::TrackAdded(std::size_t bytes, std::size_t rows) {
 // BatchHolder Implementation
 // =============================================================================
 
-BatchHolder::BatchHolder(
-    std::uint64_t id, BatchHolderConfig config,
-    std::shared_ptr<memory::MemoryResourceManager> memory_manager)
+BatchHolder::BatchHolder(std::uint64_t id, BatchHolderConfig config,
+                         std::shared_ptr<memory::MemoryResourceManager> memory_manager)
     : BatchHolderBase(id, config, std::move(memory_manager)) {}
 
 Status BatchHolder::Add(DataBlockPtr data) {
@@ -87,7 +91,9 @@ Result<DataBlockPtr> BatchHolder::TryPull() {
   return result;
 }
 
-bool BatchHolder::HasNext() const { return queue_.HasNext(); }
+bool BatchHolder::HasNext() const {
+  return queue_.HasNext();
+}
 
 void BatchHolder::WaitIfSaturated() {
   std::unique_lock lock(saturation_mutex_);
@@ -198,20 +204,7 @@ Result<DataBlockPtr> ConcatenatingBatchHolder::ConcatenateAll() {
   }
 
   auto& blocks = *all_blocks;
-  if (blocks.empty()) {
-    return Status::Invalid("No data blocks to concatenate");
-  }
-
-  if (blocks.size() == 1) {
-    return std::move(blocks[0]);
-  }
-
-  // For multiple blocks, we need to concatenate RecordBatches
-  // This requires combining column data from all batches
-  // For now, return an error - proper implementation would require
-  // creating new column vectors with combined data
-  return Status::Invalid(
-      "Concatenation of multiple RecordBatch blocks not yet implemented");
+  return execution::ConcatenateHostBlocks(std::move(blocks));
 }
 
 // =============================================================================
@@ -223,12 +216,10 @@ std::shared_ptr<IBatchHolder> MakeBatchHolder(
     std::shared_ptr<memory::MemoryResourceManager> memory_manager) {
   switch (type) {
     case BatchHolderType::kSimple:
-      return std::make_shared<BatchHolder>(id, config,
-                                           std::move(memory_manager));
+      return std::make_shared<BatchHolder>(id, config, std::move(memory_manager));
 
     case BatchHolderType::kConcatenating:
-      return std::make_shared<ConcatenatingBatchHolder>(
-          id, config, std::move(memory_manager));
+      return std::make_shared<ConcatenatingBatchHolder>(id, config, std::move(memory_manager));
   }
 
   // Default to simple
