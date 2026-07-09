@@ -88,3 +88,7 @@ gtest_discover_tests(test_record_batch_serializer)
 add_executable(test_barrier_config test_barrier_config.cpp)
 target_link_libraries(test_barrier_config PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_barrier_config)
+
+add_executable(test_operator_roles test_operator_roles.cpp)
+target_link_libraries(test_operator_roles PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_operator_roles)

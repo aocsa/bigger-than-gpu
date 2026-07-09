@@ -41,6 +41,35 @@ std::pair<bool, std::uint64_t> Operator::GetEstimatedOutputNumRows() const {
   return {false, 0};
 }
 
+// =============================================================================
+// Pipeline Role Defaults
+// =============================================================================
+
+Result<cache::DataBlockPtr> Operator::ProcessBatch(cache::DataBlockPtr input) {
+  // Default execute role: passthrough. Correct for operators whose work
+  // happens in their source or sink role (scans, collectors).
+  return input;
+}
+
+Result<std::optional<cache::DataBlockPtr>> Operator::GetNextBatch() {
+  // Only sources (and finalized blocking operators) produce batches.
+  return Status::Invalid(std::format(
+      "Operator {} ({}) is not a source; GetNextBatch is not supported",
+      operator_id_, to_string(operator_type_)));
+}
+
+Status Operator::Sink(cache::DataBlockPtr /*batch*/) {
+  // Only sinks (blocking operators, collectors) may be fed final batches.
+  return Status::Invalid(std::format(
+      "Operator {} ({}) is not a sink; Sink is not supported",
+      operator_id_, to_string(operator_type_)));
+}
+
+Status Operator::FinalizeSink() {
+  // No-op for non-sink operators.
+  return Status::OK();
+}
+
 std::shared_ptr<cache::IBatchHolder> Operator::InputCache() {
   // Use the operator's ID as the default port name.
   auto default_port_name = std::to_string(operator_id_);

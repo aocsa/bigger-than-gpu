@@ -37,6 +37,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -156,6 +157,72 @@ class Operator {
   [[nodiscard]] virtual bool IsBlocking() const noexcept {
     return is_blocking_operator(operator_type_);
   }
+
+  // ===========================================================================
+  // Pipeline Roles (mirrors sirius_physical_operator's execute/source/sink)
+  //
+  // In pipeline execution one operator plays up to three roles:
+  // - execute: pure batch-in -> batch-out, called by the pipeline driver on
+  //   every streaming operator in plan order (push loop).
+  // - source:  decides whether a new task can exist and supplies its input
+  //   batch. Sources are scans and blocking operators that have finished
+  //   accumulating (post-FinalizeSink).
+  // - sink:    receives the pipeline's final batch. Blocking operators
+  //   accumulate state here; FinalizeSink() flips them into source mode.
+  // ===========================================================================
+
+  /// @brief Processes a single batch (the execute role).
+  ///
+  /// Called by the pipeline driver on each operator in plan order. The
+  /// default implementation is a passthrough (returns the input unchanged),
+  /// which is correct for operators whose work happens in their source or
+  /// sink role.
+  ///
+  /// @param input The input data block.
+  /// @return The transformed data block, or an error status.
+  [[nodiscard]] virtual Result<cache::DataBlockPtr> ProcessBatch(
+      cache::DataBlockPtr input);
+
+  /// @brief Indicates whether this operator can act as a pipeline source.
+  ///
+  /// Default consults the OperatorType classification (TableScan,
+  /// BindableTableScan, Generate). Blocking operators should report true
+  /// once finalized if they re-emit accumulated state.
+  [[nodiscard]] virtual bool IsSource() const noexcept {
+    return is_source_operator(operator_type_);
+  }
+
+  /// @brief Produces the next batch from this source (the source role).
+  ///
+  /// End-of-stream is a value, not an error: an exhausted source returns
+  /// an engaged Result holding std::nullopt. The default implementation
+  /// returns an error — only sources (and finalized blocking operators)
+  /// may be asked for batches.
+  ///
+  /// @return next batch | std::nullopt on end-of-stream | error status.
+  [[nodiscard]] virtual Result<std::optional<cache::DataBlockPtr>>
+  GetNextBatch();
+
+  /// @brief Indicates whether this operator is a pipeline sink.
+  ///
+  /// Default: blocking operators are sinks (they accumulate their input
+  /// before producing output). Terminal collectors should override to true.
+  [[nodiscard]] virtual bool IsSink() const noexcept { return IsBlocking(); }
+
+  /// @brief Receives one final batch of the pipeline (the sink role).
+  ///
+  /// Blocking operators accumulate state here (hash table, sort buffer).
+  /// The default implementation returns an error — only sinks may be fed.
+  ///
+  /// @param batch The batch arriving at the end of the pipeline.
+  [[nodiscard]] virtual Status Sink(cache::DataBlockPtr batch);
+
+  /// @brief Called exactly once when the producer pipeline completes.
+  ///
+  /// Flips a blocking operator from sink mode to source mode (e.g. hash
+  /// table built -> start emitting). Default is a no-op returning OK so
+  /// non-sink operators are unaffected.
+  [[nodiscard]] virtual Status FinalizeSink();
 
   // ===========================================================================
   // Identity and Type
@@ -417,12 +484,14 @@ class SimpleOperator : public Operator {
  protected:
   /// @brief Processes a single input batch.
   ///
-  /// Derived classes implement this to define their transformation logic.
+  /// Redeclared pure: SimpleOperator subclasses MUST implement their
+  /// transformation logic (the Operator base default is a passthrough,
+  /// which would silently do nothing useful here).
   ///
   /// @param input The input cache data batch.
   /// @return The transformed cache data, or an error status.
-  [[nodiscard]] virtual Result<std::shared_ptr<cache::DataBlock>> ProcessBatch(
-      std::shared_ptr<cache::DataBlock> input) = 0;
+  [[nodiscard]] Result<cache::DataBlockPtr> ProcessBatch(
+      cache::DataBlockPtr input) override = 0;
 };
 
 }  // namespace quest::taskflow
