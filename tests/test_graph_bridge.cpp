@@ -37,7 +37,7 @@ namespace {
 
 }  // namespace
 
-TEST(GraphBridgeTest, CreateGraphBuildsSingleFusedPipeline) {
+TEST(GraphBridgeTest, CreateGraphBuildsFusedPipelinePlusCollectorPipeline) {
   if (!std::filesystem::exists(EmployeesParquet())) {
     GTEST_SKIP() << "missing " << EmployeesParquet();
   }
@@ -50,11 +50,21 @@ TEST(GraphBridgeTest, CreateGraphBuildsSingleFusedPipeline) {
 
   ASSERT_OK_AND_ASSIGN(auto exec, CreateGraph(*plan));
   ASSERT_OK_AND_ASSIGN(auto pipelines, MetaPipeline::Build(exec->graph()));
-  ASSERT_EQ(pipelines.size(), 1U);
-  // scan, filter, project, collector
-  EXPECT_EQ(pipelines[0]->operators().size(), 4U);
-  EXPECT_TRUE(pipelines[0]->source()->IsSource());
-  EXPECT_TRUE(pipelines[0]->sink()->IsSink());
+
+  // Streaming operators fuse; the collector sits behind a Full barrier in
+  // its own pipeline (the RESULT_COLLECTOR shape) so final batches always
+  // cross a spill-aware holder.
+  ASSERT_EQ(pipelines.size(), 2U);
+  const auto& producer = pipelines[0];
+  const auto& collector = pipelines[1];
+
+  EXPECT_EQ(producer->operators().size(), 3U);  // scan, filter, project
+  EXPECT_TRUE(producer->source()->IsSource());
+
+  EXPECT_EQ(collector->operators().size(), 1U);
+  EXPECT_TRUE(collector->sink()->IsSink());
+  ASSERT_EQ(collector->FullBarrierProducers().size(), 1U);
+  EXPECT_EQ(collector->FullBarrierProducers()[0], producer.get());
 }
 
 TEST(GraphBridgeTest, ParquetQueryParityCallbackVsGraph) {
@@ -114,20 +124,34 @@ TEST(GraphBridgeTest, FlagshipSpillThroughRealOperators) {
   }
   ASSERT_TRUE(cpu->is_saturated());
 
-  ASSERT_OK_AND_ASSIGN(auto source_ds, ParquetDataSource::Open(EmployeesParquet().string()));
-  auto shared_ds = std::make_shared<ParquetDataSource>(std::move(source_ds));
+  // THE flagship: a real query, through the real gate (CreateGraph), with
+  // filter+project in the path — the blocks that reach the collector's
+  // Full-barrier holder are ProjectOperator outputs, so this proves both
+  // that the collector pipeline break exists AND that intermediate
+  // operators stamp memory resources onto their outputs (without which
+  // ToDisk() fails and MaybeSpill silently keeps everything in RAM).
+  auto plan = QueryBuilder::FromParquet(EmployeesParquet().string())
+                  .value()
+                  .Where(Col("salary") > Lit(50000.0))
+                  .Select({"id", "name", "salary"})
+                  .BuildLogicalPlan();
 
-  TableScanOperator scan{0, shared_ds, std::nullopt, manager};
-  CollectorOperator collector{1};
-  auto graph = std::make_shared<Graph>(manager);
-  // Full barrier forces a pipeline split so batches cross a BatchHolder
-  // (Pipeline barrier alone still fuses).
-  *graph += link(scan, collector, EdgeConfig::Simple().with_barrier(BarrierType::Full));
+  ASSERT_OK_AND_ASSIGN(auto exec, CreateGraph(*plan, manager));
+  ASSERT_OK(exec->Execute());
 
-  ASSERT_OK(graph->Execute());
+  const auto& collector = exec->collector();
   EXPECT_GT(collector.total_rows(), 0U);
   EXPECT_GT(collector.disk_tier_count(), 0U)
-      << "tiny CPU budget must spill at least one batch through the holder";
+      << "tiny CPU budget must spill at least one batch through the "
+         "collector's Full-barrier holder";
+
+  // Spilled blocks must still materialize correctly (disk -> CPU upgrade).
+  ASSERT_OK_AND_ASSIGN(auto batches, collector.CollectBatches());
+  std::size_t rows = 0;
+  for (const auto& batch : batches) {
+    rows += batch.num_rows();
+  }
+  EXPECT_EQ(rows, collector.total_rows());
 }
 
 TEST(ConcatenatingBatchHolderTest, MultipleBlocksConcatenate) {

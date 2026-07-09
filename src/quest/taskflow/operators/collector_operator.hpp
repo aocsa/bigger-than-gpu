@@ -13,10 +13,11 @@
 #include <utility>
 #include <vector>
 
+#include "quest/cache/data_block.hpp"
 #include "quest/datasource/column_vector.hpp"
 #include "quest/datasource/record_batch.hpp"
 #include "quest/memory/memory_resource.hpp"
-#include "quest/taskflow/operators/collector_operator.hpp"
+#include "quest/taskflow/operator.hpp"
 
 namespace quest::taskflow {
 
@@ -45,6 +46,11 @@ class CollectorOperator : public Operator {
     return Status::OK();
   }
 
+  // NOTE (thread-safety contract): Sink() locks because a future executor
+  // may deliver batches from multiple tasks; the readers below deliberately
+  // do NOT lock — they are only valid after Execute() has returned (single
+  // drain per pipeline today, and Execute() joins all workers before
+  // returning). Do not call them while the graph is running.
   [[nodiscard]] const std::vector<cache::DataBlockPtr>& batches() const noexcept {
     return batches_;
   }

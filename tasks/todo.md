@@ -50,6 +50,31 @@ the `Execute()` → `ExecutePipelined()` default.
 
 ## Review log
 
+### 2026-07-09 — Phase 1 independent review (review session; P1+P4 fixed, folded into the Phase 1 commit)
+Second-session review of the staged Phase 1 diff against the replication plan, focused on
+Phase 1 ⇄ Phase 2 integration. Verdict: the pipeline engine needed NO changes — all fixes are
+Phase-1-side, using Phase 2 vocabulary that already existed.
+1. **P1 (flagship promise, fixed)** — `ExecuteOnGraph` could never spill: (a) a linear plan
+   fused into ONE pipeline → no cross-pipeline holder anywhere → `MaybeSpill` unreachable
+   (the old flagship test only spilled by hand-assembling a Full edge, bypassing
+   `CreateGraph`); (b) `FilterOperator`/`ProjectOperator` built output blocks with no
+   cpu/disk resources → allocations invisible to saturation AND `ToDisk()` failed, which
+   `MaybeSpill` swallows silently. Fixed: `CreateGraph` now wires the collector behind a
+   **Full barrier** (Sirius's RESULT_COLLECTOR-as-own-pipeline shape — final batches always
+   cross a spill-aware holder), and all three operators stamp blocks via a shared
+   `execution::MakeTrackedHostBlock` helper (scan deduplicated onto it). The flagship test
+   now goes through the real gate with filter+project in the path and asserts
+   `disk_tier_count > 0` plus correct disk→CPU materialization. Shape test updated: 2
+   pipelines (fused producer + collector), Full dependency asserted.
+2. **P3 (drive-by, one line)** — `collector_operator.hpp` included itself instead of
+   `taskflow/operator.hpp`; compiled only via include-order luck, broke standalone use.
+3. **P4 (fixed)** — thread-safety contract comment on `CollectorOperator` readers (valid
+   only after Execute() returns); `.DS_Store`/`.claude/settings.local.json` unstaged;
+   `.DS_Store` added to `.gitignore`.
+Deferred with note: **P2** layering inversion (`cache/batch_holder.cpp` → `execution/
+batch_kernels.hpp` → `physical_plan/expressions`) — split the concat helper down a layer.
+Suite: **530 passed / 0 failed / 1 skipped**.
+
 ### 2026-07-09 — Phase 1 implementation (Stages 0–6)
 - Sirius note: single gate, error = fallback; no capability table.
 - Phase 2 scorecard already marked landed; Phase 1 now ☑ with flagship spill proof.

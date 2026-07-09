@@ -14,6 +14,7 @@
 
 #include "quest/cache/data_block.hpp"
 #include "quest/execution/batch_kernels.hpp"
+#include "quest/memory/memory_resource.hpp"
 #include "quest/physical_plan/expressions/physical_expr.hpp"
 #include "quest/result.hpp"
 #include "quest/taskflow/operator.hpp"
@@ -23,9 +24,13 @@ namespace quest::taskflow {
 /// @brief Streaming filter: mask + gather inside ProcessBatch.
 class FilterOperator : public SimpleOperator {
  public:
-  FilterOperator(std::uint32_t operator_id, ExpressionPtr predicate)
+  /// @param memory_manager Stamped onto output blocks so they stay visible
+  ///        to saturation accounting and spillable at pipeline breaks.
+  FilterOperator(std::uint32_t operator_id, ExpressionPtr predicate,
+                 std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr)
       : SimpleOperator(operator_id, "Filter", OperatorType::Filter),
-        predicate_(std::move(predicate)) {}
+        predicate_(std::move(predicate)),
+        memory_manager_(std::move(memory_manager)) {}
 
   [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
 
@@ -46,13 +51,13 @@ class FilterOperator : public SimpleOperator {
       return std::unexpected(filtered.error());
     }
 
-    auto out = std::make_shared<cache::HostMemoryBlock>(std::format("filter_{}", id()),
-                                                        std::move(*filtered));
-    return out;
+    return execution::MakeTrackedHostBlock(std::format("filter_{}", id()), std::move(*filtered),
+                                           memory_manager_);
   }
 
  private:
   ExpressionPtr predicate_;
+  std::shared_ptr<memory::MemoryResourceManager> memory_manager_;
 };
 
 }  // namespace quest::taskflow

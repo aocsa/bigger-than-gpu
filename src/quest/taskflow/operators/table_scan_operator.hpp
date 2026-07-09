@@ -17,6 +17,7 @@
 
 #include "quest/cache/data_block.hpp"
 #include "quest/datasource/data_source.hpp"
+#include "quest/execution/batch_kernels.hpp"
 #include "quest/memory/memory_resource.hpp"
 #include "quest/result.hpp"
 #include "quest/taskflow/operator.hpp"
@@ -67,20 +68,9 @@ class TableScanOperator : public Operator {
       return std::unexpected(batch_result.error());
     }
 
-    std::shared_ptr<memory::CPUMemoryResource> cpu;
-    std::shared_ptr<memory::DiskMemoryResource> disk;
-    if (memory_manager_) {
-      cpu = memory_manager_->cpu_ptr();
-      disk = memory_manager_->disk_ptr();
-    }
-
-    auto block =
-        std::make_shared<cache::HostMemoryBlock>(std::format("scan_{}_{}", id(), next_batch_id_++),
-                                                 std::move(*batch_result), std::move(cpu));
-    if (disk) {
-      block->set_disk_resource(std::move(disk));
-    }
-    return std::optional<cache::DataBlockPtr>{std::move(block)};
+    return std::optional<cache::DataBlockPtr>{
+        execution::MakeTrackedHostBlock(std::format("scan_{}_{}", id(), next_batch_id_++),
+                                        std::move(*batch_result), memory_manager_)};
   }
 
  private:

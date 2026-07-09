@@ -17,6 +17,7 @@
 #include "quest/cache/data_block.hpp"
 #include "quest/datasource/column_vector.hpp"
 #include "quest/datasource/record_batch.hpp"
+#include "quest/memory/memory_resource.hpp"
 #include "quest/physical_plan/expressions/physical_expr.hpp"
 #include "quest/result.hpp"
 
@@ -179,6 +180,31 @@ namespace quest::execution {
     return host;
   }
   return input->ToCpu();
+}
+
+/// @brief Wrap a RecordBatch in a HostMemoryBlock carrying both memory
+/// resources from @p memory_manager (which may be null).
+///
+/// Every operator that creates output blocks must use this instead of a
+/// bare HostMemoryBlock: without the CPU resource the allocation is
+/// invisible to saturation accounting, and without the disk resource
+/// ToDisk() fails — MaybeSpill then silently keeps the data in RAM, so a
+/// plan with any filter/project before a pipeline break could never spill.
+[[nodiscard]] inline std::shared_ptr<cache::HostMemoryBlock> MakeTrackedHostBlock(
+    std::string block_id, datasource::RecordBatch batch,
+    const std::shared_ptr<memory::MemoryResourceManager>& memory_manager) {
+  std::shared_ptr<memory::CPUMemoryResource> cpu;
+  std::shared_ptr<memory::DiskMemoryResource> disk;
+  if (memory_manager) {
+    cpu = memory_manager->cpu_ptr();
+    disk = memory_manager->disk_ptr();
+  }
+  auto block = std::make_shared<cache::HostMemoryBlock>(std::move(block_id), std::move(batch),
+                                                        std::move(cpu));
+  if (disk) {
+    block->set_disk_resource(std::move(disk));
+  }
+  return block;
 }
 
 /// @brief Append values from @p src onto a typed destination column.

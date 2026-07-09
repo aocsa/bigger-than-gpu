@@ -72,7 +72,8 @@ namespace detail {
     if (!expr_result) {
       return std::unexpected(expr_result.error());
     }
-    ops.push_back(std::make_unique<taskflow::FilterOperator>(next_id++, std::move(*expr_result)));
+    ops.push_back(std::make_unique<taskflow::FilterOperator>(next_id++, std::move(*expr_result),
+                                                             std::move(memory_manager)));
     return Status::OK();
   }
 
@@ -103,7 +104,8 @@ namespace detail {
     }
 
     ops.push_back(std::make_unique<taskflow::ProjectOperator>(
-        next_id++, datasource::Schema(std::move(fields)), std::move(exprs)));
+        next_id++, datasource::Schema(std::move(fields)), std::move(exprs),
+        std::move(memory_manager)));
     return Status::OK();
   }
 
@@ -136,9 +138,17 @@ namespace detail {
   ops.push_back(std::move(collector));
 
   auto graph = std::make_shared<taskflow::Graph>(memory_manager);
-  for (std::size_t i = 0; i + 1 < ops.size(); ++i) {
+  // Streaming operators fuse into one pipeline (plain edges) ...
+  for (std::size_t i = 0; i + 2 < ops.size(); ++i) {
     *graph += *ops[i] >> *ops[i + 1];
   }
+  // ... but the collector sits behind a Full barrier so it becomes its own
+  // pipeline (Sirius's RESULT_COLLECTOR shape). This is what makes queries
+  // spillable end-to-end: final batches always cross a spill-aware
+  // BatchHolder (MaybeSpill runs on Add), whereas a fully fused pipeline
+  // has no holder anywhere and could never spill regardless of budget.
+  *graph += taskflow::link(*ops[ops.size() - 2], *ops.back(),
+                           taskflow::EdgeConfig::Simple().with_barrier(taskflow::BarrierType::Full));
 
   return std::make_unique<ExecutableGraph>(std::move(graph), std::move(ops), collector_ptr);
 }
