@@ -8,18 +8,44 @@
 
 ---
 
-## Where QUEST stands today (baseline)
+## Implementation order
 
-Verified by full code review (2026-07-08, 473/473 tests green):
+**1 ✅ → 2 ✅ → 2.5 (DSL, new) → 3 → 4 → 5 → 6 → 7 → 8.**
 
-- **Two disconnected engines.** Engine A (`builder/` → `logical_plan/` → `physical_plan/`) runs every real query as a single-threaded recursion of `std::function` callbacks — it never touches memory tiers or spilling. Engine B (`taskflow/` + `cache/` + `memory/`) has the DAG, blocking queues, backpressure, and CPU→Disk spill — but its only `Operator` subclasses are mocks in `tests/test_graph.cpp`. **The project's namesake feature (out-of-core execution) is unreachable from a real query.**
-- **3 of 19 operators wired end-to-end** (Scan, Selection/Filter, Projection). No Limit, Aggregate/GroupBy, Sort, Join, Union.
-- **Known bugs to fix along the way:**
-  - `CreatePhysicalExpr` doesn't translate arithmetic exprs — `Select(Col("a") + Col("b"))` fails at plan time (`physical_plan/physical_plan.hpp:439` area, binary branch handles only comparisons/And/Or).
-  - `ConcatenatingBatchHolder::ConcatenateAll` errors on >1 block (`cache/batch_holder.cpp:213`).
-  - `StreamingQueryBuilder::ExecuteStream` buffers everything before yielding (fake streaming).
-  - All arithmetic upcasts to `double`; type promotion uses left operand; nulls compare `false` (no 3-valued logic); materialized columns drop null tracking.
-  - Memory accounting is advisory (`cols × size × 8` estimate), macOS RAM detection hardcoded to 8 GB.
+Phase 2.5 (GraphBuilder DSL + `PreparedQuery` lifecycle + runtime tuning,
+[graph-builder-dsl.md](graph-builder-dsl.md)) was inserted after phases 1+2 landed. It goes
+**before phase 3** because: (a) its `PreparedQuery` is where phase 3's task creator will
+live — landing it first makes phase 3 a rewrite-in-place instead of rewrite-then-move;
+(b) its deferred-holder refactor retires the eager-`AddEdge` debt phase 3 would otherwise
+work around; (c) it ships the simple CV-based live-tuning wake that phase 3 then swaps for
+the task-re-arm event per the documented wake contract. The rest of the order is unchanged —
+the dependency chain still holds: reservations gate *tasks* (4 after 3), downgrade *serves*
+reservations (5 after 4), out-of-core joins need downgrade for their flagship (6 after 5),
+7 and 8 are orthogonal tails. Phases 4/5/6 each consume something 2.5 provides
+(`Prepare(stats, hw)`; `SpillPolicy`; port contracts + `PartitionedUpTo` + the synthesis hook).
+
+## Where QUEST stands (status snapshot, 2026-07-09)
+
+Phases 1+2 are landed (532/532 tests green; commits `b789943..a65e447`):
+
+- **The two-engines gap is closed.** `QueryBuilder::ExecuteOnGraph()` → `CreateGraph` gate
+  (error = fallback to the callback engine) → `MetaPipeline::Build` → `PipelineExecutor`.
+  The pipelined engine is the default (`Graph::Execute()` delegates; legacy survives as
+  deprecated `ExecuteLegacy()` until its `run()`-based callers migrate).
+- **Out-of-core is real:** a Parquet query with filter+project under a 256-byte budget
+  spills through the collector's Full-barrier holder and returns correct results
+  (`test_graph_bridge` flagship). Fused pipelines measured ~5× faster than
+  thread-per-operator on per-batch overhead.
+- **Still 3 of 19 operators wired end-to-end** (Scan, Filter, Projection). No Limit,
+  Aggregate/GroupBy, Sort, Join, Union — that's phase 6.
+- **Known-bug ledger** (original baseline list, annotated):
+  - ~~`CreatePhysicalExpr` arithmetic~~ — **fixed in phase 1** (`d6685aa`).
+  - ~~`ConcatenatingBatchHolder` multi-block~~ — **fixed in phase 1** (`ConcatenateHostBlocks`).
+  - `StreamingQueryBuilder` fake streaming — open, owned by **phase 8**.
+  - Arithmetic double-upcast / left-operand promotion / nulls compare `false` /
+    materialized columns drop nulls — open, owned by **phase 7**.
+  - Advisory memory accounting (`cols × size × 8`), macOS RAM hardcoded 8 GB — open,
+    owned by **phase 4** ("fix accounting first").
 
 ## The Sirius ideas worth stealing (ranked by learning value)
 
@@ -27,6 +53,7 @@ Verified by full code review (2026-07-08, 473/473 tests green):
 |---|---|---|---|
 | 1 | Single plan gate with fallback | `create_plan()` translates or throws; the CPU plan is the executor of last resort | 1 |
 | 2 | Pipelines from blocking operators | streaming ops fuse; blocking ops end one pipeline and source the next | 2 |
+| 2b | Runtime-decided configs | Sirius binds partition counts, thresholds, strategies at runtime from real sizes (`determine_num_partitions`, settings) — not at plan time | 2.5 |
 | 3 | Data-driven task creation (hint chain) | nothing polls; operators answer READY/WAITING and the creator recurses to the deepest ready producer | 3 |
 | 4 | Reserve memory before dispatch | a task secures its estimated peak (history-corrected, clamped) or it doesn't run | 4 |
 | 5 | Predicate-driven spilling + batch lock states | spill *idle* batches until "does the reservation fit now?" passes; idle ⇄ locked makes it safe | 5 |
@@ -50,7 +77,7 @@ Before building anything, ground the mental model in real code. Read in this ord
 
 ---
 
-## Phase 1 — Bridge the two engines (the `create_plan()` gate)
+## Phase 1 ✅ — Bridge the two engines (the `create_plan()` gate)
 
 **Sirius idea:** one function (`sirius_physical_plan_generator::create_plan()`, `src/planner/sirius_physical_plan_generator.cpp`, 324 lines + one file per node type) translates the whole plan or throws; on throw, the untouched CPU plan runs. Support *is* whatever the gate can translate — no capability table.
 
@@ -70,7 +97,7 @@ Before building anything, ground the mental model in real code. Read in this ord
 
 ---
 
-## Phase 2 — Pipelines (blocking ops are the seam)
+## Phase 2 ✅ — Pipelines (blocking ops are the seam)
 
 **Sirius idea:** `sirius_meta_pipeline::build()` walks the operator tree; streaming ops (FILTER, PROJECTION, LIMIT) append to the current pipeline; blocking ops (JOIN, ORDER_BY, aggregates) become sinks and spawn child meta-pipelines (build side before probe side). A blocking operator is the sink of one pipeline and the source of the next. Read: `src/pipeline/sirius_meta_pipeline.cpp`, then skim the seven-phase `sirius_pipeline_converter.cpp` (1353 lines — the largest file; don't replicate it, just understand *why* each phase exists).
 
@@ -83,6 +110,37 @@ Before building anything, ground the mental model in real code. Read in this ord
 
 ---
 
+## Phase 2.5 — GraphBuilder DSL + PreparedQuery + runtime tuning (inserted)
+
+**Full design:** [graph-builder-dsl.md](graph-builder-dsl.md) (decisions locked in its §9;
+phase-3/5/6 readiness matrix in its §10). **Working plan:** `tasks/todo.md` stages D1–D4.
+
+**Sirius idea:** configs are bound when sizes are known, not when the plan is written —
+Sirius picks partition counts at runtime (`determine_num_partitions` from real input
+bytes) and barrier/port semantics are decided by operator code, never by the query
+author. QUEST's equivalent: defer holder materialization to `Prepare(stats, hw)`, let
+operators declare port contracts, and let policies tune edges when Parquet footer
+statistics and hardware info exist.
+
+**Build in QUEST (stages D1–D4):**
+- **D1** — deferred holders + `PreparedQuery`: `Graph` stores edge *specs*; holders
+  materialize in `Prepare()`; `PreparedQuery` owns resolved configs, holders, pipelines,
+  executor. Behavior-preserving (retires the Stage-6 eager-`AddEdge` debt).
+- **D2** — `GraphBuilder`/`EdgeBuilder`/`ChainBuilder` (last-edge refinement rule),
+  `Apply(Shape)`, `Build()` validation (declared ports, acyclicity, contract conflicts,
+  duplicate names, `.Partial()` rejected until phase 6).
+- **D3** — port contracts (`DeclaredInputPorts`/`InputEdgeContract`); collector declares
+  Full; `CreateGraph` loses its special-case link.
+- **D4** — tuning: `AddTuningPolicy` chain resolved at `Prepare()`, `Graph::Tune()`
+  (structural, Built-only by type), `PreparedQuery::SetFlowControl/SetSpillPolicy/
+  ScaleFlowControl` (soft, live, atomic + re-wake).
+
+**Done when:** the same `Graph` `Prepare()`d twice with different stats yields different
+holder configs; a live `SetFlowControl` raise releases a producer blocked in
+`WaitIfSaturated()`; the §8 examples gallery runs as tests with old-DSL parity.
+
+---
+
 ## Phase 3 — Data-driven tasks + scheduler (the hint chain)
 
 **Sirius idea:** work exists only when data does. Operators answer `get_next_task_hint() -> READY{producer} | WAITING_FOR_INPUT_DATA{producer}`; on WAITING the task creator **recurses into the producer** until something is READY; a task = (pipeline, one input batch); a scheduler matches tasks to ready workers. Read: `src/creator/task_creator.cpp` (`get_operator_for_next_task`, `manager_loop`) and `src/pipeline/task_scheduler.cpp` (374 lines).
@@ -90,9 +148,11 @@ Before building anything, ground the mental model in real code. Read in this ord
 **Build in QUEST:**
 - `TaskCreationHint {Ready, WaitingForInput}` + `GetNextTaskHint()` / `GetNextTaskInputData()` virtuals on `Operator`.
 - `Task = {Pipeline*, DataBlockPtr input}`; `TaskCreator` implementing the recursion; a `TaskScheduler` over a fixed worker pool (`std::jthread` × N, one shared queue — skip per-device executors, you have one "device").
-- Replace `Graph::Execute`'s thread-per-operator BFS with: schedule the scan; after each task completes, offer downstream consumers to the creator. Mind Sirius's ordering invariant: **mark task created before popping input**, or a pipeline can look finished mid-pop.
+- Replace `PipelineExecutor`'s **one-worker-drains-one-pipeline loop** (phase 2 already killed thread-per-operator) with task-granular scheduling, **inside `PreparedQuery`** (phase 2.5 put the executor there — this phase is a rewrite-in-place). Mind Sirius's ordering invariant: **mark task created before popping input**, or a pipeline can look finished mid-pop.
+- This retires the documented executor ordering-invariant hazard (a Pipeline-barrier consumer parked in `Pull()` occupying a worker): a consumer without input becomes a *non-created task*, never a blocked thread.
+- Honor the **wake contract** from the DSL design (§6.5): `SetFlowControl` must post a task-re-evaluation event to the creator (replacing the CV-notify that phase 2.5 shipped), and un-reserve `PreparedQuery::SetMaxInFlightTasks()`.
 
-**Done when:** queries run correctly on a 4-worker pool regardless of plan width; a `Full`-barrier consumer never receives a task before its producer pipeline finishes; throughput scales with workers on a multi-pipeline plan. Stress-test with the pattern from `verify-operator` (the project has a skill for adversarial operator testing — use it).
+**Done when:** queries run correctly on a 4-worker pool regardless of plan width; a `Full`-barrier consumer never receives a task before its producer pipeline finishes; throughput scales with workers on a multi-pipeline plan; a live threshold raise on a WAITING producer mints its task without any unrelated completion. Stress-test with the pattern from `verify-operator`.
 
 ---
 
@@ -105,6 +165,9 @@ Before building anything, ground the mental model in real code. Read in this ord
 - `Reservation` RAII type on `MemoryResourceManager`: `MakeReservation(bytes) -> Result<Reservation>`; release on destruction.
 - `Operator::EstimatePeakMemory(input_bytes)` (default 2×) + a `PipelineMemoryHistory` ring that corrects future estimates with observed peak/estimate ratios.
 - Scheduler integration: clamp → reserve → run; failed reservation requeues the task (and, after phase 5, triggers a downgrade request instead of spinning).
+- Plug into phase 2.5's seam: reservation sizing happens at/under `Prepare(stats, hw)` —
+  `QueryStats`/`HardwareInfo` are already the shared vocabulary, and the macOS
+  `sysctl(HW_MEMSIZE)` fix doubles as `HardwareInfo` probing.
 
 **Done when:** with a 100 MB budget, a query whose working set is 500 MB either succeeds via spill or fails with a clean `ResourceExhausted` — never OOM-kills the process. A test asserts estimates converge (ring average within 2× of observed after 10 batches).
 
@@ -116,7 +179,7 @@ Before building anything, ground the mental model in real code. Read in this ord
 
 **Build in QUEST:**
 - Three-state lock on `DataBlock`: `Idle ⇄ ReadOnly ⇄ Mutable`, with RAII accessors (`ReadLock`, `WriteLock`) — data reachable *only* through a lock, so an idle block provably has no readers.
-- `DowngradeExecutor`: one background thread + `RequestDowngrade(predicate) -> std::future<size_t>`; candidates = idle blocks enumerated from `BatchHolder`s (back-to-front, like Sirius partitions); convert via existing `ToDisk()`, rollback on failure.
+- `DowngradeExecutor`: one background thread + `RequestDowngrade(predicate) -> std::future<size_t>`; candidates = idle blocks enumerated from `BatchHolder`s (back-to-front, like Sirius partitions), **honoring phase 2.5's per-edge `SpillPolicy`** (`Never` = skip, `First` = victim-order front — the join build side's hint); convert via existing `ToDisk()`, rollback on failure.
 - Rewire: `BatchHolder::Add` stops spilling inline (`MaybeSpill` goes away); a failed reservation in the scheduler issues a downgrade request and retries when the future resolves. Add trigger/stop hysteresis (e.g. trigger 0.9, stop 0.7) so it doesn't thrash.
 
 **Done when:** under memory pressure the executor spills the *oldest idle* blocks only, stops as soon as the pending reservation fits, never touches a locked block (assert via a test that holds a ReadLock during pressure), and a spilled block transparently upgrades on next use.
@@ -127,7 +190,7 @@ Before building anything, ground the mental model in real code. Read in this ord
 
 **Sirius idea:** every blocking operator decomposes into partition/merge stages so each task stays bounded: `HASH_GROUP_BY → PARTITION → MERGE_GROUP_BY`; ORDER_BY = three-pipeline sample sort (local sort → sample/partition → k-way merge, one partition per task); hash join = PARTITION→CONCAT on *both* sides, left = probe (streamed), right = build (materialized), build behind a FULL barrier. Read per-operator: `src/op/sirius_physical_grouped_aggregate.cpp` + `_merge`, `src/op/sirius_physical_sort_sample.cpp` / `_sort_partition` / `_merge_sort`, `src/op/sirius_physical_hash_join.cpp`, and the planner side `src/planner/sirius_plan_aggregate.cpp` / `_comparison_join.cpp`.
 
-**Build in QUEST, in order (each = logical node + physical node + taskflow operator + tests, via the `/new-node` and `/new-op` skills):**
+**Build in QUEST, in order (each = logical node + physical node + taskflow operator + tests, via the `/new-node` and `/new-op` skills). Every operator ships phase 2.5's extension recipe — port contracts (`DeclaredInputPorts`/`InputEdgeContract`), typed port accessors, and a `Shape` helper — so wiring is correct by construction. Partition counts arrive as `PartitionedUpTo(max)` bounds, bound by the operator at runtime from real input sizes; injected partition/merge stages and relay pipelines plug into `Prepare()`'s `SynthesizeStructure()` hook (synthesized edges get generated names and remain policy-tunable); `.Partial()` unblocks here.**
 
 1. **Limit** — the warm-up. `StreamingLimit` with an atomic claim on remaining rows (Sirius does exactly this — no compute, just arithmetic). Replace the hardcoded 1000-row hack in `Graph::OptimizeScanWithLimit` (`graph.cpp:12`) with a real pushed limit. *Teaches:* early pipeline termination.
 2. **Hash aggregate** — the first cross-batch state. `HashGroupBy` (sink accumulates per-batch partial aggregates into a hash table keyed by group columns) → `Merge` (combines partials). Support SUM/COUNT/MIN/MAX/AVG — and follow Sirius: **AVG = SUM + COUNT finalized at merge**, don't implement it as a primitive. Add `GroupBy()` to `QueryPlan`'s fluent API. *Teaches:* sink role, partial/final decomposition, why merges exist.
@@ -176,6 +239,7 @@ Before building anything, ground the mental model in real code. Read in this ord
 |---|---|---|
 | 1 — Bridge | ☑ | real Parquet scan→filter→project via CreateGraph; spill under tiny CPU budget (`test_graph_bridge`) |
 | 2 — Pipelines | ☑ | fused pipeline ~5× faster than thread-per-operator (21 ms → 4 ms, 10k batches × 1k rows, Debug) |
+| 2.5 — DSL + tuning | ☐ | same Graph `Prepare()`d twice with different stats → different holder configs; live threshold raise releases a blocked producer |
 | 3 — Tasks | ☐ | 4-worker pool, barrier ordering test |
 | 4 — Reservations | ☐ | 500 MB query under 100 MB budget: spill or clean error |
 | 5 — Downgrade | ☐ | spills idle-only, stops when reservation fits |

@@ -1,14 +1,58 @@
-# Phase 1 — Feed Real Operators Into the Push Pipeline
+# GraphBuilder DSL + Runtime Edge Tuning — Working Plan
 
-Executing the Phase 1 bridge from [docs/dev/sirius-replication-plan.md](../docs/dev/sirius-replication-plan.md)
-(plan: feed Scan/Filter/Project into the existing push `PipelineExecutor` without changing
-Phase 2 semantics).
+Executing [docs/dev/graph-builder-dsl.md](../docs/dev/graph-builder-dsl.md) (design
+finalized 2026-07-09: fluent builder, `PreparedQuery` lifecycle, policy-chain tuning,
+phase-3/5/6 readiness per its §10 matrix).
 
 **Process:** one stage = one commit; each stage gets a review summary BEFORE committing;
-user reviews and may request changes.
+user reviews and may request changes. Keep this file updated while working.
 
-**Non-goals:** do not change `MetaPipeline::Build`, `PipelineExecutor`, role contracts, or
-the `Execute()` → `ExecutePipelined()` default.
+**Decisions locked (design §9):** `Chain()` refines its LAST edge; `Prepare()` returns a
+`PreparedQuery` (states as types); `AddTuningPolicy` chain; `ScaleFlowControl` ships as a
+documented stopgap. **Ordering:** land before replication phase 4 — `Prepare(stats, hw)`
+is where reservation estimates plug in later.
+
+## Stage D0 — Design ✅ (docs/dev/graph-builder-dsl.md)
+- [x] Fluent builder API (Chain/Edge/EdgeBuilder/Apply/Build) fully documented
+- [x] Lifecycle: Graph (Built, structural tuning) → PreparedQuery (soft tuning)
+- [x] Runtime tuning: EdgeRef/names, introspection, policy chain, live soft knobs
+- [x] Phase 3/5/6 readiness pass: wake contract, Spill(SpillPolicy), Partial() reserved,
+      PartitionedUpTo (late-bound structural), synthesis-before-resolution + synthesized-edge names
+- [ ] REVIEW GATE: user reviews the design doc → then implementation stages below
+
+## Stage D1 — Deferred holders + PreparedQuery (the load-bearing refactor)
+- [ ] Graph stores edge SPECS; holders materialize in `Prepare()` (retires Stage-6 debt)
+- [ ] `PreparedQuery` owns resolved configs, holders, pipelines, executor; `Graph::Execute()` = `Prepare({},{}).Execute()`
+- [ ] `ExecuteLegacy()` keeps eager semantics for its remaining callers
+- [ ] All 532 existing tests green (behavior-preserving)
+- [ ] REVIEW GATE
+
+## Stage D2 — GraphBuilder + EdgeBuilder/ChainBuilder + validation
+- [ ] Chain (last-edge refinement rule), Edge overloads, Named, Config, ThenTo, Apply(Shape)
+- [ ] Build(): port-declaration validation, acyclicity, contract-conflict, duplicate names, Partial() rejected
+- [ ] Examples from design §8 as tests (old-DSL parity where applicable)
+- [ ] REVIEW GATE
+
+## Stage D3 — Port contracts
+- [ ] `DeclaredInputPorts()` / `InputEdgeContract()` virtuals; resolution layer 4
+- [ ] `CollectorOperator` contract = Full; `CreateGraph` loses its special-case link
+- [ ] Typed-port accessor pattern documented on one operator
+- [ ] REVIEW GATE
+
+## Stage D4 — Tuning: policy chain + live soft knobs
+- [ ] `AddTuningPolicy` (ordered), resolution precedence chain (§5) incl. synthesis hook stub
+- [ ] `Graph::Tune()` (structural, Built only by construction), `PreparedQuery::SetFlowControl/SetSpillPolicy/ScaleFlowControl`
+- [ ] Holder thresholds → atomics + `NotifySaturationWaiters()` re-wake; `SetMaxInFlightTasks` reserved (returns Invalid until phase 3)
+- [ ] Tests: precedence, policy ordering, live re-wake under a blocked producer, re-Prepare independence
+- [ ] REVIEW GATE
+
+---
+
+# ✅ COMPLETED — Phase 1: Feed Real Operators Into the Push Pipeline
+
+Executed the Phase 1 bridge from [docs/dev/sirius-replication-plan.md](../docs/dev/sirius-replication-plan.md)
+(feed Scan/Filter/Project into the existing push `PipelineExecutor` without changing
+Phase 2 semantics). Commits `d6685aa` + hardening `a65e447`.
 
 ## Stage 0 — Sirius note + tracker ✅
 - [x] `tasks/notes/create-plan-gate.md`

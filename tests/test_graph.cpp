@@ -289,8 +289,10 @@ TEST(GraphExecutionTest, ConcatenatingBatchHolder) {
   auto graph = std::make_shared<Graph>();
 
   std::size_t received_count = 0;
-  // Use 1 batch since RecordBatch concatenation is not yet implemented
-  SourceOperator source(0, 1);
+  // Multiple source batches: the concatenating holder merges them all into
+  // ONE block delivered at Pull (multi-block concat implemented in Phase 1
+  // via execution::ConcatenateHostBlocks).
+  SourceOperator source(0, 3);
   SinkOperator sink(1, received_count);
 
   *graph +=
@@ -298,7 +300,7 @@ TEST(GraphExecutionTest, ConcatenatingBatchHolder) {
 
   auto status = graph->ExecuteLegacy();
   ASSERT_TRUE(status.ok());
-  EXPECT_EQ(received_count, 1);
+  EXPECT_EQ(received_count, 1);  // 3 batches in, 1 merged batch out
 }
 
 // =============================================================================

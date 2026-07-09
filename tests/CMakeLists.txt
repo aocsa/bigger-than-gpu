@@ -108,3 +108,7 @@ gtest_discover_tests(test_execution_parity)
 add_executable(test_graph_bridge test_graph_bridge.cpp)
 target_link_libraries(test_graph_bridge PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_graph_bridge)
+
+add_executable(test_manual_query_walkthrough test_manual_query_walkthrough.cpp)
+target_link_libraries(test_manual_query_walkthrough PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_manual_query_walkthrough)
