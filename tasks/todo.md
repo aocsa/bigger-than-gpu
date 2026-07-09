@@ -14,19 +14,26 @@ Executing [docs/dev/pipeline-execution-plan.md](../docs/dev/pipeline-execution-p
 - [x] Build green: 487 passed / 0 failed / 1 skipped (pre-existing)
 - [x] REVIEW GATE: user approved Stage 0; Stage 1 landed in the same commit, summary delivered post-hoc
 
-## Stage 2 — Operator roles ⏸ awaiting review
+## Stage 2 — Operator roles ✅ (commit 96d2673)
 - [x] Hoist `ProcessBatch` to `Operator` (default passthrough); `SimpleOperator` redeclares it pure — legacy `run()` path untouched
 - [x] `IsSource` (default: type classification) / `GetNextBatch` (EOS = engaged nullopt, not an error)
 - [x] `IsSink` (default: `IsBlocking()`) / `Sink` (default: error) / `FinalizeSink` (default: OK no-op)
 - [x] Test doubles: `VectorSourceOperator`, `AccumulatingSinkOperator` (mock blocking op with sink→source flip), `CountingStreamOperator`
 - [x] `tests/test_operator_roles.cpp` (11 tests) incl. manual push-loop through all three roles
 - [x] Build green: 498 passed / 0 failed / 1 skipped
-- [ ] REVIEW GATE: summary delivered, awaiting user approval → commit
+- [x] REVIEW GATE: user approved ("LGTM") → committed 96d2673
 
-## Stage 3 — Pipeline + MetaPipeline::Build
-- [ ] `pipeline.{hpp,cpp}`: operator list, counters, status lock, completion predicate, `RunTask`
-- [ ] `meta_pipeline.{hpp,cpp}`: upstream walk, holders only on cross-pipeline edges
-- [ ] Shape tests: linear->1; agg-in-middle->2 + FULL dep; two-port sink->build-before-probe; PIPELINE edge->holder present
+## Stage 3 — Pipeline + MetaPipeline::Build ✅ (code review passed, awaiting commit approval)
+**Design ref:** [`tasks/notes/session-handoff-pipeline.md`](notes/session-handoff-pipeline.md).
+- [x] `pipeline.{hpp,cpp}`: operator list, counters, status lock, `RunTask(batch, start_index=1)` push loop
+- [x] `meta_pipeline.{hpp,cpp}`: BuildFrom walk (memoized, children-before-parents)
+- [x] Graph: store `EdgeConfig` per edge (`edge_configs_` map + `GetEdgeConfig`) — side map, `Edge` itself untouched
+- [x] Graph: `GetTerminalOperators()` (pure query, no `FinalizeWorkflow()` mutation) as MetaPipeline::Build's walk starting points
+- [x] DECIDED DEVIATION (kept): holders stay in `AddEdge` until Stage 6; pipelined path ignores intra-pipeline holders
+- [x] Shape tests: linear->1; agg-in-middle->2 + FULL dep + agg in both; multi-input port-order->children before parent; explicit-Full-without-blocking split; Partitioned(2)->PIPELINE dep; memo/diamond (6 `MetaPipelineTest`)
+- [x] `RunTask` push loop tests: streaming->sink, error mid-loop, single-op pipeline, non-blocking sink via real AddToOutput holder (4 `PipelineRunTaskTest`)
+- [x] Build green: **508 passed / 0 failed / 1 skipped** (498 baseline + 10 new)
+- [x] Self code review (via code-reviewer subagent) — see review log for findings + fixes
 - [ ] REVIEW GATE
 
 ## Stage 4 — PipelineExecutor
@@ -45,6 +52,31 @@ Executing [docs/dev/pipeline-execution-plan.md](../docs/dev/pipeline-execution-p
 - [ ] REVIEW GATE
 
 ## Review log
+
+### 2026-07-08 — Stage 3 (uncommitted, pending REVIEW GATE)
+- New: `pipeline.{hpp,cpp}`, `meta_pipeline.{hpp,cpp}`, `tests/test_meta_pipeline.cpp` (10 tests).
+  Modified: `graph.{hpp,cpp}` (+`edge_configs_`/`GetEdgeConfig`, +`GetTerminalOperators`),
+  `CMakeLists.txt`, `tests/CMakeLists.txt`. 508 passed / 0 failed / 1 skipped.
+- `BuildFrom` matches the handoff pseudocode exactly (verified by hand-tracing all 6 shape
+  cases against both the algorithm and the passing tests): blocking-check before edge-config
+  check; single vs multi-input dispatch; port-name-sorted multi-input children; memoized
+  diamond; children always pushed before the parent that depends on them.
+- Code-reviewed via the code-reviewer subagent. Two real findings, both addressed with
+  documentation (not behavior changes, since neither is in Stage 3's own execution scope):
+  1. `Pipeline::PublishOutput`'s `AddToOutput()` call only targets the default (operator-id)
+     port. A pipeline whose sink ends at a *partitioned* edge (`num_partitions > 1`) would
+     publish to the wrong port and get `Status::Invalid` back — a clean failure, not silent
+     data loss, but real. Nothing in Stage 3 executes a partitioned pipeline yet (shape-only
+     test), so documented as a `@note` on `PublishOutput` with the fix deferred to Stage 4
+     (thread the edge's actual output port through once an executor runs partitioned work).
+  2. `GetTerminalOperators()` returns nothing if `FinalizeWorkflow()` already ran on the same
+     graph (its sentinel edges make every real terminal's outgoing set non-empty). Not
+     triggered today; documented as a `@warning` on both `GetTerminalOperators()` and
+     `MetaPipeline::Build()` so a future `ExecutePipelined()` doesn't reuse `Execute()`'s prep
+     step and silently build zero pipelines.
+- Also fixed two clang-tidy warnings in the new `src/` code (short parameter name in
+  `PrependOperator`; `PublishOutput` made `const` — it never mutates `Pipeline` state).
+- No regressions: all 498 pre-existing tests still green.
 
 ### 2026-07-08 — Stage 0+1 (`b789943`)
 - 7 files, +378/−209. Pure vocabulary, no execution path reads `barrier` yet.

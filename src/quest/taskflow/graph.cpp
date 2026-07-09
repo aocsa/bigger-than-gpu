@@ -34,10 +34,7 @@ KPair& Graph::operator+=(KPair edge_pair) {
                                 : std::to_string(edge_pair.destination()->id());
 
   // Create the edge with the resolved port names.
-  AddEdge(edge_pair.source(),
-          edge_pair.destination(),
-          source_port,
-          target_port,
+  AddEdge(edge_pair.source(), edge_pair.destination(), source_port, target_port,
           edge_pair.config());
 
   // Store the edge for potential fluent chaining.
@@ -68,10 +65,8 @@ std::size_t Graph::AddNode(Operator* node_operator) {
   return node_operator->id();
 }
 
-void Graph::AddEdge(Operator* source_operator,
-                    Operator* target_operator,
-                    const std::string& source_port_name,
-                    const std::string& target_port_name,
+void Graph::AddEdge(Operator* source_operator, Operator* target_operator,
+                    const std::string& source_port_name, const std::string& target_port_name,
                     const EdgeConfig& edge_config) {
   // Ensure both operators are registered in the graph.
   AddNode(source_operator);
@@ -93,6 +88,11 @@ void Graph::AddEdge(Operator* source_operator,
   // Establish the parent-child dependency relationship.
   target_operator->set_parent(source_id);
 
+  // Remember the configuration this edge was created with, keyed by
+  // endpoint identity (see GetEdgeConfig() for why this lives in a side
+  // map instead of on Edge itself).
+  edge_configs_[{source_id, target_id}] = edge_config;
+
   // Create the batch holders that will carry data between operators.
   auto batch_holders = CreateBatchHolders(edge_config);
 
@@ -100,23 +100,19 @@ void Graph::AddEdge(Operator* source_operator,
   if (edge_config.num_partitions > 1) {
     // Partitioned mode: each partition gets its own batch holder.
     // This enables parallel processing patterns (e.g., FOR_EACH).
-    for (std::size_t partition_index = 0;
-         partition_index < batch_holders.size();
+    for (std::size_t partition_index = 0; partition_index < batch_holders.size();
          ++partition_index) {
       auto output_port_name = std::format("output_{}", partition_index);
       auto input_port_name = std::format("input_{}", partition_index);
 
-      source_operator->output().RegisterBatchHolder(
-          output_port_name, batch_holders[partition_index]);
-      target_operator->input().RegisterBatchHolder(
-          input_port_name, batch_holders[partition_index]);
+      source_operator->output().RegisterBatchHolder(output_port_name,
+                                                    batch_holders[partition_index]);
+      target_operator->input().RegisterBatchHolder(input_port_name, batch_holders[partition_index]);
     }
   } else {
     // Simple mode: single batch holder connecting the ports directly.
-    source_operator->output().RegisterBatchHolder(
-        source_port_name, batch_holders[0]);
-    target_operator->input().RegisterBatchHolder(
-        target_port_name, batch_holders[0]);
+    source_operator->output().RegisterBatchHolder(source_port_name, batch_holders[0]);
+    target_operator->input().RegisterBatchHolder(target_port_name, batch_holders[0]);
   }
 
   // If source has no parent, connect it to the sentinel entry point.
@@ -137,18 +133,13 @@ std::vector<std::shared_ptr<cache::IBatchHolder>> Graph::CreateBatchHolders(
 
   // Configure flow control thresholds for backpressure.
   cache::BatchHolderConfig holder_config{
-      .flow_control_batches_threshold =
-          edge_config.flow_control_batches_threshold,
-      .flow_control_bytes_threshold =
-          edge_config.flow_control_bytes_threshold};
+      .flow_control_batches_threshold = edge_config.flow_control_batches_threshold,
+      .flow_control_bytes_threshold = edge_config.flow_control_bytes_threshold};
 
   // Create the requested number of batch holders.
-  for (std::size_t partition = 0; partition < edge_config.num_partitions;
-       ++partition) {
-    holders.push_back(cache::MakeBatchHolder(GenerateNextBatchHolderId(),
-                                               edge_config.type,
-                                               holder_config,
-                                               memory_resource_manager_));
+  for (std::size_t partition = 0; partition < edge_config.num_partitions; ++partition) {
+    holders.push_back(cache::MakeBatchHolder(GenerateNextBatchHolderId(), edge_config.type,
+                                             holder_config, memory_resource_manager_));
   }
 
   return holders;
@@ -162,8 +153,7 @@ void Graph::FinalizeWorkflow() {
   // Iterate through all registered operators to find terminal nodes.
   for (auto& [operator_id, current_operator] : operator_lookup_table_) {
     // Skip the sentinel node and check for missing outgoing edges.
-    if (current_operator != nullptr &&
-        GetOutgoingEdges(current_operator).empty()) {
+    if (current_operator != nullptr && GetOutgoingEdges(current_operator).empty()) {
       // Mark this as a terminal node by adding a sentinel target edge.
       auto current_id = static_cast<std::int32_t>(current_operator->id());
       Edge terminal_edge{.source_operator_id = current_id,
@@ -218,12 +208,10 @@ Status Graph::Execute() {
     auto dependency_edges = GetIncomingEdges(current_operator);
     bool all_dependencies_satisfied =
         dependency_edges.empty() ||
-        std::all_of(dependency_edges.begin(),
-                    dependency_edges.end(),
-                    [&processed_edges](const Edge& dep) {
-                      return processed_edges.contains(
-                          {dep.source_operator_id, dep.target_operator_id});
-                    });
+        std::all_of(
+            dependency_edges.begin(), dependency_edges.end(), [&processed_edges](const Edge& dep) {
+              return processed_edges.contains({dep.source_operator_id, dep.target_operator_id});
+            });
 
     if (!all_dependencies_satisfied) {
       // Re-queue this operator to try again after dependencies complete.
@@ -234,9 +222,8 @@ Status Graph::Execute() {
 
     // Process all outgoing edges from this operator.
     for (const auto& edge : GetOutgoingEdges(current_operator)) {
-      auto edge_key = std::make_pair(
-          current_operator_id,
-          static_cast<std::size_t>(edge.target_operator_id));
+      auto edge_key =
+          std::make_pair(current_operator_id, static_cast<std::size_t>(edge.target_operator_id));
 
       // Skip already processed edges.
       if (processed_edges.contains(edge_key)) {
@@ -261,8 +248,7 @@ Status Graph::Execute() {
               current_operator->output().Finish();
               current_operator->mark_done();
             } else if (target >= 0) {
-              std::println(stderr,
-                           "ERROR: Operator {} did not finish successfully",
+              std::println(stderr, "ERROR: Operator {} did not finish successfully",
                            current_operator_id);
             }
           });
@@ -284,8 +270,7 @@ Status Graph::Execute() {
 // =============================================================================
 
 Operator* Graph::GetNode(std::size_t operator_id) const {
-  auto iterator =
-      operator_lookup_table_.find(static_cast<std::int32_t>(operator_id));
+  auto iterator = operator_lookup_table_.find(static_cast<std::int32_t>(operator_id));
   return iterator != operator_lookup_table_.end() ? iterator->second : nullptr;
 }
 
@@ -327,8 +312,23 @@ std::set<Edge> Graph::GetIncomingEdges(std::int32_t operator_id) const {
   return iterator != incoming_edges_.end() ? iterator->second : std::set<Edge>{};
 }
 
-std::pair<bool, std::uint64_t> Graph::EstimateInputRowCount(
-    std::int32_t operator_id) const {
+EdgeConfig Graph::GetEdgeConfig(std::int32_t source_operator_id,
+                                std::int32_t target_operator_id) const {
+  auto iterator = edge_configs_.find({source_operator_id, target_operator_id});
+  return iterator != edge_configs_.end() ? iterator->second : EdgeConfig{};
+}
+
+std::vector<Operator*> Graph::GetTerminalOperators() const {
+  std::vector<Operator*> terminals;
+  for (auto* current_operator : registered_operators_) {
+    if (GetOutgoingEdges(current_operator).empty()) {
+      terminals.push_back(current_operator);
+    }
+  }
+  return terminals;
+}
+
+std::pair<bool, std::uint64_t> Graph::EstimateInputRowCount(std::int32_t operator_id) const {
   auto* target_operator = GetNode(operator_id);
   if (target_operator == nullptr) {
     return {false, 0};
@@ -342,8 +342,7 @@ std::pair<bool, std::uint64_t> Graph::EstimateInputRowCount(
   // Try to estimate from upstream operators.
   auto upstream_edges = GetIncomingEdges(operator_id);
   if (upstream_edges.size() == 1) {
-    auto* source_operator =
-        GetNode(upstream_edges.begin()->source_operator_id);
+    auto* source_operator = GetNode(upstream_edges.begin()->source_operator_id);
     if (source_operator != nullptr) {
       return source_operator->GetEstimatedOutputNumRows();
     }
@@ -353,8 +352,7 @@ std::pair<bool, std::uint64_t> Graph::EstimateInputRowCount(
 }
 
 std::pair<bool, std::uint64_t> Graph::EstimateInputRowCountForPort(
-    std::int32_t operator_id,
-    const std::string& port_name) const {
+    std::int32_t operator_id, const std::string& port_name) const {
   auto* target_operator = GetNode(operator_id);
   if (target_operator == nullptr) {
     return {false, 0};
@@ -389,9 +387,7 @@ void Graph::PrintStructure() const {
 
   // Print each operator with its type.
   for (const auto* current_operator : registered_operators_) {
-    std::println("  {} -> {}",
-                 current_operator->id(),
-                 to_string(current_operator->type()));
+    std::println("  {} -> {}", current_operator->id(), to_string(current_operator->type()));
   }
 
   std::println("\nEdges:");
@@ -409,10 +405,8 @@ void Graph::PrintStructure() const {
     auto current_id = traversal_queue.front();
     traversal_queue.pop_front();
 
-    for (const auto& edge :
-         GetOutgoingEdges(static_cast<std::int32_t>(current_id))) {
-      auto edge_key = std::make_pair(
-          current_id, static_cast<std::size_t>(edge.target_operator_id));
+    for (const auto& edge : GetOutgoingEdges(static_cast<std::int32_t>(current_id))) {
+      auto edge_key = std::make_pair(current_id, static_cast<std::size_t>(edge.target_operator_id));
 
       if (visited_edges.contains(edge_key)) {
         continue;
@@ -446,10 +440,8 @@ void Graph::PrintBackwardsFrom(std::int32_t operator_id) const {
     auto current_id = traversal_queue.front();
     traversal_queue.pop_front();
 
-    for (const auto& edge :
-         GetIncomingEdges(static_cast<std::int32_t>(current_id))) {
-      auto edge_key = std::make_pair(
-          static_cast<std::size_t>(edge.source_operator_id), current_id);
+    for (const auto& edge : GetIncomingEdges(static_cast<std::int32_t>(current_id))) {
+      auto edge_key = std::make_pair(static_cast<std::size_t>(edge.source_operator_id), current_id);
 
       if (visited_edges.contains(edge_key)) {
         continue;
@@ -499,8 +491,7 @@ void Graph::OptimizeScanWithLimit() {
   }
 
   // Apply optimization if the pattern matches.
-  if (scan_operator != nullptr && limit_operator != nullptr &&
-      output_operator != nullptr) {
+  if (scan_operator != nullptr && limit_operator != nullptr && output_operator != nullptr) {
     // Push limit down to scan operator.
     // In a full implementation, this would parse the limit expression.
     scan_operator->set_limit(kDefaultOptimizedLimitRows);

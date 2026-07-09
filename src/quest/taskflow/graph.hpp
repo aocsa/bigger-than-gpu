@@ -28,13 +28,14 @@
 #include <memory>
 #include <set>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "quest/cache/batch_holder.hpp"
 #include "quest/memory/memory_resource.hpp"
+#include "quest/result.hpp"
 #include "quest/taskflow/kpair.hpp"
 #include "quest/taskflow/operator.hpp"
-#include "quest/result.hpp"
 
 namespace quest::taskflow {
 
@@ -106,8 +107,7 @@ class Graph : public std::enable_shared_from_this<Graph> {
   ///
   /// @param memory_manager Optional memory manager for controlling memory
   ///        allocation and disk spilling. If null, a default manager is used.
-  explicit Graph(
-      std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr);
+  explicit Graph(std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr);
 
   ~Graph() = default;
 
@@ -155,10 +155,8 @@ class Graph : public std::enable_shared_from_this<Graph> {
   /// @param source_port_name Name of the output port (or empty for default).
   /// @param target_port_name Name of the input port (or empty for default).
   /// @param edge_config Configuration for the batch holder connection.
-  void AddEdge(Operator* source_operator,
-               Operator* target_operator,
-               const std::string& source_port_name,
-               const std::string& target_port_name,
+  void AddEdge(Operator* source_operator, Operator* target_operator,
+               const std::string& source_port_name, const std::string& target_port_name,
                const EdgeConfig& edge_config);
 
   // ===========================================================================
@@ -210,9 +208,7 @@ class Graph : public std::enable_shared_from_this<Graph> {
   [[nodiscard]] const Operator& GetLastOperator() const;
 
   /// @brief Returns the total number of operators in the graph.
-  [[nodiscard]] std::size_t GetNodeCount() const noexcept {
-    return registered_operators_.size();
-  }
+  [[nodiscard]] std::size_t GetNodeCount() const noexcept { return registered_operators_.size(); }
 
   /// @brief Finds all outgoing edges from an operator.
   ///
@@ -227,6 +223,40 @@ class Graph : public std::enable_shared_from_this<Graph> {
   /// @return Set of edges pointing to this operator.
   [[nodiscard]] std::set<Edge> GetIncomingEdges(Operator* to_operator) const;
   [[nodiscard]] std::set<Edge> GetIncomingEdges(std::int32_t operator_id) const;
+
+  /// @brief Looks up the configuration an edge was created with.
+  ///
+  /// Used by pipeline construction (`MetaPipeline::Build`) to inspect an
+  /// edge's barrier semantics and partitioning while walking the DAG.
+  /// `AddEdge` populates this alongside the adjacency lists; it is a side
+  /// map rather than a field on `Edge` because `Edge::operator<=>` orders
+  /// the `std::set<Edge>` adjacency lists and must stay identity-only.
+  ///
+  /// @param source_operator_id The edge's source operator ID.
+  /// @param target_operator_id The edge's target operator ID.
+  /// @return The stored configuration, or a default `EdgeConfig{}` if no
+  ///         edge with these endpoints was ever added.
+  [[nodiscard]] EdgeConfig GetEdgeConfig(std::int32_t source_operator_id,
+                                         std::int32_t target_operator_id) const;
+
+  /// @brief Finds all operators with no outgoing edges (pipeline sinks/roots
+  /// of the upstream walk in `MetaPipeline::Build`).
+  ///
+  /// Unlike `FinalizeWorkflow()`, this is a pure query: it does not mutate
+  /// the graph with sentinel terminal edges.
+  ///
+  /// @warning Call this BEFORE `FinalizeWorkflow()` on the same graph.
+  ///          `FinalizeWorkflow()` inserts a sentinel `{terminal_id, -1}`
+  ///          outgoing edge for every real terminal, which makes every
+  ///          terminal's `GetOutgoingEdges()` non-empty; after that call
+  ///          this method would find zero terminals. `MetaPipeline::Build`
+  ///          only needs the real DAG shape, so it must not run
+  ///          `FinalizeWorkflow()` first — a future `ExecutePipelined()`
+  ///          must not reuse the legacy `Execute()`'s prep step.
+  ///
+  /// @return Operators with an empty `GetOutgoingEdges()` set, in
+  ///         registration order.
+  [[nodiscard]] std::vector<Operator*> GetTerminalOperators() const;
 
   /// @brief Estimates the number of input rows for an operator.
   ///
@@ -247,8 +277,7 @@ class Graph : public std::enable_shared_from_this<Graph> {
   /// @param port_name The specific input port name.
   /// @return Pair of (is_estimate_available, estimated_row_count).
   [[nodiscard]] std::pair<bool, std::uint64_t> EstimateInputRowCountForPort(
-      std::int32_t operator_id,
-      const std::string& port_name) const;
+      std::int32_t operator_id, const std::string& port_name) const;
 
   // ===========================================================================
   // Debug and Visualization API
@@ -273,16 +302,14 @@ class Graph : public std::enable_shared_from_this<Graph> {
   // ===========================================================================
 
   /// @brief Gets the memory resource manager for this graph.
-  [[nodiscard]] std::shared_ptr<memory::MemoryResourceManager>
-  GetMemoryManager() const {
+  [[nodiscard]] std::shared_ptr<memory::MemoryResourceManager> GetMemoryManager() const {
     return memory_resource_manager_;
   }
 
   /// @brief Sets the memory resource manager.
   ///
   /// @param manager The new memory manager to use.
-  void SetMemoryManager(
-      std::shared_ptr<memory::MemoryResourceManager> manager) {
+  void SetMemoryManager(std::shared_ptr<memory::MemoryResourceManager> manager) {
     memory_resource_manager_ = std::move(manager);
   }
 
@@ -298,8 +325,8 @@ class Graph : public std::enable_shared_from_this<Graph> {
   ///
   /// @param edge_config The configuration specifying holder type and count.
   /// @return Vector of created batch holders.
-  [[nodiscard]] std::vector<std::shared_ptr<cache::IBatchHolder>>
-  CreateBatchHolders(const EdgeConfig& edge_config);
+  [[nodiscard]] std::vector<std::shared_ptr<cache::IBatchHolder>> CreateBatchHolders(
+      const EdgeConfig& edge_config);
 
   /// @brief Generates a unique ID for a new batch holder.
   [[nodiscard]] std::uint64_t GenerateNextBatchHolderId() {
@@ -320,6 +347,10 @@ class Graph : public std::enable_shared_from_this<Graph> {
 
   // Reverse adjacency list: operator_id -> set of incoming edges.
   std::map<std::int32_t, std::set<Edge>> incoming_edges_;
+
+  // Side map from (source_id, target_id) to the EdgeConfig it was created
+  // with. See GetEdgeConfig() for why this isn't a field on Edge itself.
+  std::map<std::pair<std::int32_t, std::int32_t>, EdgeConfig> edge_configs_;
 
   // Stores the most recently added edge for fluent DSL chaining.
   std::unique_ptr<KPair> most_recent_edge_;

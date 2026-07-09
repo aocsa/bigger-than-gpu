@@ -92,3 +92,7 @@ gtest_discover_tests(test_barrier_config)
 add_executable(test_operator_roles test_operator_roles.cpp)
 target_link_libraries(test_operator_roles PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_operator_roles)
+
+add_executable(test_meta_pipeline test_meta_pipeline.cpp)
+target_link_libraries(test_meta_pipeline PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_meta_pipeline)
