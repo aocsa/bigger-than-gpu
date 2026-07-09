@@ -447,7 +447,7 @@ int main() {
   std::cout << "\n--- Executing Graph ---\n\n";
 
   // Execute
-  auto status = graph->Execute();
+  auto status = graph->ExecuteLegacy();
 
   if (status.ok()) {
     std::cout << "\n=== Execution completed successfully ===\n";

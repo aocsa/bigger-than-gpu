@@ -245,7 +245,7 @@ TEST(GraphExecutionTest, SimpleExecution) {
 
   *graph += source >> sink;
 
-  auto status = graph->Execute();
+  auto status = graph->ExecuteLegacy();
   ASSERT_TRUE(status.ok());
   EXPECT_EQ(received_count, 5);
 }
@@ -261,7 +261,7 @@ TEST(GraphExecutionTest, PassthroughExecution) {
   *graph += source >> passthrough;
   *graph += passthrough >> sink;
 
-  auto status = graph->Execute();
+  auto status = graph->ExecuteLegacy();
   ASSERT_TRUE(status.ok());
   EXPECT_EQ(received_count, 10);
 }
@@ -279,7 +279,7 @@ TEST(GraphExecutionTest, NamedPortsExecution) {
   *graph += source_a >> join_op["left_input"];
   *graph += source_b >> join_op["right_input"];
 
-  auto status = graph->Execute();
+  auto status = graph->ExecuteLegacy();
   ASSERT_TRUE(status.ok());
   EXPECT_EQ(left_count, 3);
   EXPECT_EQ(right_count, 4);
@@ -296,7 +296,7 @@ TEST(GraphExecutionTest, ConcatenatingBatchHolder) {
   *graph +=
       link(source, sink, EdgeConfig::Concatenating().with_flow_control(10, 1024 * 1024));
 
-  auto status = graph->Execute();
+  auto status = graph->ExecuteLegacy();
   ASSERT_TRUE(status.ok());
   EXPECT_EQ(received_count, 1);
 }

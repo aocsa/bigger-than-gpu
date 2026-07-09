@@ -100,3 +100,7 @@ gtest_discover_tests(test_meta_pipeline)
 add_executable(test_pipeline_executor test_pipeline_executor.cpp)
 target_link_libraries(test_pipeline_executor PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_pipeline_executor)
+
+add_executable(test_execution_parity test_execution_parity.cpp)
+target_link_libraries(test_execution_parity PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_execution_parity)

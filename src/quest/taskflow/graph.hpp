@@ -163,27 +163,38 @@ class Graph : public std::enable_shared_from_this<Graph> {
   // Graph Execution API
   // ===========================================================================
 
-  /// @brief Executes all operators in the graph respecting dependencies.
+  /// @brief Executes the graph. Since Stage 6 of
+  /// docs/dev/pipeline-execution-plan.md this delegates to the pipelined
+  /// engine (`ExecutePipelined()`).
   ///
-  /// The execution algorithm:
-  /// - Identifies root operators (those with no incoming edges)
-  /// - Uses a work queue to schedule operators when dependencies are met
-  /// - Launches each operator in a separate thread for parallelism
-  /// - Waits for all threads to complete before returning
+  /// Operators therefore execute via their pipeline roles (`GetNextBatch`
+  /// / `ProcessBatch` / `Sink`), NOT via `run()`. Operators implementing
+  /// only the legacy `run()` contract must use `ExecuteLegacy()` until
+  /// they are migrated; the legacy path is retired once the last such
+  /// caller is gone.
   ///
   /// @return Status::OK() on successful completion, error status otherwise.
   [[nodiscard]] Status Execute();
 
-  /// @brief Executes the graph via the pipelined engine (Stage 4 of
-  /// docs/dev/pipeline-execution-plan.md): `MetaPipeline::Build(*this)`
-  /// followed by `PipelineExecutor::Execute(...)` on a default-sized
-  /// worker pool.
+  /// @brief Executes via the legacy thread-per-operator engine
+  /// (DEPRECATED — migration escape hatch only).
   ///
-  /// Coexists with `Execute()` — the same `*graph +=` DSL builds a graph
-  /// usable by either path; this one does not read `FinalizeWorkflow()`'s
-  /// sentinel edges, so calling it does not require (or preclude) calling
-  /// `FinalizeWorkflow()` first. Replaces `Execute()` as the default in
-  /// Stage 6.
+  /// The pre-Stage-6 `Execute()` algorithm: BFS from root operators, one
+  /// `std::jthread` per operator running `run()`, holders on every edge.
+  /// Kept while `run()`-based operators still exist (tests/test_graph.cpp,
+  /// examples); scheduled for deletion once they migrate to the pipeline
+  /// roles — don't maintain two schedulers (plan Stage 6).
+  ///
+  /// @return Status::OK() on successful completion, error status otherwise.
+  [[nodiscard]] Status ExecuteLegacy();
+
+  /// @brief Executes the graph via the pipelined engine:
+  /// `MetaPipeline::Build(*this)` followed by `PipelineExecutor::
+  /// Execute(...)` on a default-sized worker pool.
+  ///
+  /// This is what `Execute()` delegates to since Stage 6. Does not read
+  /// `FinalizeWorkflow()`'s sentinel edges, so calling it does not require
+  /// (or preclude) calling `FinalizeWorkflow()` first.
   ///
   /// @return Status::OK() if every pipeline finished without error, or the
   ///         first error encountered (building the pipelines, or running

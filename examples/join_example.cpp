@@ -221,7 +221,7 @@ int main() {
 
     std::cout << "\n--- Executing Join ---\n\n";
 
-    auto status = graph->Execute();
+    auto status = graph->ExecuteLegacy();
     
     if (status.ok()) {
         std::cout << "\n=== Join completed successfully ===\n";

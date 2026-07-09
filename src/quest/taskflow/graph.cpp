@@ -170,6 +170,13 @@ void Graph::FinalizeWorkflow() {
 }
 
 Status Graph::Execute() {
+  // Stage 6 (docs/dev/pipeline-execution-plan.md): the pipelined engine is
+  // the default. The thread-per-operator scheduler survives only as
+  // ExecuteLegacy() for not-yet-migrated run()-based operators.
+  return ExecutePipelined();
+}
+
+Status Graph::ExecuteLegacy() {
   // Prepare the graph by marking terminal operators.
   FinalizeWorkflow();
 
