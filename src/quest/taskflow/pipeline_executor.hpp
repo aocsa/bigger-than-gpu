@@ -55,15 +55,28 @@ class PipelineExecutor {
   /// As each pipeline finishes, re-evaluates its dependents and schedules
   /// any that just became runnable — completion is edge-triggered, nothing
   /// polls. On the first error from any pipeline, stops scheduling new
-  /// work (already-dispatched pipelines finish their own drain loop —
-  /// "drain queued work" before "join workers", plan §2.5's teardown
-  /// order), then joins the pool before returning the error.
+  /// work; pipelines already sitting in the ready queue still drain
+  /// ("drain queued work" before "join workers", plan §2.5's teardown
+  /// order — only *dependent* scheduling stops), then the pool is joined
+  /// before the error is returned.
+  ///
+  /// @warning ORDERING INVARIANT (until the task-creator phase lands a
+  ///          non-blocking claim): a Pipeline-barrier consumer occupies its
+  ///          worker while blocked in `Pull()` on the producer's holder. If
+  ///          every worker is occupied by such consumers while their
+  ///          producers sit unpopped in the ready queue, execution hangs —
+  ///          and the stall detector cannot see it (workers are in flight,
+  ///          the queue is non-empty). Callers must therefore order
+  ///          Pipeline-barrier producers BEFORE their consumers in
+  ///          `pipelines`. `MetaPipeline::Build` output satisfies this by
+  ///          construction (children always precede parents); hand-assembled
+  ///          sets (as in tests/test_pipeline_executor.cpp) must preserve it
+  ///          themselves, or provide at least one worker per concurrently
+  ///          blocked consumer.
   ///
   /// @param pipelines The pipelines to run, typically `MetaPipeline::
-  ///        Build`'s output (though any well-formed set works — see
-  ///        tests/test_pipeline_executor.cpp for hand-assembled examples).
-  ///        Ownership passes to this call; pipelines are destroyed when it
-  ///        returns.
+  ///        Build`'s output. Ownership passes to this call; pipelines are
+  ///        destroyed when it returns.
   /// @return Status::OK() if every pipeline finished without error, or the
   ///         first error encountered.
   [[nodiscard]] Status Execute(std::vector<PipelinePtr> pipelines);

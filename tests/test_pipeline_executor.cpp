@@ -635,4 +635,51 @@ TEST(PipelineExecutorTest, GraphExecutePipelinedRunsALinearPlan) {
   EXPECT_EQ(collector.received_count(), 2U);
 }
 
+// =============================================================================
+// Test 7 -- a holder-fed first operator must run its own ProcessBatch.
+//
+// Regression test: DrainPipeline used to call RunTask with the default
+// start_index=1 unconditionally, which is only correct when operators()[0]
+// itself produced the batch (a role-based source). When the batch was
+// claimed from a cross-pipeline holder instead, the first operator never
+// saw it -- its transform was silently dropped in any multi-operator
+// pipeline beginning at an explicit Full/partitioned break.
+// =============================================================================
+
+TEST(PipelineExecutorTest, HolderFedFirstOperatorRunsItsOwnProcessBatch) {
+  constexpr std::size_t kBatchCount = 3;
+  EventLog log;
+  auto graph = std::make_shared<Graph>();
+
+  VectorSourceOperator producer_op{0, kBatchCount};
+  LoggingStreamOperator holder_fed_op{1, log, "holder_fed"};
+  LoggingCollectingSink sink_op{2, log, "sink"};
+
+  // Wires the real BatchHolder the consumer pipeline claims from
+  // (producer_op's default output port -> holder_fed_op's default input).
+  *graph += producer_op >> holder_fed_op;
+
+  auto producer_pipeline = std::make_unique<Pipeline>(0);
+  producer_pipeline->PrependOperator(&producer_op);
+
+  // Two-operator consumer pipeline whose FIRST operator is holder-fed:
+  // exactly the shape where start_index=1 used to skip holder_fed_op.
+  auto consumer_pipeline = std::make_unique<Pipeline>(1);
+  consumer_pipeline->PrependOperator(&sink_op);
+  consumer_pipeline->PrependOperator(&holder_fed_op);
+  consumer_pipeline->AddProducer(producer_pipeline.get(), BarrierType::Pipeline);
+
+  std::vector<PipelinePtr> pipelines;
+  pipelines.push_back(std::move(producer_pipeline));  // producer first (ordering invariant)
+  pipelines.push_back(std::move(consumer_pipeline));
+
+  PipelineExecutor executor{2};
+  auto status = executor.Execute(std::move(pipelines));
+  ASSERT_TRUE(status.has_value()) << status.error().ToString();
+
+  EXPECT_EQ(holder_fed_op.processed_count(), kBatchCount)
+      << "the holder-fed first operator's ProcessBatch was skipped";
+  EXPECT_EQ(sink_op.received_count(), kBatchCount);
+}
+
 }  // namespace

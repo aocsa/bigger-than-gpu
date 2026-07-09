@@ -45,6 +45,7 @@ Executing [docs/dev/pipeline-execution-plan.md](../docs/dev/pipeline-execution-p
 - [x] Tests (7 `PipelineExecutorTest`): FULL gating via an ordered event log (no sleeps); PIPELINE overlap via an explicit release-gate (no timing); many independent pipelines racing to complete; error propagation + Full-barrier-gated downstream never running; a Full-barrier cycle among a subset of pipelines failing instead of hanging; 2-worker bound; `Graph::ExecutePipelined()` smoke test
 - [x] Build green: **519 passed / 0 failed / 1 skipped** (512 baseline + 7 new); 30x shuffled repeat clean
 - [x] Self code review (code-reviewer subagent) — found + fixed one critical deadlock and one test-hang-on-regression risk before commit; see review log
+- [x] Independent review pass (review session, at user request) — P1–P3 fixed, see review log: **520 passed / 0 failed / 1 skipped**, executor tests 15x shuffled clean
 - [ ] REVIEW GATE
 
 ## Stage 5 — Parity + benchmark
@@ -57,6 +58,34 @@ Executing [docs/dev/pipeline-execution-plan.md](../docs/dev/pipeline-execution-p
 - [ ] REVIEW GATE
 
 ## Review log
+
+### 2026-07-09 — Stage 4 independent review (review session, fixes folded into the Stage 4 commit)
+Second-session review of the staged Stage 4 diff, on top of the implementing session's own
+review. Three findings fixed, two left as documentation:
+1. **P1 (correctness bug, fixed)** — `DrainPipeline` always ran `RunTask` with the default
+   `start_index=1`, which is only right when `operators()[0]` produced the batch itself. A
+   holder-fed source (pipeline starting at an explicit Full/partitioned break) never saw its
+   own `ProcessBatch` — the first operator's transform was silently dropped in any
+   multi-operator pipeline of that shape. Fixed: `start_index = source->IsSource() ? 1 : 0`
+   (exactly the rule the Stage 3 handoff specified but Stage 4 didn't implement). New
+   regression test: `HolderFedFirstOperatorRunsItsOwnProcessBatch`.
+2. **P2 (latent hang, documented as an ordering invariant)** — a Pipeline-barrier consumer
+   occupies its worker while blocked in `Pull()`; if all workers are occupied by such
+   consumers while their producers sit unpopped in the ready queue, execution hangs and the
+   stall detector cannot see it (in-flight > 0, queue non-empty). Masked today by
+   `MetaPipeline::Build`'s children-before-parents ordering. The overstated "any well-formed
+   set works" doc on `Execute()` was replaced with an explicit `@warning` ORDERING INVARIANT;
+   the real fix (non-blocking claim + requeue-as-waiting) is the task-creator phase's hint
+   chain by design.
+3. **P3 (silent truncation risk, fixed)** — `ClaimNextBatch` treated ANY
+   `ErrorCode::Invalid` from `Pull()` as clean EOS; Invalid is also the codebase's
+   general-purpose error code, so a genuine holder failure would truncate the stream with a
+   green status. Now corroborated against holder state (`IsFinished() && !HasNext()`) before
+   being treated as end-of-stream; anything else propagates as the error it is.
+Also noted, not changed: harmless no-op `FinalizeSink()` on holder-fed Full consumers (now
+commented at the call site); post-error draining of already-queued pipelines is intended
+behavior (doc clarified); `.claude/settings.local.json` should not ride along in the Stage 4
+commit. Suite: **520 passed / 0 failed / 1 skipped**; executor tests 15x shuffled clean.
 
 ### 2026-07-08/09 — Stage 4 (uncommitted, pending REVIEW GATE)
 - New: `pipeline_executor.{hpp,cpp}`, `tests/test_pipeline_executor.cpp` (7 tests). Modified:

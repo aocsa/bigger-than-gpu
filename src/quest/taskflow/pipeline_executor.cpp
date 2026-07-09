@@ -185,12 +185,24 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
     // Gated on FullBarrierProducers() (not just IsSink()) so an operator
     // that merely reports IsSink()==true for unrelated reasons -- e.g. a
     // Pipeline-barrier-only pipeline whose source has no producer at all
-    // -- never gets an unsolicited FinalizeSink() call.
+    // -- never gets an unsolicited FinalizeSink() call. (A holder-fed
+    // Full-barrier consumer whose first operator is not a blocking op
+    // also lands here and receives a no-op FinalizeSink(); harmless by
+    // contract -- the default implementation returns OK.)
     auto finalize_status = source_op->FinalizeSink();
     if (!finalize_status.ok()) {
       return finalize_status;
     }
   }
+
+  // A role-based source (IsSource(), including a blocking operator just
+  // flipped above) produced the claimed batch itself, so RunTask must
+  // skip it (start_index 1). A holder-fed source did NOT see the batch --
+  // it arrived from the cross-pipeline holder -- so its own ProcessBatch
+  // is the first stop (start_index 0). Skipping it would silently drop
+  // the first operator's transform in any multi-operator pipeline that
+  // begins at an explicit Full/partitioned break.
+  const std::size_t run_start_index = source_op->IsSource() ? 1 : 0;
 
   while (true) {
     std::optional<cache::DataBlockPtr> batch;
@@ -222,7 +234,7 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
       pipeline.MarkTaskCreated();
     }
 
-    auto run_status = pipeline.RunTask(std::move(*batch));
+    auto run_status = pipeline.RunTask(std::move(*batch), run_start_index);
     pipeline.MarkTaskCompleted();
     if (!run_status.ok()) {
       return run_status;
@@ -253,7 +265,15 @@ Result<std::optional<cache::DataBlockPtr>> PipelineExecutor::ClaimNextBatch(Oper
 
   auto pulled = holder->Pull();  // Blocks until data arrives or the producer finishes.
   if (!pulled.has_value()) {
-    if (pulled.error().code() == ErrorCode::Invalid) {
+    // Pull() signals "finished and empty" with ErrorCode::Invalid — but
+    // Invalid is also the codebase's general-purpose error code, so the
+    // holder's actual state must corroborate before an error is treated
+    // as clean end-of-stream. Otherwise a genuine Invalid failure would
+    // silently truncate the stream with a green status. (The honest
+    // Closed state replacing this error-as-EOS protocol is planned for
+    // the streaming phase — replication plan phase 8.)
+    if (pulled.error().code() == ErrorCode::Invalid && holder->IsFinished() &&
+        !holder->HasNext()) {
       return std::optional<cache::DataBlockPtr>{std::nullopt};  // EOS
     }
     return std::unexpected(pulled.error());
