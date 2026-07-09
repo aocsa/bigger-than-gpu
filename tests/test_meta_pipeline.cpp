@@ -304,6 +304,77 @@ TEST(MetaPipelineTest, SharedBlockingProducerIsBuiltOnce) {
 }
 
 // =============================================================================
+// Robustness — terminal detection, unsupported shapes, cycles
+// =============================================================================
+
+TEST(MetaPipelineTest, BuildStillFindsTerminalsAfterFinalizeWorkflow) {
+  auto graph = std::make_shared<Graph>();
+  MockOperator scan{0, OperatorType::TableScan};
+  MockOperator filter{1, OperatorType::Filter};
+
+  *graph += scan >> filter;
+  graph->FinalizeWorkflow();  // adds sentinel (-1) edges to terminals
+
+  auto result = MetaPipeline::Build(*graph);
+  ASSERT_TRUE(result.has_value());
+  ASSERT_EQ(result.value().size(), 1U);
+  EXPECT_EQ(result.value()[0]->sink(), &filter);
+}
+
+TEST(MetaPipelineTest, BlockingProducerIntoMultiInputConsumerIsRejected) {
+  // agg accumulates via Sink(); nothing would ever re-emit its state into
+  // the join's input port (no relay pipeline yet), so Build must fail
+  // loudly instead of producing an unexecutable shape.
+  auto graph = std::make_shared<Graph>();
+  MockOperator scan{0, OperatorType::TableScan};
+  MockOperator agg{1, OperatorType::ComputeAggregate};  // blocking
+  MockOperator source_b{2, OperatorType::TableScan};
+  MockOperator join{3, OperatorType::PartwiseJoin};
+
+  *graph += scan >> agg;
+  *graph += agg >> join["input_a"];
+  *graph += source_b >> join["input_b"];
+
+  auto result = MetaPipeline::Build(*graph);
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error().code(), ErrorCode::Invalid);
+}
+
+TEST(MetaPipelineTest, StreamingCycleReturnsErrorInsteadOfHanging) {
+  // a -> b -> a plus b -> out: the fuse walk from `out` would loop
+  // forever without the per-walk visited set.
+  auto graph = std::make_shared<Graph>();
+  MockOperator op_a{0, OperatorType::Filter};
+  MockOperator op_b{1, OperatorType::Filter};
+  MockOperator out{2, OperatorType::Output};
+
+  graph->AddEdge(&op_a, &op_b, "0", "1", EdgeConfig{});
+  graph->AddEdge(&op_b, &op_a, "1", "0", EdgeConfig{});
+  graph->AddEdge(&op_b, &out, "1", "2", EdgeConfig{});
+
+  auto result = MetaPipeline::Build(*graph);
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error().code(), ErrorCode::Invalid);
+}
+
+TEST(MetaPipelineTest, BlockingCycleReturnsErrorInsteadOfOverflowing) {
+  // agg1 -> agg2 -> agg1 plus agg2 -> out: BuildFrom recursion would
+  // re-enter agg2 without the in-progress guard.
+  auto graph = std::make_shared<Graph>();
+  MockOperator agg1{0, OperatorType::ComputeAggregate};
+  MockOperator agg2{1, OperatorType::ComputeAggregate};
+  MockOperator out{2, OperatorType::Output};
+
+  graph->AddEdge(&agg1, &agg2, "0", "1", EdgeConfig{});
+  graph->AddEdge(&agg2, &agg1, "1", "0", EdgeConfig{});
+  graph->AddEdge(&agg2, &out, "1", "2", EdgeConfig{});
+
+  auto result = MetaPipeline::Build(*graph);
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error().code(), ErrorCode::Invalid);
+}
+
+// =============================================================================
 // Shape test 6 — Pipeline::RunTask push loop (no Graph/MetaPipeline)
 // =============================================================================
 

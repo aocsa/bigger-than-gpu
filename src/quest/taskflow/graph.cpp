@@ -321,7 +321,15 @@ EdgeConfig Graph::GetEdgeConfig(std::int32_t source_operator_id,
 std::vector<Operator*> Graph::GetTerminalOperators() const {
   std::vector<Operator*> terminals;
   for (auto* current_operator : registered_operators_) {
-    if (GetOutgoingEdges(current_operator).empty()) {
+    // Only edges to real operators count: FinalizeWorkflow() marks
+    // terminals with sentinel edges (target -1), and those must not make
+    // an operator look non-terminal — otherwise building pipelines after
+    // the legacy Execute() path silently finds no terminals at all.
+    auto outgoing = GetOutgoingEdges(current_operator);
+    bool has_real_consumer = std::ranges::any_of(outgoing, [](const Edge& edge) {
+      return edge.target_operator_id >= 0;
+    });
+    if (!has_real_consumer) {
       terminals.push_back(current_operator);
     }
   }

@@ -23,7 +23,7 @@ Executing [docs/dev/pipeline-execution-plan.md](../docs/dev/pipeline-execution-p
 - [x] Build green: 498 passed / 0 failed / 1 skipped
 - [x] REVIEW GATE: user approved ("LGTM") → committed 96d2673
 
-## Stage 3 — Pipeline + MetaPipeline::Build ✅ (code review passed, awaiting commit approval)
+## Stage 3 — Pipeline + MetaPipeline::Build ✅ (commit f9108cd + hardening follow-up)
 **Design ref:** [`tasks/notes/session-handoff-pipeline.md`](notes/session-handoff-pipeline.md).
 - [x] `pipeline.{hpp,cpp}`: operator list, counters, status lock, `RunTask(batch, start_index=1)` push loop
 - [x] `meta_pipeline.{hpp,cpp}`: BuildFrom walk (memoized, children-before-parents)
@@ -34,7 +34,8 @@ Executing [docs/dev/pipeline-execution-plan.md](../docs/dev/pipeline-execution-p
 - [x] `RunTask` push loop tests: streaming->sink, error mid-loop, single-op pipeline, non-blocking sink via real AddToOutput holder (4 `PipelineRunTaskTest`)
 - [x] Build green: **508 passed / 0 failed / 1 skipped** (498 baseline + 10 new)
 - [x] Self code review (via code-reviewer subagent) — see review log for findings + fixes
-- [ ] REVIEW GATE
+- [x] REVIEW GATE: user committed f9108cd, then requested an independent review pass
+- [x] Hardening follow-up (P1–P4 from the independent review; see review log): 512 passed / 0 failed / 1 skipped
 
 ## Stage 4 — PipelineExecutor
 - [ ] Worker pool, runnable set, completion events, claim-under-lock, teardown order
@@ -53,7 +54,34 @@ Executing [docs/dev/pipeline-execution-plan.md](../docs/dev/pipeline-execution-p
 
 ## Review log
 
-### 2026-07-08 — Stage 3 (uncommitted, pending REVIEW GATE)
+### 2026-07-08 — Stage 3 hardening (review session, follow-up commit on top of f9108cd)
+Independent review of the staged Stage 3 diff by a second session (the one that wrote the
+handoff doc), requested by the user after committing f9108cd. Four prioritized findings
+(P1–P4), all fixed in this follow-up; P5 note-level items intentionally left:
+1. **P1 (real bug)** — `GetTerminalOperators()` returned nothing after `FinalizeWorkflow()`
+   (sentinel `-1` edges made every terminal look non-terminal), so "legacy Execute, then
+   Build" silently produced zero pipelines. The implementing session had documented this as a
+   `@warning`; the review session fixed it instead: terminal detection now ignores edges with
+   `target_operator_id < 0`. The obsolete "do NOT call FinalizeWorkflow first" warning on
+   `MetaPipeline::Build` was replaced with "safe in either order".
+2. **P2 (data-path hole)** — a blocking operator feeding a multi-input consumer
+   (`agg >> join["input_a"]`) built a shape whose accumulated state nothing would ever re-emit
+   into the join's port (no relay pipeline; the single-input path avoids this by making the
+   blocking op the parent's source). `WalkMultiInputProducers` now rejects it with a clear
+   `Status::Invalid` until relay pipelines exist (real-joins phase).
+3. **P3 (latent race)** — `tasks_created_`/`tasks_completed_`/`finished_` were plain
+   `size_t`/`bool`, relying on Stage 4 always holding `status_lock()`; Sirius completes tasks
+   from worker-thread destructors without the lock. Now `std::atomic`, with the exact locking
+   contract documented on `MarkTaskCreated`/`MarkTaskCompleted`.
+4. **P4 (hang on malformed input)** — `BuildFrom` had no cycle protection; a cyclic graph hung
+   (streaming cycle in the fuse walk) or overflowed the stack (blocking cycle in the
+   recursion). Added an `in_progress_` set + per-walk visited set; both paths return
+   `Invalid`, honoring the "error if malformed" contract.
+Regression tests: +4 (`BuildStillFindsTerminalsAfterFinalizeWorkflow`,
+`BlockingProducerIntoMultiInputConsumerIsRejected`, `StreamingCycleReturnsErrorInsteadOfHanging`,
+`BlockingCycleReturnsErrorInsteadOfOverflowing`). Suite: **512 passed / 0 failed / 1 skipped**.
+
+### 2026-07-08 — Stage 3 (implementing session; committed f9108cd)
 - New: `pipeline.{hpp,cpp}`, `meta_pipeline.{hpp,cpp}`, `tests/test_meta_pipeline.cpp` (10 tests).
   Modified: `graph.{hpp,cpp}` (+`edge_configs_`/`GetEdgeConfig`, +`GetTerminalOperators`),
   `CMakeLists.txt`, `tests/CMakeLists.txt`. 508 passed / 0 failed / 1 skipped.

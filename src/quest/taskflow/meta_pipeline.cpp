@@ -9,6 +9,7 @@
 #include <optional>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -39,10 +40,20 @@ class MetaPipelineBuilder {
  private:
   /// @brief Builds (or returns the memoized) pipeline whose sink is the
   /// operator identified by `sink_operator_id`.
+  ///
+  /// Guards against cyclic graphs (the DSL never validates acyclicity):
+  /// `in_progress_` catches cycles that cross pipeline boundaries (the
+  /// recursion re-entering a sink it is already building), and a per-walk
+  /// visited set catches pure streaming cycles inside one fuse walk.
+  /// Either returns Invalid instead of hanging or overflowing the stack.
   [[nodiscard]] Result<Pipeline*> BuildFrom(std::uint32_t sink_operator_id) {
     auto memo_it = memo_.find(sink_operator_id);
     if (memo_it != memo_.end()) {
       return memo_it->second;
+    }
+    if (in_progress_.contains(sink_operator_id)) {
+      return Err(ErrorCode::Invalid,
+                 "MetaPipeline::Build: cycle detected in operator graph");
     }
 
     auto* sink_op = graph_.GetNode(sink_operator_id);
@@ -50,10 +61,13 @@ class MetaPipelineBuilder {
       return Err(ErrorCode::Invalid, "MetaPipeline::Build: unknown operator id");
     }
 
+    in_progress_.insert(sink_operator_id);
+
     auto owned_pipeline = std::make_unique<Pipeline>(next_pipeline_id_++);
     Pipeline* pipeline = owned_pipeline.get();
     pipeline->PrependOperator(sink_op);
 
+    std::unordered_set<std::uint32_t> walk_visited{sink_operator_id};
     Operator* cur = sink_op;
     while (true) {
       auto incoming = graph_.GetIncomingEdges(cur);
@@ -70,6 +84,10 @@ class MetaPipelineBuilder {
           break;  // the edge ended this pipeline (Full or partitioned break).
         }
         cur = walk_result.value().value();  // fused: keep walking upstream.
+        if (!walk_visited.insert(cur->id()).second) {
+          return Err(ErrorCode::Invalid,
+                     "MetaPipeline::Build: cycle detected in operator graph");
+        }
         continue;
       }
 
@@ -83,6 +101,7 @@ class MetaPipelineBuilder {
       break;
     }
 
+    in_progress_.erase(sink_operator_id);
     pipelines_.push_back(std::move(owned_pipeline));
     memo_[sink_operator_id] = pipeline;
     return pipeline;
@@ -147,6 +166,19 @@ class MetaPipelineBuilder {
             "MetaPipeline::Build: edge references unregistered source "
             "operator");
       }
+      if (upstream->IsBlocking()) {
+        // A blocking producer's child pipeline ends AT the producer, which
+        // accumulates via Sink() — but the multi-input path has no relay
+        // pipeline to re-emit that state into this consumer's input port
+        // (the single-input path solves it by making the blocking op the
+        // parent's source). Building the shape anyway would strand the
+        // producer's output at execution time, so fail loudly until the
+        // relay exists (planned with real joins; see
+        // docs/dev/pipeline-execution-plan.md §6 Non-goals).
+        return Status::Invalid(
+            "MetaPipeline::Build: blocking operator feeding a multi-input "
+            "consumer is not supported yet (missing relay pipeline)");
+      }
       auto child = BuildFrom(upstream->id());
       if (!child.has_value()) {
         return std::unexpected(child.error());
@@ -160,6 +192,9 @@ class MetaPipelineBuilder {
   const Graph& graph_;
   std::vector<PipelinePtr> pipelines_;
   std::unordered_map<std::uint32_t, Pipeline*> memo_;
+  // Sinks whose BuildFrom() is on the current recursion stack; re-entering
+  // one means the graph has a cycle crossing pipeline boundaries.
+  std::unordered_set<std::uint32_t> in_progress_;
   std::size_t next_pipeline_id_{0};
 };
 

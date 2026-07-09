@@ -15,6 +15,7 @@
 /// appear as the sink of one pipeline and the source of the pipeline that
 /// consumes their accumulated state (`MetaPipeline::Build` wires this up).
 
+#include <atomic>
 #include <cstddef>
 #include <memory>
 #include <mutex>
@@ -124,23 +125,33 @@ class Pipeline {
   ///
   /// Must be called while holding `status_lock()` together with the input
   /// claim that produced the task — see tasks/notes/pipelines.md for why
-  /// this ordering is load-bearing.
-  void MarkTaskCreated() noexcept { ++tasks_created_; }
+  /// this ordering is load-bearing. The counter itself is atomic (like
+  /// Sirius's tasks_created/tasks_completed) so completion-side reads
+  /// don't require the lock.
+  void MarkTaskCreated() noexcept { tasks_created_.fetch_add(1); }
 
   /// @brief Records that a running task finished (successfully or not).
-  void MarkTaskCompleted() noexcept { ++tasks_completed_; }
+  ///
+  /// Unlike MarkTaskCreated(), this may be called without status_lock()
+  /// (Sirius increments from the task destructor on a worker thread); the
+  /// executor re-evaluates the completion predicate under the lock after.
+  void MarkTaskCompleted() noexcept { tasks_completed_.fetch_add(1); }
 
-  [[nodiscard]] std::size_t tasks_created() const noexcept { return tasks_created_; }
-  [[nodiscard]] std::size_t tasks_completed() const noexcept { return tasks_completed_; }
+  [[nodiscard]] std::size_t tasks_created() const noexcept {
+    return tasks_created_.load();
+  }
+  [[nodiscard]] std::size_t tasks_completed() const noexcept {
+    return tasks_completed_.load();
+  }
 
   /// @brief Whether this pipeline has been marked finished.
   ///
   /// A thin flag rather than the full completion predicate: Stage 4 derives
   /// "finished" from source exhaustion + empty holders + balanced task
   /// counters and calls MarkFinished() once that predicate holds.
-  [[nodiscard]] bool IsFinished() const noexcept { return finished_; }
+  [[nodiscard]] bool IsFinished() const noexcept { return finished_.load(); }
 
-  void MarkFinished() noexcept { finished_ = true; }
+  void MarkFinished() noexcept { finished_.store(true); }
 
   /// @brief The lock guarding this pipeline's task-accounting sequence.
   ///
@@ -198,9 +209,12 @@ class Pipeline {
   std::vector<Pipeline*> full_barrier_producers_;
   std::vector<Pipeline*> pipeline_barrier_producers_;
 
-  std::size_t tasks_created_{0};
-  std::size_t tasks_completed_{0};
-  bool finished_{false};
+  // Atomic (not merely lock-guarded) to match the Sirius pattern: creation
+  // increments happen under status_lock_ with the input claim, but
+  // completion increments and predicate reads happen on worker threads.
+  std::atomic<std::size_t> tasks_created_{0};
+  std::atomic<std::size_t> tasks_completed_{0};
+  std::atomic<bool> finished_{false};
   std::mutex status_lock_;
 };
 

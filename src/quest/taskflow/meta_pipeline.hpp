@@ -36,13 +36,13 @@ class MetaPipeline {
   /// have producers already resolved.
   ///
   /// @param graph The graph to split. Must outlive the returned pipelines
-  ///        (they hold non-owning `Operator*` into it). Do NOT call
-  ///        `graph.FinalizeWorkflow()` first — see the warning on
-  ///        `Graph::GetTerminalOperators()`, which this relies on to find
-  ///        the walk's starting points.
+  ///        (they hold non-owning `Operator*` into it). Safe to call
+  ///        before or after `graph.FinalizeWorkflow()` — terminal
+  ///        detection ignores the sentinel edges it adds.
   /// @return The pipelines in dependency order, or an error if the graph
-  ///         is malformed (e.g. an edge references an unregistered
-  ///         operator).
+  ///         is malformed (an edge referencing an unregistered operator,
+  ///         a cycle, or a blocking operator feeding a multi-input
+  ///         consumer — unsupported until relay pipelines exist).
   [[nodiscard]] static Result<std::vector<PipelinePtr>> Build(const Graph& graph);
 };
 
