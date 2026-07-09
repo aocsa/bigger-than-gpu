@@ -99,6 +99,25 @@ enum class OperatorType : std::uint8_t {
            type == OperatorType::MergeStream;
 }
 
+/// @brief Check if operator is blocking (a pipeline breaker)
+/// @details A blocking operator must consume (part of) its input before it can
+///          produce output — aggregates, sorts, joins, partitions, unions.
+///          In pipeline execution it becomes the sink of the producer pipeline
+///          and the source of the consumer pipeline. Streaming operators
+///          (Filter, Project, Limit) fuse into their pipeline instead.
+[[nodiscard]] constexpr bool is_blocking_operator(OperatorType type) noexcept {
+    return type == OperatorType::ComputeAggregate ||
+           type == OperatorType::DistributeAggregate ||
+           type == OperatorType::MergeAggregate ||
+           type == OperatorType::SortAndSample ||
+           type == OperatorType::Partition ||
+           type == OperatorType::PartitionSingleNode ||
+           type == OperatorType::MergeStream ||
+           type == OperatorType::PartwiseJoin ||
+           type == OperatorType::JoinPartition ||
+           type == OperatorType::Union;
+}
+
 }  // namespace quest::taskflow
 
 #endif  // QUEST_TASKFLOW_OPERATOR_TYPE_HPP_

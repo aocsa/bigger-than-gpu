@@ -145,6 +145,18 @@ class Operator {
   [[nodiscard]] virtual std::pair<bool, std::uint64_t>
   GetEstimatedOutputNumRows() const;
 
+  /// @brief Indicates whether this operator is a pipeline breaker.
+  ///
+  /// A blocking operator must consume (part of) its input before producing
+  /// output (aggregate, sort, join, partition). During pipeline construction
+  /// it becomes the sink of the producer pipeline and the source of the
+  /// consumer pipeline. The default consults the OperatorType classification;
+  /// override for operators whose behavior differs from their type's default
+  /// (mirrors Sirius's overridable build_pipelines()).
+  [[nodiscard]] virtual bool IsBlocking() const noexcept {
+    return is_blocking_operator(operator_type_);
+  }
+
   // ===========================================================================
   // Identity and Type
   // ===========================================================================

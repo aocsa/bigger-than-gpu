@@ -25,8 +25,10 @@
 /// operators along with any port names and configuration. The Graph::operator+=
 /// then processes these pairs to create actual edges with batch holders.
 
+#include <cstdint>
 #include <limits>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "quest/cache/batch_holder.hpp"
@@ -42,6 +44,37 @@ class Operator;
 using OperatorPortPair = std::pair<Operator*, std::string>;
 
 // =============================================================================
+// Barrier Semantics
+// =============================================================================
+
+/// @brief Barrier semantics for an edge between two pipelines.
+///
+/// Mirrors Sirius's MemoryBarrierType. The barrier is a property of the
+/// consumer side of a cross-pipeline edge and gates when the consumer may
+/// start consuming:
+/// - Pipeline: pure streaming — the consumer may run while the producer
+///   pipeline is still active (batches flow through the BatchHolder).
+/// - Full: the consumer waits until the entire producer pipeline has
+///   finished before consuming any buffered data (hash-join build sides,
+///   merge stages, concatenating sinks).
+///
+/// A Partial barrier (incremental consumption with coordination) is
+/// deliberately not modeled yet; it arrives with partitioned joins.
+enum class BarrierType : std::uint8_t {
+  Pipeline,
+  Full
+};
+
+/// @brief Convert barrier type to its string representation.
+[[nodiscard]] constexpr std::string_view to_string(BarrierType type) noexcept {
+  switch (type) {
+    case BarrierType::Pipeline: return "Pipeline";
+    case BarrierType::Full:     return "Full";
+  }
+  return "Unknown";
+}
+
+// =============================================================================
 // Edge Configuration
 // =============================================================================
 
@@ -49,11 +82,15 @@ using OperatorPortPair = std::pair<Operator*, std::string>;
 ///
 /// EdgeConfig controls how data flows between operators:
 /// - Type: Simple (individual batches) or Concatenating (merged batches)
+/// - Barrier: Pipeline (streaming) or Full (wait for producer pipeline)
 /// - Partitioning: Number of parallel data streams
 /// - Flow control: Backpressure thresholds to prevent memory exhaustion
 struct EdgeConfig {
   // Type of batch holder (affects how data is delivered to consumers).
   cache::BatchHolderType type{cache::BatchHolderType::kSimple};
+
+  // Barrier semantics for pipeline execution (see BarrierType).
+  BarrierType barrier{BarrierType::Pipeline};
 
   // Number of partitions for parallel processing patterns.
   // Values > 1 create multiple batch holders for the FOR_EACH pattern.
@@ -80,8 +117,20 @@ struct EdgeConfig {
   ///
   /// All batches are merged into a single result before delivery.
   /// Useful for operators that need all data at once (like sorts).
+  /// Implies a Full barrier: merging everything requires the producer
+  /// pipeline to finish first.
   [[nodiscard]] static EdgeConfig Concatenating() {
-    return EdgeConfig{.type = cache::BatchHolderType::kConcatenating};
+    return EdgeConfig{.type = cache::BatchHolderType::kConcatenating,
+                      .barrier = BarrierType::Full};
+  }
+
+  /// @brief Adds a barrier type to the configuration.
+  ///
+  /// @param barrier_type The barrier semantics for this edge.
+  /// @return Reference to this config for method chaining.
+  EdgeConfig& with_barrier(BarrierType barrier_type) {
+    barrier = barrier_type;
+    return *this;
   }
 
   /// @brief Creates a configuration for partitioned parallel outputs.
