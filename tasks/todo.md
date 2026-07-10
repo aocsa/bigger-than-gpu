@@ -43,7 +43,7 @@ accessors + gate translation + tests via `/new-node` & `/new-op`.
       `FromParquet(...).Limit(n).ExecuteOnGraph()` == first n rows of the oracle;
       Limit(0); Limit > total rows; physical early-stop yield count; re-Execute;
       pipeline ShouldStopSource claim count (`tests/test_limit.cpp`)
-- [ ] REVIEW GATE
+- [x] REVIEW GATE: reviewed → fixes cd3560a/cb2e190/7fbd04f → 585 green
 
 **F1 review log:** End-to-end Limit landed — logical/physical/graph + fluent API;
 `OptimizeScanWithLimit` + `kDefaultOptimizedLimitRows` deleted (never called);
