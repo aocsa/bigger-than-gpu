@@ -100,6 +100,13 @@ Status Pipeline::PublishOutput(cache::DataBlockPtr batch) {
     return std::unexpected(processed.error());
   }
 
+  // Nothing to publish: a streaming sink can empty a batch (Limit exhausted,
+  // filter dropped every row). Mirror RunTask's 0-row short-circuit so a
+  // downstream holder never receives an empty (0-column) batch.
+  if (processed.value() == nullptr || processed.value()->num_rows() == 0) {
+    return Status::OK();
+  }
+
   // FOR_EACH partitioned edge: round-robin across output_0…N-1 lanes
   // (BlazingSQL's fan-out shape; real partition operators pick lanes by
   // hash/range themselves in phase 6 — round-robin is the generic default).

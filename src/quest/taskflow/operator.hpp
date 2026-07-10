@@ -421,29 +421,6 @@ class Operator {
   /// Called by the graph scheduler after run() returns Proceed.
   void mark_done() noexcept { execution_completed_.store(true); }
 
-  // ===========================================================================
-  // Limit Optimization (for simple scan+limit queries)
-  // ===========================================================================
-
-  /// @brief Checks if this operator has a limit optimization applied.
-  [[nodiscard]] bool has_limit() const noexcept { return limit_applied_; }
-
-  /// @brief Gets the limit row count (-1 if no limit is applied).
-  [[nodiscard]] std::int64_t limit_rows() const noexcept {
-    return limit_row_count_;
-  }
-
-  /// @brief Applies a limit optimization to this operator.
-  ///
-  /// When set, source operators should stop reading data after producing
-  /// this many rows, avoiding unnecessary I/O for simple limit queries.
-  ///
-  /// @param row_count The maximum number of rows to produce.
-  void set_limit(std::int64_t row_count) noexcept {
-    limit_applied_ = true;
-    limit_row_count_ = row_count;
-  }
-
  protected:
   // Unique identifier for this operator within the graph.
   std::uint32_t operator_id_;
@@ -468,12 +445,6 @@ class Operator {
 
   // Atomic flag indicating execution completion (thread-safe).
   std::atomic<bool> execution_completed_{false};
-
-  // Flag indicating if a limit optimization has been applied.
-  bool limit_applied_{false};
-
-  // Maximum rows to produce when limit is applied (-1 means unlimited).
-  std::int64_t limit_row_count_{-1};
 };
 
 // =============================================================================

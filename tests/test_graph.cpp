@@ -459,18 +459,6 @@ TEST(OperatorStateTest, ExecutionState) {
   EXPECT_TRUE(test_operator.is_done());
 }
 
-TEST(OperatorStateTest, LimitOptimization) {
-  std::size_t counter = 0;
-  CountingOperator test_operator(0, counter);
-
-  EXPECT_FALSE(test_operator.has_limit());
-  EXPECT_EQ(test_operator.limit_rows(), -1);
-
-  test_operator.set_limit(100);
-  EXPECT_TRUE(test_operator.has_limit());
-  EXPECT_EQ(test_operator.limit_rows(), 100);
-}
-
 // =============================================================================
 // Port Registration Tests
 // =============================================================================

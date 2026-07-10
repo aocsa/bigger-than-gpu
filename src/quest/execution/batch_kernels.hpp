@@ -152,6 +152,11 @@ namespace quest::execution {
 ///
 /// If @p n_rows is 0, returns an empty batch with the same schema. If
 /// @p n_rows >= batch.num_rows(), gathers every row (a full copy).
+///
+/// @note Inherits GatherColumn's null handling: gathered values lose their
+/// null bitmap (nulls become type defaults). A Limit whose boundary batch is
+/// truncated therefore drops nulls in that batch while pass-through batches
+/// keep them — resolved when materialized columns track nulls (phase 7).
 [[nodiscard]] inline Result<datasource::RecordBatch> TruncateRecordBatch(
     const datasource::RecordBatch& batch, std::size_t n_rows) {
   if (n_rows == 0) {

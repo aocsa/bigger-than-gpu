@@ -55,6 +55,17 @@ exhaustion (pipeline short-circuits like Filter).
 reset at each `Execute()`. Residual: multi-pipeline / cross-barrier source
 cancellation still out of scope (single-pipeline drain only).
 
+**Second-review follow-ups (P2/P3/P5):** (P2) deleted the now-dead
+`Operator::set_limit`/`has_limit`/`limit_rows` API + `limit_applied_`/
+`limit_row_count_` fields (only `OptimizeScanWithLimit` used them; test
+`OperatorStateTest.LimitOptimization` removed with it). (P3) `Pipeline::PublishOutput`
+now short-circuits null/0-row sink output, mirroring `RunTask` — a streaming sink
+(exhausted Limit, all-filtered batch) never publishes an empty 0-column batch into a
+downstream holder (was latent: a `ConcatenatingBatchHolder` consumer would index a
+0-column batch). (P5) documented on `TruncateRecordBatch` that GatherColumn drops the
+null bitmap (phase-7 debt) — Limit's truncated boundary batch loses nulls while
+pass-through batches keep them. Suite: 585 passed / 0 failed / 1 skipped.
+
 ## Stage F2 — Union (first real multi-input streaming operator)
 - [ ] ENGINE PREREQ: generalize the executor's claim path from numeric lanes to
       **declared multi-ports** — a holder-fed source with `DeclaredInputPorts()`
