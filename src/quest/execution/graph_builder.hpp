@@ -56,6 +56,33 @@ using ExecutableGraphPtr = std::unique_ptr<ExecutableGraph>;
 
 namespace detail {
 
+/// @brief If every expression of @p projection is a pure column reference
+/// (`Column` by name, or `ColumnIndex` resolved against @p input's schema),
+/// returns the ordered projected column names; otherwise `std::nullopt`.
+///
+/// This is the BindableTableScan test: a pure column-selection projection can be
+/// folded into the scan (read only these columns), but any computation
+/// (arithmetic, literals) must stay a separate ProjectOperator.
+[[nodiscard]] inline std::optional<std::vector<std::string>> TryColumnRefProjection(
+    const Projection& projection, const LogicalPlan& input) {
+  const auto input_schema = input.schema();
+  std::vector<std::string> columns;
+  columns.reserve(projection.expressions().size());
+  for (const auto& expr : projection.expressions()) {
+    if (const auto* col = dynamic_cast<const Column*>(expr.get())) {
+      columns.push_back(col->name());
+    } else if (const auto* col_idx = dynamic_cast<const ColumnIndex*>(expr.get())) {
+      if (col_idx->index() >= input_schema.num_fields()) {
+        return std::nullopt;
+      }
+      columns.push_back(input_schema.field(col_idx->index()).name);
+    } else {
+      return std::nullopt;  // computation — not a pure column selection.
+    }
+  }
+  return columns;
+}
+
 /// @brief Translate a logical subtree into taskflow operators, wiring the
 /// subtree's internal edges into @p gb, and return its root operator (whose
 /// output feeds the parent).
@@ -96,6 +123,20 @@ namespace detail {
   }
 
   if (const auto* projection = dynamic_cast<const Projection*>(&plan)) {
+    // BindableTableScan fold (F3): Projection(Scan) whose expressions are all
+    // pure column references collapses into ONE scan that reads just those
+    // columns — the ProjectOperator disappears and fewer columns come off disk.
+    if (const auto* scan = dynamic_cast<const Scan*>(&projection->input())) {
+      if (auto folded = TryColumnRefProjection(*projection, *scan)) {
+        auto op = std::make_unique<taskflow::TableScanOperator>(
+            next_id++, scan->data_source(), std::move(*folded), memory_manager);
+        op->set_type(taskflow::OperatorType::BindableTableScan);
+        auto* op_ptr = op.get();
+        ops.push_back(std::move(op));
+        return op_ptr;
+      }
+    }
+
     auto child = TranslateNode(projection->input(), memory_manager, ops, gb, next_id);
     if (!child) {
       return std::unexpected(child.error());

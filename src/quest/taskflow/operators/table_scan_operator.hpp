@@ -42,6 +42,14 @@ class TableScanOperator : public Operator {
 
   [[nodiscard]] bool IsSource() const noexcept override { return true; }
 
+  /// @brief The columns this scan reads (nullopt = all source columns).
+  ///
+  /// Set when the gate folds a Projection into the scan (BindableTableScan) —
+  /// the folded list has fewer columns than the source, proving column pruning.
+  [[nodiscard]] const std::optional<std::vector<std::string>>& projection() const noexcept {
+    return projection_;
+  }
+
   [[nodiscard]] Result<std::optional<cache::DataBlockPtr>> GetNextBatch() override {
     if (!started_) {
       std::vector<std::string> proj;

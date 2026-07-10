@@ -117,6 +117,10 @@ add_executable(test_union test_union.cpp)
 target_link_libraries(test_union PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_union)
 
+add_executable(test_bindable_scan test_bindable_scan.cpp)
+target_link_libraries(test_bindable_scan PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_bindable_scan)
+
 add_executable(test_manual_query_walkthrough test_manual_query_walkthrough.cpp)
 target_link_libraries(test_manual_query_walkthrough PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_manual_query_walkthrough)

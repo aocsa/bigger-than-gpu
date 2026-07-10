@@ -86,15 +86,23 @@ pass-through batches keep them. Suite: 585 passed / 0 failed / 1 skipped.
       at gate AND physical; e2e row count == sum; graph↔callback parity
 - [x] REVIEW GATE: build clean, 595 passed / 0 failed / 1 skipped
 
-## Stage F3 — BindableTableScan (the gate's first rewrite)
-- [ ] Gate rewrite in `CreateGraph`: `Projection(Scan)` where every expression is a
-      pure column ref → emit ONE `TableScanOperator` with the projection folded
-      (type `BindableTableScan`), skipping the `ProjectOperator`
-- [ ] Non-trivial projections (arithmetic) keep today's two-operator shape
-- [ ] Tests: shape (one operator, not two); output schema correct; the parquet
-      reader provably reads fewer columns (assert via scan schema / reader
-      behavior); parity vs the unfolded path
-- [ ] REVIEW GATE
+## Stage F3 — BindableTableScan (the gate's first rewrite) ✅
+- [x] Gate rewrite in `TranslateNode`: `Projection(Scan)` where every expression is
+      a pure column ref (`Column` by name / `ColumnIndex` resolved via schema) →
+      emit ONE `TableScanOperator` with the projected columns folded in +
+      `set_type(BindableTableScan)`, skipping the `ProjectOperator`
+      (`TryColumnRefProjection` helper)
+- [x] Non-trivial projections (arithmetic/literal) return nullopt → keep the
+      two-operator `[scan, project]` shape (only `Projection` *directly* on `Scan`
+      is a fold candidate; `Where`+`Select` has a Selection between them)
+- [x] `TableScanOperator::projection()` getter exposes the folded columns so tests
+      prove pruning directly
+- [x] Tests (`tests/test_bindable_scan.cpp`, 6): fold shape (one BindableTableScan,
+      no Project); reads-fewer-columns (projection == {id}, size < source);
+      multi-column fold preserves order; arithmetic NOT folded (stays scan+project);
+      output schema projected; parity graph↔callback. Updated test_limit shape
+      assertion ([bindable_scan, limit], the fold applies under Limit)
+- [x] REVIEW GATE: build clean, 601 passed / 0 failed / 1 skipped
 
 ## Stage F4 — Print + Generate (utilities)
 - [ ] `GenerateOperator`: configurable synthetic source (row count, batch size,

@@ -399,8 +399,11 @@ TEST(LimitE2ETest, CreateGraphFusesLimitIntoProducerPipeline) {
   const auto& producer = pipelines[0];
   const auto& collector = pipelines[1];
 
-  // scan, project, limit — Limit is streaming and fuses before the Full barrier.
-  EXPECT_EQ(producer->operators().size(), 3U);
+  // Select({"id"}) on the scan folds into a BindableTableScan (F3), so the
+  // producer is [bindable_scan, limit] — no separate ProjectOperator. Limit is
+  // streaming and fuses before the Full barrier.
+  EXPECT_EQ(producer->operators().size(), 2U);
+  EXPECT_EQ(producer->operators().front()->type(), OperatorType::BindableTableScan);
   EXPECT_EQ(producer->operators().back()->type(), OperatorType::Limit);
   EXPECT_EQ(collector->operators().size(), 1U);
   ASSERT_EQ(collector->FullBarrierProducers().size(), 1U);
