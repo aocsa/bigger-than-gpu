@@ -101,6 +101,11 @@ class QueryBuilder {
     return QueryBuilder(std::move(plan_).Limit(n));
   }
 
+  /// @brief Concatenate this query with @p other (UNION ALL; same schema).
+  [[nodiscard]] QueryBuilder UnionAll(QueryBuilder other) && {
+    return QueryBuilder(std::move(plan_).UnionAll(std::move(other.plan_)));
+  }
+
   // ===========================================================================
   // Plan Building
   // ===========================================================================

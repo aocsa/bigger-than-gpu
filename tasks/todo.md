@@ -66,19 +66,25 @@ downstream holder (was latent: a `ConcatenatingBatchHolder` consumer would index
 null bitmap (phase-7 debt) — Limit's truncated boundary batch loses nulls while
 pass-through batches keep them. Suite: 585 passed / 0 failed / 1 skipped.
 
-## Stage F2 — Union (first real multi-input streaming operator)
-- [ ] ENGINE PREREQ: generalize the executor's claim path from numeric lanes to
-      **declared multi-ports** — a holder-fed source with `DeclaredInputPorts()`
-      drains its ports in declared order (UNION ALL semantics = sequential
-      concatenation; same drain-a-port-to-EOS-then-next shape as E3 lanes)
-- [ ] `UnionOperator`: `DeclaredInputPorts() = {"input_a","input_b"}`, streaming
-      contracts, typed accessors `input_a()`/`input_b()`, `UnionShape` helper
-- [ ] Logical `Union` node (two children — first multi-child logical node) +
-      `QueryPlan::UnionAll(QueryPlan)` + gate translation of both subtrees
-- [ ] Tests: shape (two child pipelines before parent, per-port deps); e2e UNION ALL
-      of two Parquet scans == sum of both row sets; schema-mismatch rejected at
-      plan time
-- [ ] REVIEW GATE
+## Stage F2 — Union (first real multi-input streaming operator) ✅
+- [x] ENGINE PREREQ: `Pipeline::InputPorts()` (source's `DeclaredInputPorts()`
+      holders, declared order) + `ClaimNextBatch` generalized from numeric lanes to
+      an ordered input list — FOR_EACH lanes OR declared named ports, drained one
+      to EOS then the next (deterministic UNION ALL). Lanes preferred, named ports
+      fall back; mutually exclusive.
+- [x] `UnionOperator`: `DeclaredInputPorts() = {"input_a","input_b"}`, `IsBlocking()`
+      overridden false (streaming holder-fed drain, not a Sink-accumulator that
+      would double-place), Full input contract, typed `input_a()`/`input_b()`,
+      passthrough `ProcessBatch`
+- [x] Logical `Union` node (first two-child node) + `UnionCompatible()` helper +
+      `QueryPlan::UnionAll` / `QueryBuilder::UnionAll` + `UnionAllExec` (callback
+      parity) + gate `TranslateNode` refactor (returns subtree root, wires edges —
+      branches need per-port wiring a flat post-pass can't do)
+- [x] Tests (`tests/test_union.cpp`, 10): logical schema/children; UnionCompatible;
+      operator contract+passthrough; UnionAllExec left-then-right; CreatePhysicalPlan;
+      gate shape (4 pipelines, union has 2 Full producers); schema-mismatch rejected
+      at gate AND physical; e2e row count == sum; graph↔callback parity
+- [x] REVIEW GATE: build clean, 595 passed / 0 failed / 1 skipped
 
 ## Stage F3 — BindableTableScan (the gate's first rewrite)
 - [ ] Gate rewrite in `CreateGraph`: `Projection(Scan)` where every expression is a

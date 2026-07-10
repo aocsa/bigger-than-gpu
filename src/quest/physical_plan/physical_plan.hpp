@@ -420,6 +420,41 @@ class LimitExec : public PhysicalPlan {
 };
 
 // =============================================================================
+// Union Execution Node
+// =============================================================================
+
+/// @brief UNION ALL execution node - emits every row of @p left then @p right.
+///
+/// Sequential concatenation: the left child is fully executed (its batches
+/// forwarded to the callback) before the right child. Early-stop from the
+/// callback (Limit above a Union) short-circuits both children in order.
+class UnionAllExec : public PhysicalPlan {
+ public:
+  UnionAllExec(PhysicalPlanPtr left, PhysicalPlanPtr right)
+      : left_(std::move(left)), right_(std::move(right)) {}
+
+  [[nodiscard]] Schema schema() const override { return left_->schema(); }
+
+  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override {
+    return {left_.get(), right_.get()};
+  }
+
+  [[nodiscard]] Status Execute(const ResultCallback& callback) override {
+    auto left_status = left_->Execute(callback);
+    if (!left_status.ok()) {
+      return left_status;
+    }
+    return right_->Execute(callback);
+  }
+
+  [[nodiscard]] std::string ToString() const override { return "UnionAllExec"; }
+
+ private:
+  PhysicalPlanPtr left_;
+  PhysicalPlanPtr right_;
+};
+
+// =============================================================================
 // Physical Plan Factory Functions
 // =============================================================================
 
@@ -559,6 +594,21 @@ class LimitExec : public PhysicalPlan {
       return std::unexpected(input_result.error());
     }
     return std::make_unique<LimitExec>(std::move(*input_result), limit->limit());
+  }
+
+  if (const auto* union_all = dynamic_cast<const Union*>(&plan)) {
+    if (!UnionCompatible(union_all->left().schema(), union_all->right().schema())) {
+      return std::unexpected(Status::SchemaError("UNION ALL inputs have mismatched schemas"));
+    }
+    auto left_result = CreatePhysicalPlan(union_all->left());
+    if (!left_result) {
+      return std::unexpected(left_result.error());
+    }
+    auto right_result = CreatePhysicalPlan(union_all->right());
+    if (!right_result) {
+      return std::unexpected(right_result.error());
+    }
+    return std::make_unique<UnionAllExec>(std::move(*left_result), std::move(*right_result));
   }
 
   return std::unexpected(Status::PhysicalPlanError("Unsupported logical plan type"));

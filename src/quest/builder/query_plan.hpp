@@ -147,6 +147,12 @@ class QueryPlan {
     return QueryPlan(std::make_unique<quest::Limit>(std::move(plan_), n));
   }
 
+  /// @brief Concatenate this plan with @p other (UNION ALL). This plan is the
+  ///        left input, @p other the right; both must share a schema.
+  [[nodiscard]] QueryPlan UnionAll(QueryPlan other) && {
+    return QueryPlan(std::make_unique<quest::Union>(std::move(plan_), std::move(other.plan_)));
+  }
+
   // ===========================================================================
   // Plan Building
   // ===========================================================================

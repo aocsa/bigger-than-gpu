@@ -113,9 +113,12 @@ class PipelineExecutor {
   /// Three claim paths, in order:
   /// 1. `source_op.IsSource()` — claims via `GetNextBatch()` (a real data
   ///    source, or a blocking operator already flipped by `FinalizeSink()`).
-  /// 2. `input_lanes` non-empty (FOR_EACH partitioned edge, Phase 2.6 E3) —
-  ///    drains `input_0…N-1` sequentially: a lane to EOS, then the next;
-  ///    `lane_cursor` carries the position across claims.
+  /// 2. `ordered_inputs` non-empty — drains a fixed ordered list of holders
+  ///    sequentially (one to EOS, then the next); `input_cursor` carries the
+  ///    position across claims. This covers FOR_EACH partitioned lanes
+  ///    (`input_0…N-1`, Phase 2.6 E3) and a multi-input operator's declared
+  ///    named ports (Union's `input_a`, `input_b` — Phase 2.7 F2), giving
+  ///    deterministic UNION ALL concatenation.
   /// 3. Otherwise — blocking `Pull()` on `source_op`'s default input holder.
   ///
   /// `Pull()`'s `ErrorCode::Invalid` (queue finished and empty) is
@@ -125,8 +128,8 @@ class PipelineExecutor {
   /// @return The next batch, `std::nullopt` on end-of-stream, or an error.
   [[nodiscard]] static Result<std::optional<cache::DataBlockPtr>> ClaimNextBatch(
       Operator& source_op,
-      const std::vector<std::shared_ptr<cache::IBatchHolder>>& input_lanes,
-      std::size_t& lane_cursor);
+      const std::vector<std::shared_ptr<cache::IBatchHolder>>& ordered_inputs,
+      std::size_t& input_cursor);
 
   /// @brief One worker thread's loop: pop a ready pipeline, drain it,
   /// record any error, then let `OnPipelineFinished` re-evaluate the

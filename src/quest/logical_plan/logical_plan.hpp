@@ -227,6 +227,49 @@ class Limit : public LogicalPlan {
 };
 
 // =============================================================================
+// Union Node
+// =============================================================================
+
+/// @brief Union node - concatenates two input streams (UNION ALL semantics).
+///
+/// The first multi-child logical node. Both inputs must share a schema; the
+/// gate/physical layer rejects a mismatch. Output schema is the left input's.
+class Union : public LogicalPlan {
+ public:
+  Union(LogicalPlanPtr left, LogicalPlanPtr right)
+      : left_(std::move(left)), right_(std::move(right)) {}
+
+  [[nodiscard]] Schema schema() const override { return left_->schema(); }
+
+  [[nodiscard]] std::vector<const LogicalPlan*> Children() const override {
+    return {left_.get(), right_.get()};
+  }
+
+  [[nodiscard]] std::string ToString() const override { return "Union All"; }
+
+  [[nodiscard]] const LogicalPlan& left() const { return *left_; }
+  [[nodiscard]] const LogicalPlan& right() const { return *right_; }
+
+ private:
+  LogicalPlanPtr left_;
+  LogicalPlanPtr right_;
+};
+
+/// @brief Whether two schemas are UNION-compatible (same field count + types).
+[[nodiscard]] inline bool UnionCompatible(const Schema& lhs, const Schema& rhs) {
+  if (lhs.num_fields() != rhs.num_fields()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < lhs.num_fields(); ++i) {
+    if (datasource::GetTypeName(lhs.field(i).data_type) !=
+        datasource::GetTypeName(rhs.field(i).data_type)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// =============================================================================
 // Column/ColumnIndex ToField Implementations
 // =============================================================================
 

@@ -194,6 +194,12 @@ class Pipeline {
   /// Empty when the pipeline doesn't start at a partitioned edge.
   [[nodiscard]] std::vector<std::shared_ptr<cache::IBatchHolder>> InputLanes() const;
 
+  /// @brief The source's declared named-port holders, in `DeclaredInputPorts()`
+  /// order. Empty unless the source is a multi-input operator (e.g. Union's
+  /// `input_a`/`input_b`). The executor drains these sequentially — the named
+  /// analog of FOR_EACH lanes, giving deterministic UNION ALL concatenation.
+  [[nodiscard]] std::vector<std::shared_ptr<cache::IBatchHolder>> InputPorts() const;
+
  private:
   /// @brief Hands the final batch of a push loop to the sink role.
   ///

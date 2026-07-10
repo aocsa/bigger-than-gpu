@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -59,6 +60,22 @@ std::vector<std::shared_ptr<cache::IBatchHolder>> Pipeline::InputLanes() const {
     return {};
   }
   return CollectLanes(source_op->input(), "input_");
+}
+
+std::vector<std::shared_ptr<cache::IBatchHolder>> Pipeline::InputPorts() const {
+  Operator* source_op = source();
+  if (source_op == nullptr) {
+    return {};
+  }
+  std::vector<std::shared_ptr<cache::IBatchHolder>> ports;
+  Port& input = source_op->input();
+  for (std::string_view port_name : source_op->DeclaredInputPorts()) {
+    std::string name(port_name);
+    if (input.has_port(name)) {
+      ports.push_back(input.get(name));
+    }
+  }
+  return ports;
 }
 
 Status Pipeline::RunTask(cache::DataBlockPtr batch, std::size_t start_index) {

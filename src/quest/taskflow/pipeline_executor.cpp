@@ -204,11 +204,16 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
   // begins at an explicit Full/partitioned break.
   const std::size_t run_start_index = source_op->IsSource() ? 1 : 0;
 
-  // FOR_EACH lanes (Phase 2.6 E3): a pipeline starting at a partitioned
-  // edge claims from input_0…N-1 sequentially — drain a lane to EOS, then
-  // move to the next (per-lane order preserved, the merge-friendly order).
-  const auto input_lanes = pipeline.InputLanes();
-  std::size_t lane_cursor = 0;
+  // An ordered list of input holders drained sequentially (one to EOS, then
+  // the next): FOR_EACH partitioned lanes (input_0…N-1, Phase 2.6 E3) OR a
+  // multi-input operator's declared named ports (Union's input_a/input_b,
+  // Phase 2.7 F2). Mutually exclusive — a source uses numeric lanes or named
+  // ports, never both — so prefer lanes and fall back to named ports.
+  auto ordered_inputs = pipeline.InputLanes();
+  if (ordered_inputs.empty()) {
+    ordered_inputs = pipeline.InputPorts();
+  }
+  std::size_t input_cursor = 0;
 
   while (true) {
     // Single-pipeline early stop (e.g. Limit remaining == 0): do not claim
@@ -244,7 +249,7 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
       // concurrent completion check while a sibling task sits parked in
       // Pull().
       std::lock_guard<std::mutex> claim_lock(pipeline.status_lock());
-      auto claimed = ClaimNextBatch(*source_op, input_lanes, lane_cursor);
+      auto claimed = ClaimNextBatch(*source_op, ordered_inputs, input_cursor);
       if (!claimed.has_value()) {
         return std::unexpected(claimed.error());
       }
@@ -287,25 +292,28 @@ Result<std::optional<cache::DataBlockPtr>> PipelineExecutor::PullFromHolder(
 
 Result<std::optional<cache::DataBlockPtr>> PipelineExecutor::ClaimNextBatch(
     Operator& source_op,
-    const std::vector<std::shared_ptr<cache::IBatchHolder>>& input_lanes,
-    std::size_t& lane_cursor) {
+    const std::vector<std::shared_ptr<cache::IBatchHolder>>& ordered_inputs,
+    std::size_t& input_cursor) {
   if (source_op.IsSource()) {
     return source_op.GetNextBatch();
   }
 
-  // FOR_EACH lanes: drain input_0…N-1 sequentially (lane order = numeric).
-  if (!input_lanes.empty()) {
-    while (lane_cursor < input_lanes.size()) {
-      auto lane_result = PullFromHolder(*input_lanes[lane_cursor]);
-      if (!lane_result.has_value()) {
-        return std::unexpected(lane_result.error());
+  // Ordered multi-input drain: FOR_EACH lanes (input_0…N-1) or a multi-input
+  // operator's declared named ports (input_a, input_b). Drain the current
+  // holder to EOS, then advance — per-input order preserved (merge-friendly
+  // for lanes, deterministic UNION ALL for named ports).
+  if (!ordered_inputs.empty()) {
+    while (input_cursor < ordered_inputs.size()) {
+      auto input_result = PullFromHolder(*ordered_inputs[input_cursor]);
+      if (!input_result.has_value()) {
+        return std::unexpected(input_result.error());
       }
-      if (lane_result.value().has_value()) {
-        return lane_result;  // data from the current lane
+      if (input_result.value().has_value()) {
+        return input_result;  // data from the current input
       }
-      ++lane_cursor;  // lane exhausted — move to the next
+      ++input_cursor;  // input exhausted — move to the next
     }
-    return std::optional<cache::DataBlockPtr>{std::nullopt};  // all lanes done
+    return std::optional<cache::DataBlockPtr>{std::nullopt};  // all inputs done
   }
 
   auto default_port = std::to_string(source_op.id());
