@@ -8,9 +8,17 @@
 
 ---
 
+**BlazingSQL source:** [`docs/kt-bigger-than-gpu.html`](../kt-bigger-than-gpu.html) — the
+knowledge-transfer page for the ancestor engine (`/Users/aocsa/git/blazingsql`). QUEST's
+`OperatorType` enum and `EdgeConfig` descend directly from BlazingSQL's `kernel_type` and
+`cache_settings`; the full abstraction map lives in
+[graph-builder-dsl.md §11](graph-builder-dsl.md).
+
+---
+
 ## Implementation order
 
-**1 ✅ → 2 ✅ → 2.5 (DSL, new) → 3 → 4 → 5 → 6 → 7 → 8.**
+**1 ✅ → 2 ✅ → 2.5 ✅ (DSL) → 2.6 ✅ (BlazingSQL edge parity) → 2.7 (single-node operator catalog, new) → 3 → 4 → 5 → 6 → 7 → 8.**
 
 Phase 2.5 (GraphBuilder DSL + `PreparedQuery` lifecycle + runtime tuning,
 [graph-builder-dsl.md](graph-builder-dsl.md)) was inserted after phases 1+2 landed. It goes
@@ -54,6 +62,7 @@ Phases 1+2 are landed (532/532 tests green; commits `b789943..a65e447`):
 | 1 | Single plan gate with fallback | `create_plan()` translates or throws; the CPU plan is the executor of last resort | 1 |
 | 2 | Pipelines from blocking operators | streaming ops fuse; blocking ops end one pipeline and source the next | 2 |
 | 2b | Runtime-decided configs | Sirius binds partition counts, thresholds, strategies at runtime from real sizes (`determine_num_partitions`, settings) — not at plan time | 2.5 |
+| 2c | Cache flavors + gate-time kernel decomposition (BlazingSQL) | edges pick a cache machine flavor via `cache_settings` (SIMPLE/CONCATENATING/NON_WAITING/FOR_EACH); `PhysicalPlanGenerator` emits the kernel pipeline (sample→partition→merge) BEFORE any pipeline concept | 2.6 + 6 |
 | 3 | Data-driven task creation (hint chain) | nothing polls; operators answer READY/WAITING and the creator recurses to the deepest ready producer | 3 |
 | 4 | Reserve memory before dispatch | a task secures its estimated peak (history-corrected, clamped) or it doesn't run | 4 |
 | 5 | Predicate-driven spilling + batch lock states | spill *idle* batches until "does the reservation fit now?" passes; idle ⇄ locked makes it safe | 5 |
@@ -149,6 +158,92 @@ holder configs; a live `SetFlowControl` raise releases a producer blocked in
 
 ---
 
+## Phase 2.6 — BlazingSQL edge/kernel parity, CPU-only (inserted)
+
+**Reference:** [`docs/kt-bigger-than-gpu.html`](../kt-bigger-than-gpu.html) ("The cache
+system model", "Cache machines — the types, and the class map", the kernel catalog).
+**Abstraction map:** [graph-builder-dsl.md §11](graph-builder-dsl.md) — BlazingSQL
+`kernel`/`port`/`CacheMachine`/`cache_settings` ⇄ QUEST `Operator`/`Port`/`BatchHolder`/
+`EdgeConfig`, adapted for CPU-only (L1 = CPU RAM, L2 = disk; the consumer always gets a
+CPU `RecordBatch` back — `decache()` ≡ `ToCpu()`).
+
+**BlazingSQL idea:** every edge picks a cache-machine *flavor* via `cache_settings`
+(`link(partition, merge, cache_settings{.type = FOR_EACH, .num_partitions = N})`), and
+heavy operators are decomposed into kernel pipelines by the `PhysicalPlanGenerator` at
+plan-gate time — the physical operator list exists **before** pipelines are derived.
+
+**Build in QUEST:**
+- **`kNonWaiting` holder type** (BlazingSQL `NonWaitingCacheMachine`): non-blocking pull
+  for pre-filled, single-shot handoffs (the direct-execution pattern); rejected as a
+  Pipeline-barrier streaming edge (its contract is "data already there").
+- **Chunked concatenation** (mature `concat_cache_num_bytes` / Sirius
+  `_concat_batch_bytes`): `EdgeConfig::concat_bytes_threshold` +
+  `EdgeBuilder::ConcatenatingUpTo(bytes)` — the concatenating holder drains-and-merges
+  up to N bytes per delivered batch instead of all-or-nothing. Stats-tunable via the
+  policy chain (this cap should never be author-guessed).
+- **EdgeBuilder vocabulary**: `NonWaiting()`, `ConcatenatingUpTo(bytes)` (design §11.4);
+  port contracts and `MetaPipeline`/executor handling for both.
+- **Gate-time decomposition seam**: `CreateGraph` grows the `PhysicalPlanGenerator` role —
+  one logical node may emit N operators + FOR_EACH edges (structure visible to the
+  policy chain as author-written edges). Phase 6 fills in the real decompositions; this
+  phase establishes the seam and proves it with a mock two-stage decomposition.
+
+**Done when:** a pre-filled `kNonWaiting` edge feeds a pipeline without blocking; a
+`ConcatenatingUpTo` edge delivers multiple merged chunks whose sizes respect the byte cap
+(and a policy can resize the cap from `QueryStats`); a mock decomposed node (one logical
+op → two operators + FOR_EACH edge) flows through `CreateGraph → MetaPipeline → executor`
+with correct lane naming (`output_0…N-1`/`input_0…N-1`).
+
+---
+
+## Phase 2.7 — The single-node operator catalog (inserted)
+
+**The authoritative list of operators/kernels this project implements.** Derived from
+QUEST's `OperatorType` enum (which IS BlazingSQL's v0.14 kernel list) crossed with the
+KT doc's kernel catalog, scoped to **single-node execution only**. Every distributed/
+shuffle kernel stays a reserved enum value.
+
+| Kernel (BlazingSQL) | QUEST `OperatorType` | What it does | Status / owner |
+|---|---|---|---|
+| `table_scan` | `TableScan` | drives the DataSource, pushes batches as they load | ✅ `TableScanOperator` (phase 1) |
+| `filter` | `Filter` | predicate → mask → compacted batch | ✅ `FilterOperator` (phase 1) |
+| `project` | `Project` | evaluates expressions per batch | ✅ `ProjectOperator` (phase 1) |
+| output kernel | `Output` | terminal sink; the query result | ✅ `CollectorOperator` (phase 1) |
+| `limit` | `Limit` | truncate the stream to n rows (atomic claim — no compute) | ☐ **phase 2.7** — retires the hardcoded-1000 `OptimizeScanWithLimit` hack |
+| `union` | `Union` | concatenate two streams (UNION ALL); multi-input `input_a`/`input_b` | ☐ **phase 2.7** — first real multi-input streaming operator |
+| `bindable_tablescan` | `BindableTableScan` | scan with column pruning + folded filters — reads less | ☐ **phase 2.7** (projection pruning now; predicate pushdown completes in phase 8) |
+| debug print sink | `Print` | row-dump sink for debugging pipelines | ☐ **phase 2.7** (small utility) |
+| row generator | `Generate` | synthetic source (dev/test utility, real source role) | ☐ **phase 2.7** (small utility) |
+| `ComputeAggregateKernel` | `ComputeAggregate` | local groupby partials (sink role) | ☐ phase 6 (groupby: Compute → Merge) |
+| `MergeAggregateKernel` | `MergeAggregate` | re-aggregates partials (COUNT partials merge by SUM) | ☐ phase 6 |
+| `SortAndSample` | `SortAndSample` | per-batch local sort + sample pivots; two output ports (`output_a` data, `output_b` plan) | ☐ phase 6 (orderby, 3-stage) |
+| `PartitionSingleNode` | `PartitionSingleNode` | range-split at pivots → FOR_EACH lanes | ☐ phase 6 — **lane infra shipped in 2.6 (E3)** |
+| `MergeStream` | `MergeStream` | k-way merge, one lane per partition | ☐ phase 6 |
+| `PartwiseJoin` | `PartwiseJoin` | joins cached batch pairs `input_a × input_b` incrementally | ☐ phase 6 (join capstone; + `Partition` for out-of-core lanes) |
+| `DistributeAggregateKernel` | `DistributeAggregate` | multinode shuffle stage | ✋ **reserved** — out of single-node scope |
+| `JoinPartitionKernel` | `JoinPartition` | multinode hash-shuffle for joins | ✋ **reserved** |
+| `LogicalPartition` (multinode) | `Partition` | all-to-all exchange split | ✋ **reserved** (single-node uses `PartitionSingleNode`) |
+
+**Build in QUEST (phase 2.7 proper — the five simple kernels):** each ships the full
+recipe — logical node (where applicable) + taskflow operator on the pipeline roles +
+port contract + typed ports + tests via `/new-node` & `/new-op`:
+1. **Limit** — streaming, atomic remaining-rows claim; early pipeline termination
+   (the executor's limit hooks exist on `Pipeline`); wire `Limit()` into `QueryPlan`.
+2. **Union** — multi-input streaming (`input_a`/`input_b` contracts); pulls both
+   streams, forwards in arrival order; first consumer of the multi-input claim path.
+3. **BindableTableScan** — fold `Projection` directly into the scan at the gate
+   (projection pruning); the `CreateGraph` gate learns its first rewrite.
+4. **Print** — pass-through debug sink with row formatting (uses `RecordBatch::ToCSV`).
+5. **Generate** — configurable synthetic source; replaces ad-hoc test sources.
+
+**Done when:** `FromParquet(f).Where(...).Select(...).Limit(n)` runs end-to-end through
+the gate with a real `LimitOperator` (no hardcoded 1000); a UNION ALL of two scans
+returns both inputs' rows through the graph engine; the gate emits `BindableTableScan`
+when a `Projection` sits directly on a `Scan` and the parquet reader provably reads
+fewer columns.
+
+---
+
 ## Phase 3 — Data-driven tasks + scheduler (the hint chain)
 
 **Sirius idea:** work exists only when data does. Operators answer `get_next_task_hint() -> READY{producer} | WAITING_FOR_INPUT_DATA{producer}`; on WAITING the task creator **recurses into the producer** until something is READY; a task = (pipeline, one input batch); a scheduler matches tasks to ready workers. Read: `src/creator/task_creator.cpp` (`get_operator_for_next_task`, `manager_loop`) and `src/pipeline/task_scheduler.cpp` (374 lines).
@@ -198,7 +293,19 @@ holder configs; a live `SetFlowControl` raise releases a producer blocked in
 
 **Sirius idea:** every blocking operator decomposes into partition/merge stages so each task stays bounded: `HASH_GROUP_BY → PARTITION → MERGE_GROUP_BY`; ORDER_BY = three-pipeline sample sort (local sort → sample/partition → k-way merge, one partition per task); hash join = PARTITION→CONCAT on *both* sides, left = probe (streamed), right = build (materialized), build behind a FULL barrier. Read per-operator: `src/op/sirius_physical_grouped_aggregate.cpp` + `_merge`, `src/op/sirius_physical_sort_sample.cpp` / `_sort_partition` / `_merge_sort`, `src/op/sirius_physical_hash_join.cpp`, and the planner side `src/planner/sirius_plan_aggregate.cpp` / `_comparison_join.cpp`.
 
-**Build in QUEST, in order (each = logical node + physical node + taskflow operator + tests, via the `/new-node` and `/new-op` skills). Every operator ships phase 2.5's extension recipe — port contracts (`DeclaredInputPorts`/`InputEdgeContract`), typed port accessors, and a `Shape` helper — so wiring is correct by construction. Partition counts arrive as `PartitionedUpTo(max)` bounds, bound by the operator at runtime from real input sizes; injected partition/merge stages and relay pipelines plug into `Prepare()`'s `SynthesizeStructure()` hook (synthesized edges get generated names and remain policy-tunable); `.Partial()` unblocks here.**
+**Build in QUEST, in order (each = logical node + physical node + taskflow operator + tests, via the `/new-node` and `/new-op` skills). Every operator ships phase 2.5's extension recipe — port contracts (`DeclaredInputPorts`/`InputEdgeContract`), typed port accessors, and a `Shape` helper — so wiring is correct by construction. Partition counts arrive as `PartitionedUpTo(max)` bounds, bound by the operator at runtime from real input sizes; `.Partial()` unblocks here.**
+
+**Decomposition placement (BlazingSQL model, per phase 2.6):** the multi-operator
+topologies below are emitted by `CreateGraph` at **plan-gate time** — the QUEST
+`PhysicalPlanGenerator` — with FOR_EACH lanes between partition and merge stages, exactly
+as [`kt-bigger-than-gpu.html`](../kt-bigger-than-gpu.html)'s kernel catalog draws them.
+QUEST builds the **single-node topologies** (CPU-only: no shuffle/`Distribute*` stages —
+those enum values stay reserved): orderby = `SortAndSample → PartitionSingleNode(FOR_EACH)
+→ MergeStream`; groupby = `ComputeAggregate → MergeAggregate`; join = `PartwiseJoin`
+(+ `Partition` as the out-of-core mechanism — each lane fits the budget independently).
+The sample stage keeps BlazingSQL's two-output-port shape (`output_a` data, `output_b`
+partition plan). `Prepare()`'s `SynthesizeStructure()` hook stays for structure that
+genuinely needs stats, but the gate is the default place structure is born.
 
 1. **Limit** — the warm-up. `StreamingLimit` with an atomic claim on remaining rows (Sirius does exactly this — no compute, just arithmetic). Replace the hardcoded 1000-row hack in `Graph::OptimizeScanWithLimit` (`graph.cpp:12`) with a real pushed limit. *Teaches:* early pipeline termination.
 2. **Hash aggregate** — the first cross-batch state. `HashGroupBy` (sink accumulates per-batch partial aggregates into a hash table keyed by group columns) → `Merge` (combines partials). Support SUM/COUNT/MIN/MAX/AVG — and follow Sirius: **AVG = SUM + COUNT finalized at merge**, don't implement it as a primitive. Add `GroupBy()` to `QueryPlan`'s fluent API. *Teaches:* sink role, partial/final decomposition, why merges exist.
@@ -248,6 +355,8 @@ holder configs; a live `SetFlowControl` raise releases a producer blocked in
 | 1 — Bridge | ☑ | real Parquet scan→filter→project via CreateGraph; spill under tiny CPU budget (`test_graph_bridge`) |
 | 2 — Pipelines | ☑ | fused pipeline ~5× faster than thread-per-operator (21 ms → 4 ms, 10k batches × 1k rows, Debug) |
 | 2.5 — DSL + tuning | ☑ | same Graph `Prepare()`d twice with different stats → different holder configs; live threshold raise releases a blocked producer |
+| 2.6 — BlazingSQL parity | ☑ | pre-filled NonWaiting edge executes single-shot; ConcatenatingUpTo chunks at a policy-tuned byte cap; Partitioned(2) FOR_EACH fan-out/drain runs end-to-end (`test_blazing_parity`, 8 tests) |
+| 2.7 — Operator catalog | ☐ | Limit through the gate (no hardcoded 1000); UNION ALL of two scans; BindableTableScan provably reads fewer columns |
 | 3 — Tasks | ☐ | 4-worker pool, barrier ordering test |
 | 4 — Reservations | ☐ | 500 MB query under 100 MB budget: spill or clean error |
 | 5 — Downgrade | ☐ | spills idle-only, stops when reservation fits |

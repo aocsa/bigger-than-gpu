@@ -204,6 +204,12 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
   // begins at an explicit Full/partitioned break.
   const std::size_t run_start_index = source_op->IsSource() ? 1 : 0;
 
+  // FOR_EACH lanes (Phase 2.6 E3): a pipeline starting at a partitioned
+  // edge claims from input_0…N-1 sequentially — drain a lane to EOS, then
+  // move to the next (per-lane order preserved, the merge-friendly order).
+  const auto input_lanes = pipeline.InputLanes();
+  std::size_t lane_cursor = 0;
+
   while (true) {
     std::optional<cache::DataBlockPtr> batch;
     {
@@ -223,7 +229,7 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
       // concurrent completion check while a sibling task sits parked in
       // Pull().
       std::lock_guard<std::mutex> claim_lock(pipeline.status_lock());
-      auto claimed = ClaimNextBatch(*source_op);
+      auto claimed = ClaimNextBatch(*source_op, input_lanes, lane_cursor);
       if (!claimed.has_value()) {
         return std::unexpected(claimed.error());
       }
@@ -244,9 +250,47 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
   return Status::OK();
 }
 
-Result<std::optional<cache::DataBlockPtr>> PipelineExecutor::ClaimNextBatch(Operator& source_op) {
+Result<std::optional<cache::DataBlockPtr>> PipelineExecutor::PullFromHolder(
+    cache::IBatchHolder& holder) {
+  auto pulled = holder.Pull();  // Blocks until data arrives or the producer finishes.
+  if (!pulled.has_value()) {
+    // Pull() signals "finished and empty" with ErrorCode::Invalid — but
+    // Invalid is also the codebase's general-purpose error code, so the
+    // holder's actual state must corroborate before an error is treated
+    // as clean end-of-stream. Otherwise a genuine Invalid failure would
+    // silently truncate the stream with a green status. (The honest
+    // Closed state replacing this error-as-EOS protocol is planned for
+    // the streaming phase — replication plan phase 8.)
+    if (pulled.error().code() == ErrorCode::Invalid && holder.IsFinished() &&
+        !holder.HasNext()) {
+      return std::optional<cache::DataBlockPtr>{std::nullopt};  // EOS
+    }
+    return std::unexpected(pulled.error());
+  }
+  return std::optional<cache::DataBlockPtr>{std::move(pulled.value())};
+}
+
+Result<std::optional<cache::DataBlockPtr>> PipelineExecutor::ClaimNextBatch(
+    Operator& source_op,
+    const std::vector<std::shared_ptr<cache::IBatchHolder>>& input_lanes,
+    std::size_t& lane_cursor) {
   if (source_op.IsSource()) {
     return source_op.GetNextBatch();
+  }
+
+  // FOR_EACH lanes: drain input_0…N-1 sequentially (lane order = numeric).
+  if (!input_lanes.empty()) {
+    while (lane_cursor < input_lanes.size()) {
+      auto lane_result = PullFromHolder(*input_lanes[lane_cursor]);
+      if (!lane_result.has_value()) {
+        return std::unexpected(lane_result.error());
+      }
+      if (lane_result.value().has_value()) {
+        return lane_result;  // data from the current lane
+      }
+      ++lane_cursor;  // lane exhausted — move to the next
+    }
+    return std::optional<cache::DataBlockPtr>{std::nullopt};  // all lanes done
   }
 
   auto default_port = std::to_string(source_op.id());
@@ -263,22 +307,7 @@ Result<std::optional<cache::DataBlockPtr>> PipelineExecutor::ClaimNextBatch(Oper
                "has no batch holder");
   }
 
-  auto pulled = holder->Pull();  // Blocks until data arrives or the producer finishes.
-  if (!pulled.has_value()) {
-    // Pull() signals "finished and empty" with ErrorCode::Invalid — but
-    // Invalid is also the codebase's general-purpose error code, so the
-    // holder's actual state must corroborate before an error is treated
-    // as clean end-of-stream. Otherwise a genuine Invalid failure would
-    // silently truncate the stream with a green status. (The honest
-    // Closed state replacing this error-as-EOS protocol is planned for
-    // the streaming phase — replication plan phase 8.)
-    if (pulled.error().code() == ErrorCode::Invalid && holder->IsFinished() &&
-        !holder->HasNext()) {
-      return std::optional<cache::DataBlockPtr>{std::nullopt};  // EOS
-    }
-    return std::unexpected(pulled.error());
-  }
-  return std::optional<cache::DataBlockPtr>{std::move(pulled.value())};
+  return PullFromHolder(*holder);
 }
 
 }  // namespace quest::taskflow

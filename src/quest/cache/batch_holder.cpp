@@ -187,6 +187,11 @@ Result<DataBlockPtr> ConcatenatingBatchHolder::Pull() {
     return std::unexpected(status.error());
   }
 
+  // Chunked mode: serve merged chunks of up to concat_bytes_threshold bytes.
+  if (config_.concat_bytes_threshold > 0) {
+    return NextChunk();
+  }
+
   return ConcatenateAll();
 }
 
@@ -195,11 +200,71 @@ Result<DataBlockPtr> ConcatenatingBatchHolder::TryPull() {
     return Status::Invalid("Queue not finished yet");
   }
 
+  if (config_.concat_bytes_threshold > 0) {
+    return NextChunk();
+  }
+
   return ConcatenateAll();
 }
 
 bool ConcatenatingBatchHolder::HasNext() const {
+  {
+    std::lock_guard lock(pending_mutex_);
+    if (!pending_.empty()) {
+      return true;
+    }
+  }
   return queue_.HasNext() || (queue_.IsFinished() && queue_.Size() > 0);
+}
+
+bool ConcatenatingBatchHolder::IsFinished() const {
+  {
+    std::lock_guard lock(pending_mutex_);
+    if (!pending_.empty()) {
+      return false;
+    }
+  }
+  return queue_.IsFinished() && queue_.Empty();
+}
+
+Result<DataBlockPtr> ConcatenatingBatchHolder::NextChunk() {
+  std::lock_guard lock(pending_mutex_);
+
+  // Drain the (finished) queue into pending_ exactly once.
+  if (!drained_) {
+    auto all_blocks = queue_.PopAll();
+    if (all_blocks) {
+      for (auto& block : *all_blocks) {
+        pending_.push_back(std::move(block));
+      }
+    }
+    drained_ = true;
+  }
+
+  if (pending_.empty()) {
+    // Same EOS protocol as the simple holder: Invalid + IsFinished + !HasNext.
+    return Status::Invalid("ConcatenatingBatchHolder: finished and empty");
+  }
+
+  // Greedy: take blocks while under the cap — but always at least one, so a
+  // single oversized block still flows (the oversized-batch rule).
+  const std::size_t cap = config_.concat_bytes_threshold;
+  std::vector<DataBlockPtr> chunk;
+  std::size_t chunk_bytes = 0;
+  while (!pending_.empty()) {
+    const std::size_t next_bytes = pending_.front()->size_in_bytes();
+    if (!chunk.empty() && chunk_bytes + next_bytes > cap) {
+      break;
+    }
+    chunk_bytes += next_bytes;
+    chunk.push_back(std::move(pending_.front()));
+    pending_.pop_front();
+  }
+
+  if (chunk.size() == 1) {
+    return std::move(chunk.front());
+  }
+  return execution::ConcatenateHostBlocks(std::move(chunk));
 }
 
 void ConcatenatingBatchHolder::WaitIfSaturated() {
@@ -224,6 +289,48 @@ Result<DataBlockPtr> ConcatenatingBatchHolder::ConcatenateAll() {
 }
 
 // =============================================================================
+// NonWaitingBatchHolder Implementation
+// =============================================================================
+
+NonWaitingBatchHolder::NonWaitingBatchHolder(
+    std::uint64_t id, BatchHolderConfig config,
+    std::shared_ptr<memory::MemoryResourceManager> memory_manager)
+    : BatchHolderBase(id, config, std::move(memory_manager)) {}
+
+Status NonWaitingBatchHolder::Add(DataBlockPtr data) {
+  if (!data) {
+    return Status::Invalid("Cannot add null data block");
+  }
+
+  auto bytes = data->size_in_bytes();
+  auto rows = data->num_rows();
+
+  auto status = queue_.Put(std::move(data));
+  if (status.ok()) {
+    TrackAdded(bytes, rows);
+  }
+  return status;
+}
+
+Result<DataBlockPtr> NonWaitingBatchHolder::Pull() {
+  // Non-blocking by contract: the data is pre-filled or it isn't coming.
+  auto result = queue_.TryPop();
+  if (!result.has_value()) {
+    return Status::Invalid("NonWaitingBatchHolder: empty (drained)");
+  }
+  return std::move(result.value());
+}
+
+Result<DataBlockPtr> NonWaitingBatchHolder::TryPull() { return Pull(); }
+
+bool NonWaitingBatchHolder::HasNext() const { return queue_.HasNext(); }
+
+bool NonWaitingBatchHolder::IsFinished() const {
+  // Empty == drained: no finished-latch needed for single-shot handoffs.
+  return queue_.Empty();
+}
+
+// =============================================================================
 // Factory Function
 // =============================================================================
 
@@ -236,6 +343,9 @@ std::shared_ptr<IBatchHolder> MakeBatchHolder(
 
     case BatchHolderType::kConcatenating:
       return std::make_shared<ConcatenatingBatchHolder>(id, config, std::move(memory_manager));
+
+    case BatchHolderType::kNonWaiting:
+      return std::make_shared<NonWaitingBatchHolder>(id, config, std::move(memory_manager));
   }
 
   // Default to simple

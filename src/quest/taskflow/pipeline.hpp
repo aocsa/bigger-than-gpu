@@ -21,6 +21,7 @@
 #include <mutex>
 #include <vector>
 
+#include "quest/cache/batch_holder.hpp"
 #include "quest/cache/data_block.hpp"
 #include "quest/result.hpp"
 #include "quest/taskflow/edge_config.hpp"
@@ -181,30 +182,34 @@ class Pipeline {
   ///         encountered.
   [[nodiscard]] Status RunTask(cache::DataBlockPtr batch, std::size_t start_index = 1);
 
+  // ===========================================================================
+  // FOR_EACH lanes (BlazingSQL partitioned edges — Phase 2.6 E3)
+  // ===========================================================================
+
+  /// @brief The sink's `output_0…N-1` lane holders, numerically ordered.
+  /// Empty when the pipeline doesn't end at a partitioned edge.
+  [[nodiscard]] std::vector<std::shared_ptr<cache::IBatchHolder>> OutputLanes() const;
+
+  /// @brief The source's `input_0…N-1` lane holders, numerically ordered.
+  /// Empty when the pipeline doesn't start at a partitioned edge.
+  [[nodiscard]] std::vector<std::shared_ptr<cache::IBatchHolder>> InputLanes() const;
+
  private:
   /// @brief Hands the final batch of a push loop to the sink role.
   ///
   /// If `sink()` is a blocking operator (`IsSink()`), it accumulates state
   /// via `Sink()`. Otherwise `sink()` is a streaming operator that ends
-  /// this pipeline only because of an edge barrier (no blocking op
-  /// involved, e.g. an explicit Full edge): it still needs its own
-  /// `ProcessBatch`, then the result is published via `AddToOutput()`'s
-  /// default (operator-id-named) port.
-  ///
-  /// @note Does not yet support a sink ending at a *partitioned* edge
-  ///       (`EdgeConfig::num_partitions > 1`): `Graph::AddEdge` registers
-  ///       those under `output_{i}` ports, not the default port, so this
-  ///       publishes to a holder that doesn't exist and returns
-  ///       `Status::Invalid` (a clean failure, not silent data loss).
-  ///       Fails loudly by construction — `AddToOutput` never falls back
-  ///       to a wrong port. Threading the edge's actual output port
-  ///       through `PublishOutput` is Stage 4 work, once an executor
-  ///       actually runs a partitioned pipeline (Stage 3 only builds its
-  ///       shape; see `MetaPipelineTest.PartitionedEdgeSplitsUnderPipelineBarrier`).
-  [[nodiscard]] Status PublishOutput(cache::DataBlockPtr batch) const;
+  /// this pipeline only because of an edge barrier: it runs its own
+  /// `ProcessBatch`, then the result is published — round-robin across
+  /// `output_0…N-1` lanes when the edge is partitioned (FOR_EACH), else to
+  /// `AddToOutput()`'s default (operator-id-named) port.
+  [[nodiscard]] Status PublishOutput(cache::DataBlockPtr batch);
 
   std::size_t pipeline_id_;
   std::vector<Operator*> operators_;
+
+  /// Round-robin cursor for FOR_EACH lane publication.
+  std::atomic<std::size_t> publish_lane_{0};
 
   std::vector<Pipeline*> full_barrier_producers_;
   std::vector<Pipeline*> pipeline_barrier_producers_;

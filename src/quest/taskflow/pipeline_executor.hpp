@@ -103,23 +103,30 @@ class PipelineExecutor {
   /// pipeline stops producing.
   [[nodiscard]] Status DrainPipeline(Pipeline& pipeline);
 
+  /// @brief Pulls one batch from a holder, translating corroborated
+  /// "finished and empty" into end-of-stream (engaged nullopt).
+  [[nodiscard]] static Result<std::optional<cache::DataBlockPtr>> PullFromHolder(
+      cache::IBatchHolder& holder);
+
   /// @brief Claims the next batch for a pipeline's source operator.
   ///
-  /// If `source_op.IsSource()`, claims via `GetNextBatch()` — a real data
-  /// source, or a blocking operator already flipped by `FinalizeSink()`.
-  /// Otherwise claims by blocking-pulling `source_op`'s own default input
-  /// holder (wired by `Graph::AddEdge` — Stage 3's kept deviation: holders
-  /// still live on every edge). `Pull()`'s `ErrorCode::Invalid` (queue
-  /// finished and empty) is translated to end-of-stream here, the same way
-  /// `GetNextBatch()` already represents it — a queue-shaped error becomes
-  /// a value, never propagates as a real error.
+  /// Three claim paths, in order:
+  /// 1. `source_op.IsSource()` — claims via `GetNextBatch()` (a real data
+  ///    source, or a blocking operator already flipped by `FinalizeSink()`).
+  /// 2. `input_lanes` non-empty (FOR_EACH partitioned edge, Phase 2.6 E3) —
+  ///    drains `input_0…N-1` sequentially: a lane to EOS, then the next;
+  ///    `lane_cursor` carries the position across claims.
+  /// 3. Otherwise — blocking `Pull()` on `source_op`'s default input holder.
   ///
-  /// @note Only the default (operator-id-named) port is supported; a
-  ///       source ending at a partitioned edge is not yet claimable (mirrors
-  ///       `Pipeline::PublishOutput`'s matching, already-documented gap).
+  /// `Pull()`'s `ErrorCode::Invalid` (queue finished and empty) is
+  /// translated to end-of-stream, corroborated against holder state — a
+  /// queue-shaped error becomes a value, never propagates as a real error.
+  ///
   /// @return The next batch, `std::nullopt` on end-of-stream, or an error.
   [[nodiscard]] static Result<std::optional<cache::DataBlockPtr>> ClaimNextBatch(
-      Operator& source_op);
+      Operator& source_op,
+      const std::vector<std::shared_ptr<cache::IBatchHolder>>& input_lanes,
+      std::size_t& lane_cursor);
 
   /// @brief One worker thread's loop: pop a ready pipeline, drain it,
   /// record any error, then let `OnPipelineFinished` re-evaluate the

@@ -136,9 +136,12 @@ class MetaPipelineBuilder {
     }
 
     auto edge_config = graph_.GetEdgeConfig(edge.source_operator_id, edge.target_operator_id);
-    if (edge_config.barrier == BarrierType::Full || edge_config.num_partitions > 1) {
+    if (edge_config.barrier == BarrierType::Full || edge_config.num_partitions > 1 ||
+        edge_config.type != cache::BatchHolderType::kSimple) {
       // Explicit cross-pipeline break without a blocking operator:
       // upstream belongs entirely to the child pipeline, not shared.
+      // Non-simple holder types (Concatenating, NonWaiting) always break —
+      // fusing would bypass the holder whose semantics the edge asked for.
       auto child = BuildFrom(upstream->id());
       if (!child.has_value()) {
         return std::unexpected(child.error());

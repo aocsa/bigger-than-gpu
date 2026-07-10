@@ -68,7 +68,8 @@ class GraphBuilder {
     EdgeConfig config;         ///< Accumulated from author calls
     std::string name;          ///< Set by Named(); stable handle for tuning
     bool explicit_barrier{false};        ///< Full()/Streaming() was called
-    bool explicit_type{false};           ///< Concatenating()/Partitioned() was called
+    bool explicit_type{false};           ///< Concatenating()/ConcatenatingUpTo()/NonWaiting()
+    bool explicit_partitions{false};     ///< Partitioned()/PartitionedUpTo() was called
     bool explicit_flow_control{false};   ///< FlowControl() was called
     bool explicit_spill{false};          ///< Spill() was called
     bool config_replaced{false};         ///< Config() (full override) was called
@@ -210,6 +211,18 @@ class EdgeBuilder {
 
   /// @brief Merge-all holder; implies Full().
   EdgeBuilder& Concatenating() noexcept;
+
+  /// @brief Chunked concatenation: drain-and-merge up to `bytes` per
+  ///        delivered batch (implies Full, like Concatenating). BlazingSQL's
+  ///        mature concat byte cap — stats-tunable via the policy chain.
+  EdgeBuilder& ConcatenatingUpTo(std::size_t bytes) noexcept;
+
+  /// @brief Non-blocking single-shot holder (BlazingSQL NonWaitingCacheMachine).
+  ///
+  /// For PRE-FILLED handoffs: the consumer never blocks; empty == drained.
+  /// Build() rejects explicit FlowControl()/Full() on these edges — a
+  /// pre-filled edge has no producer to throttle and no pipeline to wait on.
+  EdgeBuilder& NonWaiting() noexcept;
 
   /// @brief Fixed partition count, resolved at Prepare().
   EdgeBuilder& Partitioned(std::size_t partition_count) noexcept;

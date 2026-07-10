@@ -124,3 +124,7 @@ gtest_discover_tests(test_graph_builder)
 add_executable(test_runtime_tuning test_runtime_tuning.cpp)
 target_link_libraries(test_runtime_tuning PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_runtime_tuning)
+
+add_executable(test_blazing_parity test_blazing_parity.cpp)
+target_link_libraries(test_blazing_parity PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_blazing_parity)

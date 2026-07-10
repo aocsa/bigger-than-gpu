@@ -659,3 +659,92 @@ What replication phases 3, 5, and 6 need from this design, and where it's provid
 The through-line: the DSL never encodes *how* the engine enforces a knob — only what
 the knob means. That's what lets phases 3 and 5 swap enforcement mechanisms (thread
 blocking → task admission; eager spill → demand-driven downgrade) under a stable API.
+
+---
+
+## 11. BlazingSQL heritage map — CacheMachine/cache_settings → BatchHolder/EdgeConfig (CPU-only)
+
+**Reference:** [`docs/kt-bigger-than-gpu.html`](../kt-bigger-than-gpu.html) (the BlazingSQL
+knowledge-transfer page from `/Users/aocsa/git/blazingsql`), sections "The cache system
+model" and "Cache machines — the types, and the class map". QUEST descends from this
+architecture — the abstractions map one-to-one, adapted for **CPU-only execution**
+(BlazingSQL's L1 GPU tier collapses away: QUEST's L1 is CPU RAM, L2 is disk, and the
+consumer always receives a CPU `RecordBatch` back).
+
+### 11.1 Class map
+
+| BlazingSQL (KT) | QUEST today | Notes |
+|---|---|---|
+| `kernel` (`run() : kstatus`, `expression`, `kernel_id`, `kernel_type_id`) | `Operator` (`run() : ExecutionStatus` legacy + pipeline roles, `expression()`, `id()`, `OperatorType`) | same anatomy; QUEST adds the Phase-2 roles (`ProcessBatch`/`GetNextBatch`/`Sink`) BlazingSQL never had |
+| `port` (`map<port_name, CacheMachine>`) | `Port` (`map<port_name, IBatchHolder>`) | identical, including `input_a`/`input_b` join convention and `output_0…N` fan-out |
+| `graph` + sentinel −1 + `g += a >> b` / `link(a,b,cache_settings)` | `Graph` + sentinel −1 + **`GraphBuilder`** (`Edge`/`Chain`/fluent config) | Phase 2.5 replaced the inherited `>>`/`link()` surface; `link(a,b,cache_settings{...})` ≡ `gb.Edge(a,b).Config(...)` — §8 is the migration gallery |
+| `CacheMachine` (queue whose elements know their tier) | `IBatchHolder`/`BatchHolder` | one per edge, keyed by port name on both sides — unchanged |
+| `WaitingQueue` (mutex+CV FIFO, **finished latch**, `pop_or_wait`, `get_all_or_wait`) | `BlockingQueue` (`Pop`, `Finish()`, `PopAll`) | same conduit; `get_all_or_wait` ≡ the concatenating holder's wait-then-drain |
+| `message` (CacheData + tier + auto-id) | `DataBlockPtr` with `id()` (`HasId` concept) | ids kept for traceability/`PopById` |
+| `CacheData` (claim check: `decache()` + `sizeInBytes()`) | `DataBlock` (`ToCpu()` + `size_in_bytes()` + `tier()`) | **the same claim-check idea**: demotion = swapping the claim type in-queue; promotion = redeem at pull; consumer code identical per tier |
+| `GPUCacheData` → live table (L1) | `HostMemoryBlock` → live `RecordBatch` (L1 = CPU) | CPU-only shift: RAM is the "device" tier |
+| `CPUCacheData` → `BlazingHostTable` (L2) | — (collapsed) | no intermediate tier in CPU-only QUEST |
+| `CacheDataLocalFile` → ORC file (L3) | `DiskBlock` → QRBT file (L2) | ORC → QRBT serializer; same RAII file lifetime |
+| `BlazingMemoryResource` (Device/Host/Disk) | `MemoryResource` (CPU/Disk) + `MemoryResourceManager` | tier decision at add (`MaybeSpill` ≈ demote-on-pressure), promotion at pull |
+
+### 11.2 Cache machine types → holder types (the gap list)
+
+| BlazingSQL `CacheType` | Pull semantics | QUEST status |
+|---|---|---|
+| `SIMPLE` (`CacheMachine`) | one message per pull, blocking | ✅ `BatchHolderType::kSimple` |
+| `CONCATENATING` (`ConcatenatingCacheMachine`) | wait for finish, drain all, concatenate into ONE table | ✅ `kConcatenating` (multi-block merge fixed in Phase 1) |
+| `NON_WAITING` (`NonWaitingCacheMachine`) | non-blocking pop — pre-filled, single-shot handoffs (direct-execution path) | ✅ `kNonWaiting` + `NonWaiting()` (2.6) |
+| `FOR_EACH` (N parallel SIMPLE machines, `output_0…N-1`/`input_0…N-1`) | one lane per partition; partition kernel fans out, merge consumes per lane | ✅ `num_partitions > 1` (`Partitioned(n)`/`PartitionedUpTo(max)`) — same port naming |
+
+### 11.3 `cache_settings` → `EdgeConfig` (config options, CPU-only superset)
+
+BlazingSQL's per-edge config (v0.14 core + the mature engine's additions), mapped:
+
+| `cache_settings` field | `EdgeConfig` field | Status |
+|---|---|---|
+| `type` (SIMPLE/NON_WAITING/CONCATENATING/FOR_EACH) | `type` (+ `num_partitions>1` expresses FOR_EACH) | ✅ all four (2.6) |
+| `num_partitions` | `num_partitions` / `max_partitions` (late-bound — QUEST extension) | ✅ superset |
+| flow-control thresholds (mature engine: bytes/count caps per edge) | `flow_control_batches_threshold` / `flow_control_bytes_threshold` | ✅ + live-tunable (QUEST extension) |
+| concat byte cap (mature `concat_cache_num_bytes` / Sirius `_concat_batch_bytes` — concatenate in chunks up to N bytes instead of all-or-nothing) | `concat_bytes_threshold` + `ConcatenatingUpTo(bytes)` | ✅ (2.6), policy-tunable |
+| — | `barrier` (Full/Pipeline), `spill_policy`, `Named()` identity, tuning-policy chain | QUEST extensions (Sirius-derived) with no BlazingSQL equivalent |
+
+### 11.4 EdgeBuilder additions (Phase 2.6 — IMPLEMENTED)
+
+```cpp
+EdgeBuilder& NonWaiting();                      // kNonWaiting: TryPull semantics,
+                                                // pre-filled single-shot edges
+EdgeBuilder& ConcatenatingUpTo(std::size_t bytes);  // chunked concat: drain-and-merge
+                                                // up to `bytes` per delivered batch
+                                                // (implies Full, like Concatenating)
+```
+
+Port contract + policy-chain integration is automatic: both are just `EdgeConfig`
+fields, so `InputEdgeContract` can require them and tuning policies can size
+`concat_bytes_threshold` from `QueryStats`/`HardwareInfo` — that byte cap is exactly
+the kind of knob that should be stats-bound, not author-guessed.
+
+### 11.5 The kernel catalog and where decomposition happens
+
+BlazingSQL's `PhysicalPlanGenerator` decomposes heavy logical nodes into **kernel
+pipelines at plan-gate time** — the operator list exists *before* any pipeline
+concept: orderby → `SortAndSample → Partition(SingleNode) → MergeStream` with
+FOR_EACH lanes between partition and merge; groupby → `ComputeAggregate →
+MergeAggregate` (+ `DistributeAggregate` between them only in multinode); join →
+`PartwiseJoin` (+ `JoinPartition` only in multinode). QUEST's `OperatorType` enum
+already carries these exact names — it IS BlazingSQL's v0.14 kernel list.
+
+Consequence for this design (refines §5's synthesis note): **gate-time decomposition
+is the primary mechanism** — `CreateGraph` (the QUEST `PhysicalPlanGenerator`) emits
+the multi-operator decomposition and its FOR_EACH edges explicitly, so the author-
+visible edge set already contains partition/merge structure and the policy chain
+tunes it like any other edge. `Prepare()`'s `SynthesizeStructure()` hook remains for
+structure that genuinely can't be known until stats exist, but it is the secondary
+path, not the default. CPU-only adaptation: the single-node topologies are the ones
+QUEST builds (no shuffle stages); `Partition` still earns its keep as the
+out-of-core mechanism (each lane fits the budget independently).
+
+**Status (2.6 E3):** the FOR_EACH cache shape runs end-to-end — `Pipeline` publishes
+round-robin across `output_0…N-1` and the executor drains `input_0…N-1` sequentially
+(numeric lane order, per-lane order preserved). Real partition operators (phase 6)
+pick lanes by hash/range themselves; round-robin is the generic default. The
+single-node operator catalog itself is **phase 2.7** in the replication plan.

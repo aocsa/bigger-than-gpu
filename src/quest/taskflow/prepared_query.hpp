@@ -96,6 +96,7 @@ class PreparedQuery {
   std::vector<PreparedEdge> edges_;
   std::vector<PipelinePtr> pipelines_;
   std::unique_ptr<PipelineExecutor> executor_;
+  bool executed_{false};  ///< Execute() is single-shot (see its doc).
 };
 
 }  // namespace quest::taskflow

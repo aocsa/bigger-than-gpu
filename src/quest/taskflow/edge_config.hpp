@@ -110,6 +110,12 @@ struct EdgeConfig {
   /// Spill eligibility hint for the downgrade executor.
   SpillPolicy spill_policy{SpillPolicy::Eligible};
 
+  /// Concatenating edges only: merge into chunks of up to this many bytes per
+  /// delivered batch instead of one all-encompassing block (0 = concat-all).
+  /// BlazingSQL heritage (mature concat byte cap / Sirius _concat_batch_bytes);
+  /// stats-tunable via the policy chain.
+  std::size_t concat_bytes_threshold{0};
+
   // ---- Factory helpers -------------------------------------------------------
 
   /// @brief Creates a configuration for simple (per-batch) delivery.

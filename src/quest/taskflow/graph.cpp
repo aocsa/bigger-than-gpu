@@ -280,7 +280,8 @@ std::vector<std::shared_ptr<cache::IBatchHolder>> Graph::CreateBatchHolders(
   cache::BatchHolderConfig holder_config{
       .flow_control_batches_threshold = edge_config.flow_control_batches_threshold,
       .flow_control_bytes_threshold = edge_config.flow_control_bytes_threshold,
-      .auto_spill = (edge_config.spill_policy != SpillPolicy::Never)};
+      .auto_spill = (edge_config.spill_policy != SpillPolicy::Never),
+      .concat_bytes_threshold = edge_config.concat_bytes_threshold};
 
   for (std::size_t partition = 0; partition < edge_config.num_partitions; ++partition) {
     holders.push_back(cache::MakeBatchHolder(GenerateNextBatchHolderId(), edge_config.type,

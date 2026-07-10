@@ -14,6 +14,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -39,12 +40,19 @@ struct BatchHolderConfig {
       std::numeric_limits<std::size_t>::max()};
   std::chrono::milliseconds timeout{0};  // 0 = no timeout
   bool auto_spill{true};  // Automatically spill to disk when CPU is saturated
+  /// Concatenating holders only: merge pending blocks into chunks of up to
+  /// this many bytes per Pull instead of one all-encompassing block.
+  /// 0 = concatenate everything (classic behavior). BlazingSQL heritage:
+  /// the mature engine's concat byte cap (Sirius: _concat_batch_bytes).
+  std::size_t concat_bytes_threshold{0};
 };
 
 /// @brief Type of batch holder (controls dequeue behavior)
 enum class BatchHolderType : std::uint8_t {
-  kSimple,        ///< Each batch is pulled individually
-  kConcatenating  ///< All batches are concatenated into a single result
+  kSimple,         ///< Each batch is pulled individually
+  kConcatenating,  ///< Batches are concatenated (all, or in byte-capped chunks)
+  kNonWaiting      ///< Non-blocking pull; pre-filled single-shot handoffs
+                   ///< (BlazingSQL NonWaitingCacheMachine). Empty == drained.
 };
 
 // =============================================================================
@@ -254,11 +262,58 @@ class ConcatenatingBatchHolder final : public BatchHolderBase {
   [[nodiscard]] Result<DataBlockPtr> Pull() override;
   [[nodiscard]] Result<DataBlockPtr> TryPull() override;
   [[nodiscard]] bool HasNext() const override;
+  [[nodiscard]] bool IsFinished() const override;
   void WaitIfSaturated() override;
 
  private:
   /// @brief Concatenate all pending batches into one
   [[nodiscard]] Result<DataBlockPtr> ConcatenateAll();
+
+  /// @brief Chunked mode (concat_bytes_threshold > 0): drain the queue into
+  /// pending_ once, then serve merged chunks of up to the byte cap per Pull.
+  /// Always includes at least one block per chunk (an oversized single block
+  /// still flows — the BlazingSQL/Sirius oversized-batch rule).
+  [[nodiscard]] Result<DataBlockPtr> NextChunk();
+
+  mutable std::mutex pending_mutex_;
+  std::deque<DataBlockPtr> pending_;  ///< Drained blocks awaiting chunked delivery.
+  bool drained_{false};               ///< Queue fully drained into pending_.
+};
+
+// =============================================================================
+// NonWaitingBatchHolder Implementation
+// =============================================================================
+
+/// @brief Non-blocking holder for pre-filled, single-shot handoffs.
+///
+/// BlazingSQL heritage: `NonWaitingCacheMachine` — "non-blocking pop, assumes
+/// data is already there" (the direct-execution path pre-loads a source cache,
+/// then runs the kernel). Semantics in QUEST:
+/// - `Pull()` never blocks: returns the next block, or Invalid when empty.
+/// - **Empty means drained**: `IsFinished()` is true whenever the queue is
+///   empty (no finished-latch required). Consumers therefore see clean EOS
+///   the moment the pre-filled data runs out.
+/// - Do NOT wire this on an edge whose producer runs concurrently in the same
+///   graph: the consumer may observe empty before the producer publishes.
+///   `GraphBuilder::Build()` rejects explicit FlowControl/Full on these edges.
+class NonWaitingBatchHolder final : public BatchHolderBase {
+ public:
+  NonWaitingBatchHolder(
+      std::uint64_t id, BatchHolderConfig config = {},
+      std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr);
+
+  ~NonWaitingBatchHolder() override = default;
+
+  [[nodiscard]] BatchHolderType type() const noexcept override {
+    return BatchHolderType::kNonWaiting;
+  }
+
+  [[nodiscard]] Status Add(DataBlockPtr data) override;
+  [[nodiscard]] Result<DataBlockPtr> Pull() override;      // non-blocking
+  [[nodiscard]] Result<DataBlockPtr> TryPull() override;   // same as Pull
+  [[nodiscard]] bool HasNext() const override;
+  [[nodiscard]] bool IsFinished() const override;          // empty == drained
+  void WaitIfSaturated() override {}                       // never throttles
 };
 
 // =============================================================================

@@ -1,4 +1,66 @@
-# GraphBuilder DSL Replacement — Working Plan
+# Phase 2.6 — BlazingSQL Edge/Kernel Parity (CPU-only) — Working Plan
+
+Executing the Phase 2.6 insert from
+[docs/dev/sirius-replication-plan.md](../docs/dev/sirius-replication-plan.md), designed in
+[docs/dev/graph-builder-dsl.md §11](../docs/dev/graph-builder-dsl.md) (the BlazingSQL
+heritage map). Reference: [docs/kt-bigger-than-gpu.html](../docs/kt-bigger-than-gpu.html)
+— cache system model, cache machine types, `cache_settings`, kernel catalog.
+
+**Process:** one stage = one review gate; keep this file updated while working.
+
+**Scope decisions:** CPU-only adaptation — L1 = CPU RAM, L2 = disk (`decache()` ≡
+`ToCpu()`); single-node kernel topologies only (`Distribute*`/shuffle enum values stay
+reserved); FOR_EACH lane naming keeps BlazingSQL's `output_0…N-1`/`input_0…N-1`.
+
+## Stage E0 — Heritage map + plan docs ✅ (this update)
+- [x] `graph-builder-dsl.md` §11: class map (kernel/port/CacheMachine/cache_settings ⇄
+      Operator/Port/BatchHolder/EdgeConfig), cache-type gap list, config-option map,
+      planned vocabulary (`NonWaiting()`, `ConcatenatingUpTo(bytes)`), gate-time
+      decomposition placement
+- [x] `sirius-replication-plan.md`: Phase 2.6 inserted (order 2.5 ✅ → 2.6 → 3…), ideas
+      row 2c, Phase 6 decomposition rebased onto the BlazingSQL single-node topologies,
+      scorecard row
+- [x] This todo rewritten for Phase 2.6
+- [x] REVIEW GATE: user approved ("ok implement the suggested changes")
+
+## Stage E1 — kNonWaiting holder type ✅
+- [x] `BatchHolderType::kNonWaiting` + `NonWaitingBatchHolder` (non-blocking Pull;
+      **empty == drained** — no finished-latch; never blocks, never throttles)
+- [x] `EdgeBuilder::NonWaiting()`; Build() rejects explicit `FlowControl()` (no producer
+      to throttle) and explicit `Full()` (no producer pipeline to wait on)
+- [x] MetaPipeline: any non-`kSimple` holder type breaks the pipeline (fusing would
+      bypass the holder's semantics); executor EOS via corroborated Invalid works as-is
+- [x] Tests: unit single-shot; validation rejections; e2e pre-fill via
+      `PreparedQuery::holders()` then Execute (`test_blazing_parity`)
+
+## Stage E2 — Chunked concatenation (ConcatenatingUpTo) ✅
+- [x] `EdgeConfig::concat_bytes_threshold` + `BatchHolderConfig::concat_bytes_threshold`
+      (0 = concat-all, exact legacy behavior preserved)
+- [x] `ConcatenatingBatchHolder::NextChunk()`: drain-once then greedy merge up to the
+      cap per Pull; oversized-batch rule (a chunk always carries ≥1 block); simple-holder
+      EOS protocol (Invalid + IsFinished + !HasNext)
+- [x] `EdgeBuilder::ConcatenatingUpTo(bytes)` (implies Full); policy sizes the cap from
+      `QueryStats` and the materialized holder provably chunks at it
+- [x] Tests: chunks under cap; oversized flows; threshold-0 unchanged; policy plumb-through
+
+## Stage E3 — FOR_EACH lanes end-to-end ✅ (decomposition seam partially deferred)
+- [x] `Pipeline::OutputLanes()/InputLanes()` (numeric lane order — `input_10` after
+      `input_2`); `PublishOutput` round-robins `output_0…N-1`; executor claims
+      `input_0…N-1` sequentially (drain a lane to EOS, then next — merge-friendly)
+- [x] E2E: `Partitioned(2).Full()` edge fans out and drains through
+      `GraphBuilder → Prepare → Execute` with BlazingSQL lane naming; both lanes carry data
+- [x] Drive-by fixes from the a3bf833 review folded in: **P2** (double `Execute()` now
+      errors instead of silent OK) and **P3** (`Partitioned()` no longer clobbers a
+      contract's holder type — separate `explicit_partitions` flag)
+- [~] DEFERRED: `CreateGraph` multi-operator emission + the `output_a`/`output_b`
+      sample-stage shape — the engine-side lane infra is proven; the gate-side
+      decomposition lands with the first real decomposed operator (phase 6's sort),
+      since a mock-only gate rewrite would be scaffolding without a consumer
+- [ ] REVIEW GATE: summary delivered, awaiting approval → commit
+
+---
+
+# ✅ COMPLETED — Phase 2.5: GraphBuilder DSL Replacement — Working Plan
 
 Executing [docs/dev/graph-builder-dsl.md](../docs/dev/graph-builder-dsl.md) as a
 **replacement** of the old taskflow wiring DSL (`>>` / `link()` / `operator+=` /
@@ -106,7 +168,36 @@ Phase 2 semantics). Commits `d6685aa` + hardening `a65e447`.
 - [x] Tick Phase 1 in replication scorecard
 - [x] REVIEW GATE
 
+## Phase 2.7 — Single-node operator catalog (NEXT, planned)
+Catalog + build order in [sirius-replication-plan.md Phase 2.7](../docs/dev/sirius-replication-plan.md).
+- [ ] **Limit** — atomic remaining-rows claim; retire the hardcoded-1000 `OptimizeScanWithLimit`; `QueryPlan::Limit()`
+- [ ] **Union** — multi-input streaming (`input_a`/`input_b` contracts); first consumer of multi-input claims
+- [ ] **BindableTableScan** — gate folds `Projection`-on-`Scan` into a pruned scan (first gate rewrite)
+- [ ] **Print** — debug row-dump sink (`ToCSV`)
+- [ ] **Generate** — configurable synthetic source, replaces ad-hoc test sources
+- Reserved (multinode, out of scope): `DistributeAggregate`, `JoinPartition`, `Partition`
+- Heavy decomposed kernels stay phase 6: `ComputeAggregate/MergeAggregate`,
+  `SortAndSample/PartitionSingleNode/MergeStream`, `PartwiseJoin`
+
 ## Review log
+
+### 2026-07-09 — Phase 2.6 implementation (E1–E3)
+- E1/E2/E3 landed per the heritage map (design §11): `kNonWaiting`, chunked
+  `ConcatenatingUpTo`, FOR_EACH lane publish/claim. 8 new tests in
+  `test_blazing_parity`; suite **568 passed / 0 failed / 1 skipped**; executor +
+  parity suites 10× shuffled clean.
+- Semantics decision (documented on the class): NonWaiting treats **empty as
+  drained** — the single-shot pre-fill contract; wiring it under a concurrent
+  producer is a documented misuse, and Build() rejects the knobs that would imply
+  one (FlowControl/Full).
+- Lane order is numeric, not lexicographic (`input_10` after `input_2`); round-robin
+  publish is the generic default until phase-6 partition operators pick lanes by
+  hash/range themselves.
+- Review P2/P3 from the a3bf833 pass fixed here (double-Execute error;
+  `explicit_partitions` split). P1 (re-Prepare execution independence) remains open —
+  needs `Operator::Reset()` + per-query port binding, tracked for phase 3.
+- E3's gate-side decomposition seam deferred to the first real consumer (phase 6
+  sort) — engine-side lane infra is complete and proven.
 
 ### 2026-07-09 — Stage D5 runtime tuning + soft knobs
 Landed Phase 2.5 D5 against [graph-builder-dsl.md](../docs/dev/graph-builder-dsl.md) §5–§7.

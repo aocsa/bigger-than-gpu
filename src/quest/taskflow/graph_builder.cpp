@@ -80,8 +80,12 @@ EdgeConfig ResolveEdgeConfig(const GraphBuilder::EdgeSpec& spec) {
     result.barrier = spec.config.barrier;
   }
   if (spec.explicit_type) {
+    // Only holder-type verbs (Concatenating/ConcatenatingUpTo/NonWaiting) set
+    // explicit_type; Partitioned() deliberately does NOT — so a partition
+    // count never clobbers a contract's holder type (review P3).
     result.type = spec.config.type;
-    // Concatenating() implies Full unless author explicitly overrode the barrier.
+    result.concat_bytes_threshold = spec.config.concat_bytes_threshold;
+    // Concatenating implies Full unless author explicitly overrode the barrier.
     if (spec.config.type == cache::BatchHolderType::kConcatenating &&
         !spec.explicit_barrier) {
       result.barrier = BarrierType::Full;
@@ -94,14 +98,35 @@ EdgeConfig ResolveEdgeConfig(const GraphBuilder::EdgeSpec& spec) {
   if (spec.explicit_spill) {
     result.spill_policy = spec.config.spill_policy;
   }
-  if (spec.config.num_partitions > 1) {
-    result.num_partitions = spec.config.num_partitions;
-  }
-  if (spec.config.max_partitions > 0) {
-    result.max_partitions = spec.config.max_partitions;
+  if (spec.explicit_partitions) {
+    if (spec.config.num_partitions > 1) {
+      result.num_partitions = spec.config.num_partitions;
+    }
+    if (spec.config.max_partitions > 0) {
+      result.max_partitions = spec.config.max_partitions;
+    }
   }
 
   return result;
+}
+
+/// @brief Check: NonWaiting edges reject knobs that contradict their contract.
+Status CheckNonWaiting(const GraphBuilder::EdgeSpec& spec) {
+  if (spec.config_replaced ||
+      spec.config.type != cache::BatchHolderType::kNonWaiting) {
+    return Status::OK();
+  }
+  if (spec.explicit_flow_control) {
+    return Status::Invalid(
+        "GraphBuilder: .NonWaiting() edges cannot use .FlowControl() — a "
+        "pre-filled single-shot handoff has no producer to throttle.");
+  }
+  if (spec.explicit_barrier && spec.config.barrier == BarrierType::Full) {
+    return Status::Invalid(
+        "GraphBuilder: .NonWaiting() edges cannot be .Full() — empty means "
+        "drained; there is no producer pipeline to wait on.");
+  }
+  return Status::OK();
 }
 
 /// @brief Check (e): Partial() is not yet supported.
@@ -229,6 +254,7 @@ Result<std::shared_ptr<Graph>> GraphBuilder::Build() && {
     if (auto status = CheckPartial(spec); !status.ok()) { return std::unexpected(status.error()); }
     if (auto status = CheckDeclaredPorts(spec); !status.ok()) { return std::unexpected(status.error()); }
     if (auto status = CheckContractConflict(spec); !status.ok()) { return std::unexpected(status.error()); }
+    if (auto status = CheckNonWaiting(spec); !status.ok()) { return std::unexpected(status.error()); }
   }
 
   // (b) Acyclicity.
@@ -282,15 +308,29 @@ EdgeBuilder& EdgeBuilder::Concatenating() noexcept {
   return *this;
 }
 
+EdgeBuilder& EdgeBuilder::ConcatenatingUpTo(std::size_t bytes) noexcept {
+  spec_->config.type = cache::BatchHolderType::kConcatenating;
+  spec_->config.barrier = BarrierType::Full;  // implies Full, like Concatenating
+  spec_->config.concat_bytes_threshold = bytes;
+  spec_->explicit_type = true;
+  return *this;
+}
+
+EdgeBuilder& EdgeBuilder::NonWaiting() noexcept {
+  spec_->config.type = cache::BatchHolderType::kNonWaiting;
+  spec_->explicit_type = true;
+  return *this;
+}
+
 EdgeBuilder& EdgeBuilder::Partitioned(std::size_t partition_count) noexcept {
   spec_->config.num_partitions = partition_count;
-  spec_->explicit_type = true;
+  spec_->explicit_partitions = true;
   return *this;
 }
 
 EdgeBuilder& EdgeBuilder::PartitionedUpTo(std::size_t max_partitions) noexcept {
   spec_->config.max_partitions = max_partitions;
-  spec_->explicit_type = true;
+  spec_->explicit_partitions = true;
   return *this;
 }
 

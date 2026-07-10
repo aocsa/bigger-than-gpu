@@ -22,6 +22,14 @@ PreparedQuery::PreparedQuery(PreparedQuery&&) noexcept = default;
 PreparedQuery& PreparedQuery::operator=(PreparedQuery&&) noexcept = default;
 
 Status PreparedQuery::Execute() {
+  // Single-shot: pipelines_ moves into the executor. A second call must be
+  // a loud error, not a silent OK for a query that didn't run (review P2).
+  if (executed_) {
+    return Status::Invalid(
+        "PreparedQuery::Execute: already executed — re-run by calling "
+        "Graph::Prepare() again");
+  }
+  executed_ = true;
   if (pipelines_.empty()) {
     return Status::OK();
   }

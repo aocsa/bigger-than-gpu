@@ -3,9 +3,63 @@
 
 #include "quest/taskflow/pipeline.hpp"
 
+#include <algorithm>
+#include <charconv>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 namespace quest::taskflow {
+
+namespace {
+
+/// @brief Collect FOR_EACH lane holders from a port, numerically ordered.
+///
+/// BlazingSQL lane convention: `output_0 … output_{N-1}` / `input_0 …`.
+/// Numeric parse (not lexicographic map order) so lane 10 sorts after lane 2.
+std::vector<std::shared_ptr<cache::IBatchHolder>> CollectLanes(Port& port,
+                                                               std::string_view prefix) {
+  std::vector<std::pair<std::size_t, std::shared_ptr<cache::IBatchHolder>>> indexed;
+  for (auto& [name, holder] : port) {
+    if (!holder || !name.starts_with(prefix)) {
+      continue;
+    }
+    std::size_t lane_index = 0;
+    const char* first = name.data() + prefix.size();
+    const char* last = name.data() + name.size();
+    auto [ptr, ec] = std::from_chars(first, last, lane_index);
+    if (ec != std::errc{} || ptr != last) {
+      continue;  // not a pure lane name
+    }
+    indexed.emplace_back(lane_index, holder);
+  }
+  std::ranges::sort(indexed, {}, &decltype(indexed)::value_type::first);
+
+  std::vector<std::shared_ptr<cache::IBatchHolder>> lanes;
+  lanes.reserve(indexed.size());
+  for (auto& [ignored, holder] : indexed) {
+    lanes.push_back(std::move(holder));
+  }
+  return lanes;
+}
+
+}  // namespace
+
+std::vector<std::shared_ptr<cache::IBatchHolder>> Pipeline::OutputLanes() const {
+  Operator* sink_op = sink();
+  if (sink_op == nullptr) {
+    return {};
+  }
+  return CollectLanes(sink_op->output(), "output_");
+}
+
+std::vector<std::shared_ptr<cache::IBatchHolder>> Pipeline::InputLanes() const {
+  Operator* source_op = source();
+  if (source_op == nullptr) {
+    return {};
+  }
+  return CollectLanes(source_op->input(), "input_");
+}
 
 Status Pipeline::RunTask(cache::DataBlockPtr batch, std::size_t start_index) {
   // operators_[1 .. size-2] are the streaming operators: operators_[0]
@@ -26,7 +80,7 @@ Status Pipeline::RunTask(cache::DataBlockPtr batch, std::size_t start_index) {
   return PublishOutput(std::move(batch));
 }
 
-Status Pipeline::PublishOutput(cache::DataBlockPtr batch) const {
+Status Pipeline::PublishOutput(cache::DataBlockPtr batch) {
   Operator* sink_op = sink();
   if (sink_op == nullptr) {
     return Status::Invalid("Pipeline::PublishOutput: pipeline has no sink");
@@ -45,6 +99,16 @@ Status Pipeline::PublishOutput(cache::DataBlockPtr batch) const {
   if (!processed.has_value()) {
     return std::unexpected(processed.error());
   }
+
+  // FOR_EACH partitioned edge: round-robin across output_0…N-1 lanes
+  // (BlazingSQL's fan-out shape; real partition operators pick lanes by
+  // hash/range themselves in phase 6 — round-robin is the generic default).
+  auto lanes = OutputLanes();
+  if (!lanes.empty()) {
+    const std::size_t lane = publish_lane_.fetch_add(1) % lanes.size();
+    return lanes[lane]->Add(std::move(processed.value()));
+  }
+
   return sink_op->AddToOutput(std::move(processed.value()));
 }
 
