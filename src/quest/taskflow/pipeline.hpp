@@ -23,7 +23,7 @@
 
 #include "quest/cache/data_block.hpp"
 #include "quest/result.hpp"
-#include "quest/taskflow/kpair.hpp"
+#include "quest/taskflow/edge_config.hpp"
 #include "quest/taskflow/operator.hpp"
 
 namespace quest::taskflow {

@@ -13,12 +13,12 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <quest/quest.hpp>
 #include <string>
 #include <thread>
 #include <vector>
 
-#include <quest/quest.hpp>
-
+#include "quest/taskflow/graph_builder.hpp"
 #include "quest/taskflow/meta_pipeline.hpp"
 #include "quest/taskflow/pipeline.hpp"
 #include "quest/taskflow/pipeline_executor.hpp"
@@ -262,8 +262,7 @@ class VectorSourceOperator : public Operator {
       return std::optional<DataBlockPtr>{std::nullopt};
     }
     --remaining_;
-    return std::optional<DataBlockPtr>{
-        MakeTestBlock("b" + std::to_string(remaining_), 4)};
+    return std::optional<DataBlockPtr>{MakeTestBlock("b" + std::to_string(remaining_), 4)};
   }
 
  private:
@@ -306,8 +305,7 @@ class GatedTwoBatchSource : public Operator {
 /// polling on a timer.
 class WaitableSink : public Operator {
  public:
-  explicit WaitableSink(std::uint32_t id)
-      : Operator(id, "waitable_sink", OperatorType::Filter) {}
+  explicit WaitableSink(std::uint32_t id) : Operator(id, "waitable_sink", OperatorType::Filter) {}
 
   [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
   [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
@@ -342,14 +340,15 @@ class WaitableSink : public Operator {
 
 TEST(PipelineExecutorTest, FullGatingConsumerStartsStrictlyAfterProducerFinishes) {
   EventLog log;
-  auto graph = std::make_shared<Graph>();
 
   LoggingSourceOperator scan{0, {MakeTestBlock("b0", 4), MakeTestBlock("b1", 4)}, log, "source"};
   LoggingAccumulatingSink agg{1, log, "sink"};
   LoggingCollectingSink project{2, log, "project"};
 
-  *graph += scan >> agg;
-  *graph += agg >> project;
+  GraphBuilder gb;
+  gb.Edge(scan, agg);
+  gb.Edge(agg, project);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto build_result = MetaPipeline::Build(*graph);
   ASSERT_TRUE(build_result.has_value());
@@ -366,8 +365,8 @@ TEST(PipelineExecutorTest, FullGatingConsumerStartsStrictlyAfterProducerFinishes
 
   // Every producer-side event happened before the consumer flipped to
   // source mode, and every consumer-side event happened after.
-  for (const auto& event : {"source_yield_0", "source_yield_1", "source_eos", "sink_sink_0",
-                            "sink_sink_1"}) {
+  for (const auto& event :
+       {"source_yield_0", "source_yield_1", "source_eos", "sink_sink_0", "sink_sink_1"}) {
     auto index = log.IndexOf(event);
     ASSERT_GE(index, 0) << event;
     EXPECT_LT(index, finalize_index) << event << " should precede sink_finalize";
@@ -388,7 +387,6 @@ TEST(PipelineExecutorTest, PipelineBarrierConsumerOverlapsWithActiveProducer) {
   std::promise<void> release_promise;
   std::shared_future<void> release_future = release_promise.get_future().share();
 
-  auto graph = std::make_shared<Graph>();
   GatedTwoBatchSource producer_op{0, MakeTestBlock("b0", 4), MakeTestBlock("b1", 4),
                                   release_future};
   WaitableSink consumer_op{1};
@@ -399,7 +397,12 @@ TEST(PipelineExecutorTest, PipelineBarrierConsumerOverlapsWithActiveProducer) {
   // pipelines are hand-assembled to force the Pipeline-barrier split this
   // test needs while still exercising ClaimNextBatch's real holder-pull
   // path (Pipeline::PublishOutput's AddToOutput call on the producer side).
-  *graph += producer_op >> consumer_op;
+  {
+    GraphBuilder gb;
+    gb.Chain(producer_op, consumer_op);
+    ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
+    graph->Materialize();
+  }
 
   auto producer_pipeline = std::make_unique<Pipeline>(0);
   producer_pipeline->PrependOperator(&producer_op);
@@ -423,7 +426,8 @@ TEST(PipelineExecutorTest, PipelineBarrierConsumerOverlapsWithActiveProducer) {
   // pair has no such destructor obligation, so a timeout can genuinely
   // fail fast; detach() on that path deliberately leaks the thread rather
   // than block anything further.
-  std::thread execute_thread([&] { result_promise.set_value(executor.Execute(std::move(pipelines))); });
+  std::thread execute_thread(
+      [&] { result_promise.set_value(executor.Execute(std::move(pipelines))); });
 
   // The consumer must receive the first batch without the producer ever
   // reaching its second GetNextBatch() call -- that call is blocked on
@@ -463,10 +467,9 @@ TEST(PipelineExecutorTest, ManyIndependentPipelinesAllCompleteExactlyOnce) {
   std::vector<PipelinePtr> pipelines;
 
   for (std::size_t i = 0; i < kPipelineCount; ++i) {
-    auto source = std::make_unique<VectorSourceOperator>(
-        static_cast<std::uint32_t>(i * 2), kBatchesPerPipeline);
-    auto sink =
-        std::make_unique<CollectingSink>(static_cast<std::uint32_t>(i * 2 + 1));
+    auto source = std::make_unique<VectorSourceOperator>(static_cast<std::uint32_t>(i * 2),
+                                                         kBatchesPerPipeline);
+    auto sink = std::make_unique<CollectingSink>(static_cast<std::uint32_t>(i * 2 + 1));
 
     auto pipeline = std::make_unique<Pipeline>(i);
     pipeline->PrependOperator(sink.get());
@@ -590,10 +593,9 @@ TEST(PipelineExecutorTest, WorkerPoolSmallerThanPipelineCountStillCompletesAll) 
   std::vector<PipelinePtr> pipelines;
 
   for (std::size_t i = 0; i < kPipelineCount; ++i) {
-    auto source = std::make_unique<VectorSourceOperator>(
-        static_cast<std::uint32_t>(i * 2), kBatchesPerPipeline);
-    auto sink =
-        std::make_unique<CollectingSink>(static_cast<std::uint32_t>(i * 2 + 1));
+    auto source = std::make_unique<VectorSourceOperator>(static_cast<std::uint32_t>(i * 2),
+                                                         kBatchesPerPipeline);
+    auto sink = std::make_unique<CollectingSink>(static_cast<std::uint32_t>(i * 2 + 1));
 
     auto pipeline = std::make_unique<Pipeline>(i);
     pipeline->PrependOperator(sink.get());
@@ -619,14 +621,14 @@ TEST(PipelineExecutorTest, WorkerPoolSmallerThanPipelineCountStillCompletesAll) 
 
 TEST(PipelineExecutorTest, GraphExecutePipelinedRunsALinearPlan) {
   EventLog log;
-  auto graph = std::make_shared<Graph>();
 
   LoggingSourceOperator scan{0, {MakeTestBlock("b0", 4), MakeTestBlock("b1", 4)}, log, "source"};
   LoggingStreamOperator filter{1, log, "filter"};
   LoggingCollectingSink collector{2, log, "collector"};
 
-  *graph += scan >> filter;
-  *graph += filter >> collector;
+  GraphBuilder gb;
+  gb.Chain(scan, filter, collector);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto status = graph->ExecutePipelined();
   ASSERT_TRUE(status.has_value()) << status.error().ToString();
@@ -649,7 +651,6 @@ TEST(PipelineExecutorTest, GraphExecutePipelinedRunsALinearPlan) {
 TEST(PipelineExecutorTest, HolderFedFirstOperatorRunsItsOwnProcessBatch) {
   constexpr std::size_t kBatchCount = 3;
   EventLog log;
-  auto graph = std::make_shared<Graph>();
 
   VectorSourceOperator producer_op{0, kBatchCount};
   LoggingStreamOperator holder_fed_op{1, log, "holder_fed"};
@@ -657,7 +658,12 @@ TEST(PipelineExecutorTest, HolderFedFirstOperatorRunsItsOwnProcessBatch) {
 
   // Wires the real BatchHolder the consumer pipeline claims from
   // (producer_op's default output port -> holder_fed_op's default input).
-  *graph += producer_op >> holder_fed_op;
+  {
+    GraphBuilder gb;
+    gb.Chain(producer_op, holder_fed_op);
+    ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
+    graph->Materialize();
+  }
 
   auto producer_pipeline = std::make_unique<Pipeline>(0);
   producer_pipeline->PrependOperator(&producer_op);

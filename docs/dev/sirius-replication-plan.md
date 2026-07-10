@@ -113,7 +113,10 @@ Before building anything, ground the mental model in real code. Read in this ord
 ## Phase 2.5 — GraphBuilder DSL + PreparedQuery + runtime tuning (inserted)
 
 **Full design:** [graph-builder-dsl.md](graph-builder-dsl.md) (decisions locked in its §9;
-phase-3/5/6 readiness matrix in its §10). **Working plan:** `tasks/todo.md` stages D1–D4.
+phase-3/5/6 readiness matrix in its §10). **Working plan:** `tasks/todo.md` stages D0–D5.
+**Replacement, not additive:** after this phase the old taskflow wiring DSL (`>>` /
+`link()` / `Graph::operator+=` / `kpair.hpp`) is deleted. The logical-plan fluent API
+(`QueryBuilder::FromParquet.Where.Select`) stays.
 
 **Sirius idea:** configs are bound when sizes are known, not when the plan is written —
 Sirius picks partition counts at runtime (`determine_num_partitions` from real input
@@ -122,22 +125,27 @@ author. QUEST's equivalent: defer holder materialization to `Prepare(stats, hw)`
 operators declare port contracts, and let policies tune edges when Parquet footer
 statistics and hardware info exist.
 
-**Build in QUEST (stages D1–D4):**
+**Build in QUEST (stages D0–D5):**
+- **D0** — rebaseline design docs: builder is the single supported wiring API; old DSL
+  is a migration target, not a coexistence surface.
 - **D1** — deferred holders + `PreparedQuery`: `Graph` stores edge *specs*; holders
   materialize in `Prepare()`; `PreparedQuery` owns resolved configs, holders, pipelines,
   executor. Behavior-preserving (retires the Stage-6 eager-`AddEdge` debt).
 - **D2** — `GraphBuilder`/`EdgeBuilder`/`ChainBuilder` (last-edge refinement rule),
-  `Apply(Shape)`, `Build()` validation (declared ports, acyclicity, contract conflicts,
-  duplicate names, `.Partial()` rejected until phase 6).
-- **D3** — port contracts (`DeclaredInputPorts`/`InputEdgeContract`); collector declares
-  Full; `CreateGraph` loses its special-case link.
-- **D4** — tuning: `AddTuningPolicy` chain resolved at `Prepare()`, `Graph::Tune()`
+  port contracts, `Apply(Shape)`, `Build()` validation (declared ports, acyclicity,
+  contract conflicts, duplicate names, `.Partial()` rejected until phase 6).
+  Collector declares Full; `CreateGraph` loses its special-case link.
+- **D3** — migrate all production + test call sites (`CreateGraph`, walkthrough,
+  graph/meta-pipeline/executor/barrier tests, examples) onto `GraphBuilder`.
+- **D4** — delete `kpair.hpp`, `>>`, `link()`, and `Graph::operator+=`.
+- **D5** — tuning: `AddTuningPolicy` chain resolved at `Prepare()`, `Graph::Tune()`
   (structural, Built-only by type), `PreparedQuery::SetFlowControl/SetSpillPolicy/
   ScaleFlowControl` (soft, live, atomic + re-wake).
 
 **Done when:** the same `Graph` `Prepare()`d twice with different stats yields different
 holder configs; a live `SetFlowControl` raise releases a producer blocked in
-`WaitIfSaturated()`; the §8 examples gallery runs as tests with old-DSL parity.
+`WaitIfSaturated()`; the §8 migration gallery runs as builder-only tests; no
+`kpair.hpp` / `link(` / graph `>>` call sites remain outside historical docs.
 
 ---
 
@@ -239,7 +247,7 @@ holder configs; a live `SetFlowControl` raise releases a producer blocked in
 |---|---|---|
 | 1 — Bridge | ☑ | real Parquet scan→filter→project via CreateGraph; spill under tiny CPU budget (`test_graph_bridge`) |
 | 2 — Pipelines | ☑ | fused pipeline ~5× faster than thread-per-operator (21 ms → 4 ms, 10k batches × 1k rows, Debug) |
-| 2.5 — DSL + tuning | ☐ | same Graph `Prepare()`d twice with different stats → different holder configs; live threshold raise releases a blocked producer |
+| 2.5 — DSL + tuning | ☑ | same Graph `Prepare()`d twice with different stats → different holder configs; live threshold raise releases a blocked producer |
 | 3 — Tasks | ☐ | 4-worker pool, barrier ordering test |
 | 4 — Reservations | ☐ | 500 MB query under 100 MB budget: spill or clean error |
 | 5 — Downgrade | ☐ | spills idle-only, stops when reservation fits |

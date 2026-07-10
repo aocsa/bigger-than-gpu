@@ -41,11 +41,13 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "quest/cache/batch_holder.hpp"
+#include "quest/result.hpp"
+#include "quest/taskflow/edge_config.hpp"
 #include "quest/taskflow/operator_type.hpp"
 #include "quest/taskflow/port.hpp"
-#include "quest/result.hpp"
 
 namespace quest::taskflow {
 
@@ -135,6 +137,36 @@ class Operator {
   ///
   /// @return true if backpressure is supported, false otherwise.
   [[nodiscard]] virtual bool can_you_throttle_my_input() const = 0;
+
+  // ===========================================================================
+  // Port Contracts (§4.1 of graph-builder-dsl.md)
+  //
+  // Operators may declare which named input ports they accept and what
+  // EdgeConfig each port requires. GraphBuilder::Build() validates edges
+  // against these declarations, so a typo in a port name becomes a compile
+  // error rather than a silent new port.
+  //
+  // Operators that leave these at their defaults are treated as "undeclared" —
+  // the legacy behavior: any port name is allowed and no contract is checked.
+  // ===========================================================================
+
+  /// @brief Input ports this operator accepts.
+  ///
+  /// Empty means undeclared (any name allowed — legacy behavior).
+  /// GraphBuilder::Build() validates edge target port names against this list.
+  [[nodiscard]] virtual std::vector<std::string_view> DeclaredInputPorts() const {
+    return {};
+  }
+
+  /// @brief Required EdgeConfig for the given input port.
+  ///
+  /// Called by GraphBuilder::Build() (config resolution layer 4) to apply
+  /// per-port constraints. The author's explicit Edge/Chain calls (layer 3)
+  /// override this; explicit contradictions without .Config() are a Build() error.
+  /// Default: returns EdgeConfig{} (no constraint — streaming, simple holder).
+  [[nodiscard]] virtual EdgeConfig InputEdgeContract(std::string_view /*port*/) const {
+    return {};
+  }
 
   /// @brief Estimates the number of output rows this operator will produce.
   ///

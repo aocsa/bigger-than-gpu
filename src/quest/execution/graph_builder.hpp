@@ -18,6 +18,7 @@
 #include "quest/quest.hpp"
 #include "quest/result.hpp"
 #include "quest/taskflow/graph.hpp"
+#include "quest/taskflow/graph_builder.hpp"
 #include "quest/taskflow/operators/collector_operator.hpp"
 #include "quest/taskflow/operators/filter_operator.hpp"
 #include "quest/taskflow/operators/project_operator.hpp"
@@ -137,20 +138,19 @@ namespace detail {
   auto* collector_ptr = collector.get();
   ops.push_back(std::move(collector));
 
-  auto graph = std::make_shared<taskflow::Graph>(memory_manager);
-  // Streaming operators fuse into one pipeline (plain edges) ...
-  for (std::size_t i = 0; i + 2 < ops.size(); ++i) {
-    *graph += *ops[i] >> *ops[i + 1];
+  // Wire operators via GraphBuilder. CollectorOperator declares Full via
+  // InputEdgeContract, so the last edge (→ collector) automatically infers
+  // Full — the RESULT_COLLECTOR shape — without a special-case link() call.
+  taskflow::GraphBuilder gb{memory_manager};
+  for (std::size_t i = 0; i + 1 < ops.size(); ++i) {
+    gb.Edge(*ops[i], *ops[i + 1]);
   }
-  // ... but the collector sits behind a Full barrier so it becomes its own
-  // pipeline (Sirius's RESULT_COLLECTOR shape). This is what makes queries
-  // spillable end-to-end: final batches always cross a spill-aware
-  // BatchHolder (MaybeSpill runs on Add), whereas a fully fused pipeline
-  // has no holder anywhere and could never spill regardless of budget.
-  *graph += taskflow::link(*ops[ops.size() - 2], *ops.back(),
-                           taskflow::EdgeConfig::Simple().with_barrier(taskflow::BarrierType::Full));
+  auto graph_result = std::move(gb).Build();
+  if (!graph_result) {
+    return std::unexpected(graph_result.error());
+  }
 
-  return std::make_unique<ExecutableGraph>(std::move(graph), std::move(ops), collector_ptr);
+  return std::make_unique<ExecutableGraph>(std::move(*graph_result), std::move(ops), collector_ptr);
 }
 
 }  // namespace quest::execution

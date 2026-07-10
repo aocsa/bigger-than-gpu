@@ -33,6 +33,27 @@ class CollectorOperator : public Operator {
 
   [[nodiscard]] bool IsSink() const noexcept override { return true; }
 
+  // --- Port contract: CollectorOperator always requires a Full barrier -------
+
+  /// @brief DeclaredInputPorts is empty (undeclared): any port name is valid.
+  ///
+  /// The collector accepts data from any source, so port name checking is not
+  /// enforced. The contract below applies to all inputs regardless of port.
+  [[nodiscard]] std::vector<std::string_view> DeclaredInputPorts() const override {
+    return {};
+  }
+
+  /// @brief CollectorOperator requires Full barrier on every input port.
+  ///
+  /// This ensures producers flush completely before the collector drains,
+  /// which is required for correct result accumulation. GraphBuilder::Build()
+  /// infers this automatically when no explicit barrier is specified.
+  [[nodiscard]] EdgeConfig InputEdgeContract(std::string_view /*port*/) const override {
+    EdgeConfig cfg;
+    cfg.barrier = BarrierType::Full;
+    return cfg;
+  }
+
   [[nodiscard]] Status Sink(cache::DataBlockPtr batch) override {
     if (!batch || batch->num_rows() == 0) {
       return Status::OK();

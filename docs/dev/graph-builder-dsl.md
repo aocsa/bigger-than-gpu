@@ -1,16 +1,18 @@
 # GraphBuilder DSL — Fluent Builder + Runtime Edge Tuning (Design)
 
-**Status:** design, not implemented. This documents Option 3 from the DSL discussion
-(fluent builder) in full, plus the runtime edge-tuning API that motivates it.
-Revised for forward compatibility with replication phases 3 (task-creator hint
-chain), 5 (predicate-driven spilling), and 6 (blocking operators) — see §10 for the
-readiness matrix and §9 for the recorded decisions.
+**Status:** design + implementation plan (Phase 2.5). This documents Option 3 from the
+DSL discussion (fluent builder) in full, plus the runtime edge-tuning API that
+motivates it. **Phase 2.5 replaces the old taskflow wiring DSL** (`>>` / `link()` /
+`Graph::operator+=`) — it is not additive. Revised for forward compatibility with
+replication phases 3 (task-creator hint chain), 5 (predicate-driven spilling), and 6
+(blocking operators) — see §10 for the readiness matrix and §9 for the recorded
+decisions.
 
-**Why a builder at all:** the current DSL splits into two idioms — `a >> b` for plain
+**Why a builder at all:** the old DSL split into two idioms — `a >> b` for plain
 edges and `link(a, b, EdgeConfig::...)` for anything custom — and the custom path is
-where the bugs live (the P1 review finding: `CreateGraph` forgot the collector's Full
+where the bugs lived (the P1 review finding: `CreateGraph` forgot the collector's Full
 barrier and no query could spill; a typo'd port name like `join["biuld"]` silently
-creates a new port today). A builder gives one discoverable API, a natural validation
+created a new port). A builder gives one discoverable API, a natural validation
 point (`Build()`), and — the real driver — **stable edge identity plus a lifecycle**
 that makes tuning edges *after* construction sound. Flow-control thresholds, partition
 counts, and spill behavior can only be chosen once Parquet footer statistics, data
@@ -22,7 +24,7 @@ sometimes during execution.
 ## 1. Goals / non-goals
 
 **Goals**
-1. One API that covers every case the old DSL covers (plain edges, named ports, holder
+1. One API that covers every case the old DSL covered (plain edges, named ports, holder
    type, barrier, partitions, flow control) with verbosity proportional to deviation.
 2. Every edge individually addressable **after** construction — by name or endpoints —
    so configs can be tuned when statistics arrive. This includes edges the author
@@ -36,10 +38,13 @@ sometimes during execution.
 6. Knob *semantics* defined abstractly enough to survive the engine's evolution:
    flow control is a **task-admission condition** (not "block a thread" — phase 3),
    spill policy is a **candidate-eligibility hint** (not "serialize on Add" — phase 5).
+7. **Replace** the old taskflow wiring DSL: after Phase 2.5, `GraphBuilder` is the
+   single supported graph-wiring API. `>>`, `link()`, and `Graph::operator+=` are
+   deleted (not kept as a parallel surface).
 
 **Non-goals**
-- Replacing `>>` / `link()` — they remain for simple cases and existing tests; the
-  builder is additive. (`CreateGraph` migrates to the builder once it lands.)
+- Changing the logical-plan fluent API (`QueryBuilder::FromParquet.Where.Select`).
+  That layer stays; only the taskflow graph-wiring layer is replaced.
 - Changing pipeline/executor semantics ahead of their phases. `MetaPipeline::Build`
   and `PipelineExecutor` read the same `Graph` + `EdgeConfig` they read today.
 - Distributed/multi-node concerns.
@@ -504,10 +509,11 @@ insufficient if no event invokes it.* Implementation note §7.2 carries this.
 
 ---
 
-## 8. Examples gallery — old DSL vs builder
+## 8. Migration gallery — old DSL → builder
 
-All "old" snippets are real, from `tests/test_manual_query_walkthrough.cpp`,
-`tests/test_graph.cpp`, and `tests/test_meta_pipeline.cpp`.
+All "old" snippets were real call sites from `tests/test_manual_query_walkthrough.cpp`,
+`tests/test_graph.cpp`, and `tests/test_meta_pipeline.cpp`. They are a **migration
+guide**: after Phase 2.5 the left-hand forms are gone; only the builder forms remain.
 
 ### 8.1 Linear query with a collector (walkthrough Stage 4)
 

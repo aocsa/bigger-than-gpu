@@ -1,6 +1,7 @@
 #include "quest/taskflow/graph.hpp"
 
 #include <algorithm>
+#include <deque>
 #include <format>
 #include <mutex>
 #include <print>
@@ -24,26 +25,6 @@ Graph::Graph(std::shared_ptr<memory::MemoryResourceManager> memory_manager)
   // Initialize the sentinel entry point node.
   // This virtual node serves as the parent for all root operators (sources).
   operator_lookup_table_[kGraphEntryPointId] = nullptr;
-}
-
-KPair& Graph::operator+=(KPair edge_pair) {
-  // Determine port names for the connection.
-  // If no custom port is specified, use the operator's ID as the port name.
-  std::string source_port = edge_pair.has_custom_source()
-                                ? edge_pair.source_port()
-                                : std::to_string(edge_pair.source()->id());
-
-  std::string target_port = edge_pair.has_custom_destination()
-                                ? edge_pair.destination_port()
-                                : std::to_string(edge_pair.destination()->id());
-
-  // Create the edge with the resolved port names.
-  AddEdge(edge_pair.source(), edge_pair.destination(), source_port, target_port,
-          edge_pair.config());
-
-  // Store the edge for potential fluent chaining.
-  most_recent_edge_ = std::make_unique<KPair>(std::move(edge_pair));
-  return *most_recent_edge_;
 }
 
 std::size_t Graph::AddNode(Operator* node_operator) {
@@ -71,7 +52,7 @@ std::size_t Graph::AddNode(Operator* node_operator) {
 
 void Graph::AddEdge(Operator* source_operator, Operator* target_operator,
                     const std::string& source_port_name, const std::string& target_port_name,
-                    const EdgeConfig& edge_config) {
+                    const EdgeConfig& edge_config, const std::string& edge_name) {
   // Ensure both operators are registered in the graph.
   AddNode(source_operator);
   AddNode(target_operator);
@@ -97,27 +78,14 @@ void Graph::AddEdge(Operator* source_operator, Operator* target_operator,
   // map instead of on Edge itself).
   edge_configs_[{source_id, target_id}] = edge_config;
 
-  // Create the batch holders that will carry data between operators.
-  auto batch_holders = CreateBatchHolders(edge_config);
-
-  // Connect batch holders to operator ports based on partitioning mode.
-  if (edge_config.num_partitions > 1) {
-    // Partitioned mode: each partition gets its own batch holder.
-    // This enables parallel processing patterns (e.g., FOR_EACH).
-    for (std::size_t partition_index = 0; partition_index < batch_holders.size();
-         ++partition_index) {
-      auto output_port_name = std::format("output_{}", partition_index);
-      auto input_port_name = std::format("input_{}", partition_index);
-
-      source_operator->output().RegisterBatchHolder(output_port_name,
-                                                    batch_holders[partition_index]);
-      target_operator->input().RegisterBatchHolder(input_port_name, batch_holders[partition_index]);
-    }
-  } else {
-    // Simple mode: single batch holder connecting the ports directly.
-    source_operator->output().RegisterBatchHolder(source_port_name, batch_holders[0]);
-    target_operator->input().RegisterBatchHolder(target_port_name, batch_holders[0]);
-  }
+  // Record the edge spec; holders materialize in Prepare()/Materialize().
+  edge_specs_.push_back(EdgeSpec{.source = source_operator,
+                                 .target = target_operator,
+                                 .source_port_name = source_port_name,
+                                 .target_port_name = target_port_name,
+                                 .config = edge_config,
+                                 .name = edge_name,
+                                 .synthesized = false});
 
   // If source has no parent, connect it to the sentinel entry point.
   // This marks it as a root operator in the graph.
@@ -130,23 +98,256 @@ void Graph::AddEdge(Operator* source_operator, Operator* target_operator,
   }
 }
 
+void Graph::AddTuningPolicy(EdgeTuningPolicy policy) {
+  tuning_policies_.push_back(std::move(policy));
+}
+
+EdgeInfo Graph::MakeEdgeInfo(const EdgeSpec& spec) const {
+  EdgeInfo info;
+  info.ref = EdgeRef{.source_id = static_cast<std::int32_t>(spec.source->id()),
+                     .target_id = static_cast<std::int32_t>(spec.target->id()),
+                     .target_port = spec.target_port_name};
+  info.name = spec.name;
+  info.synthesized = spec.synthesized;
+  info.config = spec.config;
+  info.source_type = spec.source->type();
+  info.target_type = spec.target->type();
+  return info;
+}
+
+std::vector<EdgeInfo> Graph::Edges() const {
+  std::vector<EdgeInfo> infos;
+  infos.reserve(edge_specs_.size());
+  for (const auto& spec : edge_specs_) {
+    infos.push_back(MakeEdgeInfo(spec));
+  }
+  return infos;
+}
+
+Graph::EdgeSpec* Graph::FindEdgeSpec(const EdgeRef& ref) {
+  const std::string default_port = std::to_string(ref.target_id);
+  for (auto& spec : edge_specs_) {
+    const auto source_id = static_cast<std::int32_t>(spec.source->id());
+    const auto target_id = static_cast<std::int32_t>(spec.target->id());
+    if (source_id != ref.source_id || target_id != ref.target_id) {
+      continue;
+    }
+    if (ref.target_port.empty()) {
+      if (spec.target_port_name.empty() || spec.target_port_name == default_port) {
+        return &spec;
+      }
+    } else if (spec.target_port_name == ref.target_port) {
+      return &spec;
+    }
+  }
+  return nullptr;
+}
+
+Graph::EdgeSpec* Graph::FindEdgeSpecByName(std::string_view name) {
+  for (auto& spec : edge_specs_) {
+    if (spec.name == name) {
+      return &spec;
+    }
+  }
+  return nullptr;
+}
+
+Result<EdgeTuner> Graph::Tune(const EdgeRef& ref) {
+  auto* spec = FindEdgeSpec(ref);
+  if (spec == nullptr) {
+    return std::unexpected(
+        Status::Invalid(std::format("Graph::Tune: no edge {}:{}:{}", ref.source_id, ref.target_id,
+                                    ref.target_port))
+            .error());
+  }
+  return EdgeTuner{this, spec};
+}
+
+Result<EdgeTuner> Graph::Tune(std::string_view edge_name) {
+  auto* spec = FindEdgeSpecByName(edge_name);
+  if (spec == nullptr) {
+    return std::unexpected(
+        Status::Invalid(std::format("Graph::Tune: no edge named '{}'", edge_name)).error());
+  }
+  return EdgeTuner{this, spec};
+}
+
+void Graph::SynthesizeStructure() {
+  // Phase 6 plugs partition/merge injection here. Empty so Prepare()'s
+  // order (synthesize → resolve → materialize) is already correct.
+  // Synthesized edges should set EdgeSpec::synthesized and use §6.1 naming:
+  // "<consumer_name>_<consumer_id>.<port>~synth<k>".
+}
+
+std::vector<EdgeConfig> Graph::ResolveConfigs(const QueryStats& stats, const HardwareInfo& hw) {
+  // Author + contract already applied at GraphBuilder::Build(); Tune() may have
+  // refined Built specs. Policies refine in registration order from that base;
+  // last write wins per field (§5). Resolved configs are returned — Built
+  // edge_specs_[].config is NOT mutated so Re-Prepare stays independent.
+  std::vector<EdgeConfig> resolved;
+  resolved.reserve(edge_specs_.size());
+
+  for (auto& spec : edge_specs_) {
+    EdgeConfig running = spec.config;
+    for (const auto& policy : tuning_policies_) {
+      EdgeInfo snapshot = MakeEdgeInfo(spec);
+      snapshot.config = running;
+      running = policy(snapshot, stats, hw);
+    }
+    resolved.push_back(running);
+
+    const auto source_id = static_cast<std::int32_t>(spec.source->id());
+    const auto target_id = static_cast<std::int32_t>(spec.target->id());
+    edge_configs_[{source_id, target_id}] = running;
+  }
+  return resolved;
+}
+
+void Graph::RestoreAuthorEdgeConfigs() {
+  for (const auto& spec : edge_specs_) {
+    const auto source_id = static_cast<std::int32_t>(spec.source->id());
+    const auto target_id = static_cast<std::int32_t>(spec.target->id());
+    edge_configs_[{source_id, target_id}] = spec.config;
+  }
+}
+
+std::vector<PreparedEdge> Graph::MaterializeHolders(
+    const std::vector<EdgeConfig>& resolved_configs) {
+  std::vector<PreparedEdge> prepared_edges;
+  prepared_edges.reserve(edge_specs_.size());
+
+  for (std::size_t i = 0; i < edge_specs_.size(); ++i) {
+    const auto& spec = edge_specs_[i];
+    const EdgeConfig& cfg = resolved_configs[i];
+    auto batch_holders = CreateBatchHolders(cfg);
+
+    if (cfg.num_partitions > 1) {
+      for (std::size_t partition_index = 0; partition_index < batch_holders.size();
+           ++partition_index) {
+        auto output_port_name = std::format("output_{}", partition_index);
+        auto input_port_name = std::format("input_{}", partition_index);
+
+        spec.source->output().RegisterBatchHolder(output_port_name, batch_holders[partition_index]);
+        spec.target->input().RegisterBatchHolder(input_port_name, batch_holders[partition_index]);
+      }
+    } else {
+      spec.source->output().RegisterBatchHolder(spec.source_port_name, batch_holders[0]);
+      spec.target->input().RegisterBatchHolder(spec.target_port_name, batch_holders[0]);
+    }
+
+    EdgeInfo info = MakeEdgeInfo(spec);
+    info.config = cfg;
+    prepared_edges.push_back(
+        PreparedEdge{.info = std::move(info), .holders = std::move(batch_holders)});
+  }
+
+  return prepared_edges;
+}
+
+void Graph::Materialize() {
+  // Materialize with Built (author) configs — no policy resolution.
+  std::vector<EdgeConfig> configs;
+  configs.reserve(edge_specs_.size());
+  for (const auto& spec : edge_specs_) {
+    configs.push_back(spec.config);
+  }
+  (void)MaterializeHolders(configs);
+}
+
+Result<PreparedQuery> Graph::Prepare(const QueryStats& stats, const HardwareInfo& hw) {
+  // §5 / §7: synthesize → resolve (policy chain) → materialize → pipelines.
+  SynthesizeStructure();
+  auto resolved = ResolveConfigs(stats, hw);
+  auto prepared_edges = MaterializeHolders(resolved);
+
+  auto build_result = MetaPipeline::Build(*this);
+  // Restore Built edge_configs_ so the Graph remains reusable for another Prepare.
+  RestoreAuthorEdgeConfigs();
+
+  if (!build_result.has_value()) {
+    return std::unexpected(build_result.error());
+  }
+
+  return PreparedQuery{std::move(prepared_edges), std::move(build_result.value())};
+}
+
 std::vector<std::shared_ptr<cache::IBatchHolder>> Graph::CreateBatchHolders(
     const EdgeConfig& edge_config) {
   std::vector<std::shared_ptr<cache::IBatchHolder>> holders;
   holders.reserve(edge_config.num_partitions);
 
-  // Configure flow control thresholds for backpressure.
+  // Never → auto_spill=false; Eligible/First → auto_spill=true (phase 5 expands).
   cache::BatchHolderConfig holder_config{
       .flow_control_batches_threshold = edge_config.flow_control_batches_threshold,
-      .flow_control_bytes_threshold = edge_config.flow_control_bytes_threshold};
+      .flow_control_bytes_threshold = edge_config.flow_control_bytes_threshold,
+      .auto_spill = (edge_config.spill_policy != SpillPolicy::Never)};
 
-  // Create the requested number of batch holders.
   for (std::size_t partition = 0; partition < edge_config.num_partitions; ++partition) {
     holders.push_back(cache::MakeBatchHolder(GenerateNextBatchHolderId(), edge_config.type,
                                              holder_config, memory_resource_manager_));
   }
 
   return holders;
+}
+
+// =============================================================================
+// EdgeTuner
+// =============================================================================
+
+void EdgeTuner::SyncSideMap() noexcept {
+  const auto source_id = static_cast<std::int32_t>(spec_->source->id());
+  const auto target_id = static_cast<std::int32_t>(spec_->target->id());
+  graph_->edge_configs_[{source_id, target_id}] = spec_->config;
+}
+
+EdgeTuner& EdgeTuner::Full() noexcept {
+  spec_->config.barrier = BarrierType::Full;
+  SyncSideMap();
+  return *this;
+}
+
+EdgeTuner& EdgeTuner::Streaming() noexcept {
+  spec_->config.barrier = BarrierType::Pipeline;
+  SyncSideMap();
+  return *this;
+}
+
+EdgeTuner& EdgeTuner::Concatenating() noexcept {
+  spec_->config.type = cache::BatchHolderType::kConcatenating;
+  spec_->config.barrier = BarrierType::Full;
+  SyncSideMap();
+  return *this;
+}
+
+EdgeTuner& EdgeTuner::Partitioned(std::size_t partition_count) noexcept {
+  spec_->config.num_partitions = partition_count;
+  SyncSideMap();
+  return *this;
+}
+
+EdgeTuner& EdgeTuner::PartitionedUpTo(std::size_t max_partitions) noexcept {
+  spec_->config.max_partitions = max_partitions;
+  SyncSideMap();
+  return *this;
+}
+
+EdgeTuner& EdgeTuner::FlowControl(std::size_t max_batches, std::size_t max_bytes) noexcept {
+  spec_->config.flow_control_batches_threshold = max_batches;
+  spec_->config.flow_control_bytes_threshold = max_bytes;
+  SyncSideMap();
+  return *this;
+}
+
+EdgeTuner& EdgeTuner::Spill(SpillPolicy policy) noexcept {
+  spec_->config.spill_policy = policy;
+  SyncSideMap();
+  return *this;
+}
+
+EdgeTuner& EdgeTuner::Config(EdgeConfig config) noexcept {
+  spec_->config = std::move(config);
+  SyncSideMap();
+  return *this;
 }
 
 // =============================================================================
@@ -170,13 +371,18 @@ void Graph::FinalizeWorkflow() {
 }
 
 Status Graph::Execute() {
-  // Stage 6 (docs/dev/pipeline-execution-plan.md): the pipelined engine is
-  // the default. The thread-per-operator scheduler survives only as
-  // ExecuteLegacy() for not-yet-migrated run()-based operators.
-  return ExecutePipelined();
+  // Phase 2.5: Execute is sugar for Prepare({}, {}).Execute().
+  auto prepared = Prepare(QueryStats{}, HardwareInfo{});
+  if (!prepared.has_value()) {
+    return std::unexpected(prepared.error());
+  }
+  return prepared->Execute();
 }
 
 Status Graph::ExecuteLegacy() {
+  // Holders are deferred from AddEdge; materialize before run()-based I/O.
+  Materialize();
+
   // Prepare the graph by marking terminal operators.
   FinalizeWorkflow();
 
@@ -277,13 +483,8 @@ Status Graph::ExecuteLegacy() {
 }
 
 Status Graph::ExecutePipelined() {
-  auto build_result = MetaPipeline::Build(*this);
-  if (!build_result.has_value()) {
-    return std::unexpected(build_result.error());
-  }
-
-  PipelineExecutor executor;
-  return executor.Execute(std::move(build_result.value()));
+  // Alias for Execute(); kept for direct callers until D4 consolidation.
+  return Execute();
 }
 
 // =============================================================================
@@ -347,9 +548,8 @@ std::vector<Operator*> Graph::GetTerminalOperators() const {
     // an operator look non-terminal — otherwise building pipelines after
     // the legacy Execute() path silently finds no terminals at all.
     auto outgoing = GetOutgoingEdges(current_operator);
-    bool has_real_consumer = std::ranges::any_of(outgoing, [](const Edge& edge) {
-      return edge.target_operator_id >= 0;
-    });
+    bool has_real_consumer = std::ranges::any_of(
+        outgoing, [](const Edge& edge) { return edge.target_operator_id >= 0; });
     if (!has_real_consumer) {
       terminals.push_back(current_operator);
     }

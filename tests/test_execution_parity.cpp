@@ -24,12 +24,12 @@
 #include <format>
 #include <memory>
 #include <print>
+#include <quest/quest.hpp>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include <quest/quest.hpp>
-
+#include "quest/taskflow/graph_builder.hpp"
 #include "quest/taskflow/pipeline.hpp"
 #include "quest/taskflow/pipeline_executor.hpp"
 #include "quest/tests/utils.hpp"
@@ -238,22 +238,25 @@ TEST(ExecutionParityTest, StreamingPlanProducesIdenticalBatchesOnBothEngines) {
 
   // Two identical plans with independent operator instances (operators
   // hold execution state and cannot be reused across runs).
-  auto legacy_graph = std::make_shared<Graph>();
   DualSource legacy_source{0, kBatches, kRows};
   DualStream legacy_stream{1};
   DualCollector legacy_collector{2};
-  *legacy_graph += legacy_source >> legacy_stream;
-  *legacy_graph += legacy_stream >> legacy_collector;
+  {
+    GraphBuilder gb;
+    gb.Chain(legacy_source, legacy_stream, legacy_collector);
+    ASSERT_OK_AND_ASSIGN(auto legacy_graph, std::move(gb).Build());
+    ASSERT_OK(legacy_graph->ExecuteLegacy());
+  }
 
-  auto pipelined_graph = std::make_shared<Graph>();
   DualSource pipelined_source{0, kBatches, kRows};
   DualStream pipelined_stream{1};
   DualCollector pipelined_collector{2};
-  *pipelined_graph += pipelined_source >> pipelined_stream;
-  *pipelined_graph += pipelined_stream >> pipelined_collector;
-
-  ASSERT_OK(legacy_graph->ExecuteLegacy());
-  ASSERT_OK(pipelined_graph->ExecutePipelined());
+  {
+    GraphBuilder gb;
+    gb.Chain(pipelined_source, pipelined_stream, pipelined_collector);
+    ASSERT_OK_AND_ASSIGN(auto pipelined_graph, std::move(gb).Build());
+    ASSERT_OK(pipelined_graph->ExecutePipelined());
+  }
 
   EXPECT_EQ(legacy_collector.fingerprints().size(), kBatches);
   EXPECT_EQ(legacy_collector.fingerprints(), pipelined_collector.fingerprints())
@@ -265,22 +268,25 @@ TEST(ExecutionParityTest, BlockingPlanProducesIdenticalBatchesOnBothEngines) {
   constexpr std::size_t kBatches = 6;
   constexpr std::size_t kRows = 12;
 
-  auto legacy_graph = std::make_shared<Graph>();
   DualSource legacy_source{0, kBatches, kRows};
   DualBlockingOp legacy_agg{1};
   DualCollector legacy_collector{2};
-  *legacy_graph += legacy_source >> legacy_agg;
-  *legacy_graph += legacy_agg >> legacy_collector;
+  {
+    GraphBuilder gb;
+    gb.Chain(legacy_source, legacy_agg, legacy_collector);
+    ASSERT_OK_AND_ASSIGN(auto legacy_graph, std::move(gb).Build());
+    ASSERT_OK(legacy_graph->ExecuteLegacy());
+  }
 
-  auto pipelined_graph = std::make_shared<Graph>();
   DualSource pipelined_source{0, kBatches, kRows};
   DualBlockingOp pipelined_agg{1};
   DualCollector pipelined_collector{2};
-  *pipelined_graph += pipelined_source >> pipelined_agg;
-  *pipelined_graph += pipelined_agg >> pipelined_collector;
-
-  ASSERT_OK(legacy_graph->ExecuteLegacy());
-  ASSERT_OK(pipelined_graph->ExecutePipelined());
+  {
+    GraphBuilder gb;
+    gb.Chain(pipelined_source, pipelined_agg, pipelined_collector);
+    ASSERT_OK_AND_ASSIGN(auto pipelined_graph, std::move(gb).Build());
+    ASSERT_OK(pipelined_graph->ExecutePipelined());
+  }
 
   EXPECT_EQ(legacy_collector.fingerprints().size(), kBatches);
   EXPECT_EQ(legacy_collector.fingerprints(), pipelined_collector.fingerprints());
@@ -303,12 +309,16 @@ TEST(ExecutionParityTest, PipelinedPathSpillsToDiskUnderTinyBudgetAndLosesNothin
   auto disk = std::make_shared<memory::DiskMemoryResource>();
   auto manager = std::make_shared<memory::MemoryResourceManager>(cpu, disk);
 
-  auto graph = std::make_shared<Graph>(manager);
   // Blocks carry both resources: CPU (allocation tracking -> saturation)
   // and disk (ToDisk() needs a target to generate spill files).
   DualSource producer_op{0, kBatches, kRows, cpu, disk};
   DualCollector consumer_op{1};
-  *graph += producer_op >> consumer_op;  // wires the spill-aware holder
+  {
+    GraphBuilder gb{manager};
+    gb.Chain(producer_op, consumer_op);
+    ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
+    graph->Materialize();
+  }
 
   ASSERT_TRUE(cpu->is_saturated())
       << "test setup: pre-created batches must already saturate the budget";
@@ -353,37 +363,47 @@ TEST(ExecutionParityTest, Benchmark10MRowsFusedVsThreadPerOperator) {
   constexpr std::size_t kTotalRows = kBatches * kRowsPerBatch;
 
   auto run_legacy = [&]() -> std::pair<std::chrono::milliseconds, std::size_t> {
-    auto graph = std::make_shared<Graph>();
     DualSource source{0, kBatches, kRowsPerBatch};
     DualStream filter{1};
     DualStream project{2};
     DualCollector collector{3};
-    *graph += source >> filter;
-    *graph += filter >> project;
-    *graph += project >> collector;
+
+    GraphBuilder gb;
+    gb.Chain(source, filter, project, collector);
+    auto graph_result = std::move(gb).Build();
+    EXPECT_TRUE(graph_result.has_value());
+    if (!graph_result.has_value()) {
+      return {{}, 0};
+    }
+    auto graph = *graph_result;
 
     auto start = std::chrono::steady_clock::now();
     auto status = graph->ExecuteLegacy();
-    auto elapsed =
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start);
     EXPECT_TRUE(status.has_value());
     return {elapsed, collector.total_rows()};
   };
 
   auto run_pipelined = [&]() -> std::pair<std::chrono::milliseconds, std::size_t> {
-    auto graph = std::make_shared<Graph>();
     DualSource source{0, kBatches, kRowsPerBatch};
     DualStream filter{1};
     DualStream project{2};
     DualCollector collector{3};
-    *graph += source >> filter;
-    *graph += filter >> project;
-    *graph += project >> collector;
+
+    GraphBuilder gb;
+    gb.Chain(source, filter, project, collector);
+    auto graph_result = std::move(gb).Build();
+    EXPECT_TRUE(graph_result.has_value());
+    if (!graph_result.has_value()) {
+      return {{}, 0};
+    }
+    auto graph = *graph_result;
 
     auto start = std::chrono::steady_clock::now();
     auto status = graph->ExecutePipelined();
-    auto elapsed =
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start);
     EXPECT_TRUE(status.has_value());
     return {elapsed, collector.total_rows()};
   };

@@ -112,3 +112,15 @@ gtest_discover_tests(test_graph_bridge)
 add_executable(test_manual_query_walkthrough test_manual_query_walkthrough.cpp)
 target_link_libraries(test_manual_query_walkthrough PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_manual_query_walkthrough)
+
+add_executable(test_prepared_query test_prepared_query.cpp)
+target_link_libraries(test_prepared_query PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_prepared_query)
+
+add_executable(test_graph_builder test_graph_builder.cpp)
+target_link_libraries(test_graph_builder PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_graph_builder)
+
+add_executable(test_runtime_tuning test_runtime_tuning.cpp)
+target_link_libraries(test_runtime_tuning PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_runtime_tuning)

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <quest/quest.hpp>
 #include <quest/taskflow/graph.hpp>
+#include <quest/taskflow/graph_builder.hpp>
 
 #include "quest/cache/data_block.hpp"
 #include "quest/datasource/data_source.hpp"
@@ -425,21 +426,22 @@ int main() {
   // Create memory manager
   auto memory_manager = quest::make_default_memory_manager();
 
-  // Create graph
-  auto graph = std::make_shared<Graph>(memory_manager);
-
   // Create operators
   TableScanOperator scan_node(0, scan_ptr);
   FilterOperator filter_node(1, selection_ptr);
   ProjectOperator project_node(2, projection_ptr);
   OutputOperator output_node(3);
 
-  // Build execution graph using DSL
+  // Build execution graph using GraphBuilder (Phase 2.5 D3)
   // scan -> filter -> project -> output
-
-  *graph += scan_node >> filter_node;
-  *graph += filter_node >> project_node;
-  *graph += project_node >> output_node;
+  quest::taskflow::GraphBuilder gb{memory_manager};
+  gb.Chain(scan_node, filter_node, project_node, output_node);
+  auto graph_result = std::move(gb).Build();
+  if (!graph_result.has_value()) {
+    std::cerr << "Failed to build graph: " << graph_result.error().message_ << "\n";
+    return 1;
+  }
+  auto graph = *graph_result;
 
   // Show graph structure
   graph->PrintStructure();

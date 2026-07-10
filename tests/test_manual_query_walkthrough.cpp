@@ -30,17 +30,18 @@
 #include <utility>
 #include <vector>
 
-#include "quest/builder/query_builder.hpp"          // the oracle (fluent API)
-#include "quest/datasource/data_source.hpp"         // ParquetDataSource
-#include "quest/logical_plan/logical_expr.hpp"      // col(), lit(), gt()
-#include "quest/logical_plan/logical_plan.hpp"      // Scan, Selection, Projection
-#include "quest/physical_plan/physical_plan.hpp"    // CreatePhysicalExpr
-#include "quest/taskflow/meta_pipeline.hpp"         // MetaPipeline::Build
+#include "quest/builder/query_builder.hpp"        // the oracle (fluent API)
+#include "quest/datasource/data_source.hpp"       // ParquetDataSource
+#include "quest/logical_plan/logical_expr.hpp"    // col(), lit(), gt()
+#include "quest/logical_plan/logical_plan.hpp"    // Scan, Selection, Projection
+#include "quest/physical_plan/physical_plan.hpp"  // CreatePhysicalExpr
+#include "quest/taskflow/graph_builder.hpp"       // GraphBuilder (Phase 2.5 D3)
+#include "quest/taskflow/meta_pipeline.hpp"       // MetaPipeline::Build
 #include "quest/taskflow/operators/collector_operator.hpp"
 #include "quest/taskflow/operators/filter_operator.hpp"
 #include "quest/taskflow/operators/project_operator.hpp"
 #include "quest/taskflow/operators/table_scan_operator.hpp"
-#include "quest/taskflow/pipeline_executor.hpp"     // PipelineExecutor
+#include "quest/taskflow/pipeline_executor.hpp"  // PipelineExecutor
 #include "quest/tests/utils.hpp"
 
 using namespace quest;
@@ -88,8 +89,7 @@ TEST(ManualQueryWalkthroughTest, RolesOnlyNoEngine) {
   // not logical ones (column names). CreatePhysicalExpr resolves names
   // against the input plan's schema — so we need a logical Scan node as
   // the schema provider even in this engine-less test.
-  auto scan_node =
-      std::make_unique<Scan>(EmployeesParquet().string(), data_source);
+  auto scan_node = std::make_unique<Scan>(EmployeesParquet().string(), data_source);
 
   auto predicate_logical = gt(col("salary"), lit(kSalaryThreshold));
   ASSERT_OK_AND_ASSIGN(auto predicate, CreatePhysicalExpr(*predicate_logical, *scan_node));
@@ -178,8 +178,8 @@ TEST(ManualQueryWalkthroughTest, ManualAssemblyEndToEnd) {
 
   auto scan_node = std::make_unique<Scan>(path, data_source);
 
-  auto selection_node = std::make_unique<Selection>(
-      std::move(scan_node), gt(col("salary"), lit(kSalaryThreshold)));
+  auto selection_node =
+      std::make_unique<Selection>(std::move(scan_node), gt(col("salary"), lit(kSalaryThreshold)));
 
   std::vector<LogicalExprPtr> select_list;
   for (const auto& name : kSelectedColumns) {
@@ -195,8 +195,7 @@ TEST(ManualQueryWalkthroughTest, ManualAssemblyEndToEnd) {
   //  Selection's predicate resolves against the Scan; the Projection's
   //  columns resolve against the Selection.)
   // ==========================================================================
-  const auto* selection =
-      dynamic_cast<const Selection*>(&projection_node->input());
+  const auto* selection = dynamic_cast<const Selection*>(&projection_node->input());
   ASSERT_NE(selection, nullptr);
 
   ASSERT_OK_AND_ASSIGN(auto predicate,
@@ -228,14 +227,13 @@ TEST(ManualQueryWalkthroughTest, ManualAssemblyEndToEnd) {
   // Stage 4 — the graph wiring, by hand.
   // (CreateGraph's edge policy: streaming edges are plain — they will
   //  FUSE into one pipeline — but the collector sits behind a Full
-  //  barrier, Sirius's RESULT_COLLECTOR shape. That one edge is why every
-  //  query's final batches cross a spill-aware BatchHolder.)
+  //  barrier, Sirius's RESULT_COLLECTOR shape. CollectorOperator declares
+  //  Full via InputEdgeContract, so GraphBuilder infers it automatically.)
   // ==========================================================================
-  auto graph = std::make_shared<Graph>(memory_manager);
-  *graph += scan_op >> filter_op;
-  *graph += filter_op >> project_op;
-  *graph += link(project_op, collector_op,
-                 EdgeConfig::Simple().with_barrier(BarrierType::Full));
+  GraphBuilder gb{memory_manager};
+  gb.Chain(scan_op, filter_op, project_op, collector_op);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
+  graph->Materialize();  // holders deferred from AddEdge until Prepare/Materialize
 
   // ==========================================================================
   // Stage 5 — pipelines, made visible.
@@ -246,15 +244,14 @@ TEST(ManualQueryWalkthroughTest, ManualAssemblyEndToEnd) {
   ASSERT_OK_AND_ASSIGN(auto pipelines, MetaPipeline::Build(*graph));
 
   ASSERT_EQ(pipelines.size(), 2U);
-  const auto& producer = pipelines[0];   // children before parents, always
+  const auto& producer = pipelines[0];  // children before parents, always
   const auto& consumer = pipelines[1];
 
-  EXPECT_EQ(producer->operators(),
-            (std::vector<Operator*>{&scan_op, &filter_op, &project_op}));
-  EXPECT_TRUE(producer->source()->IsSource());   // scan has the source role
+  EXPECT_EQ(producer->operators(), (std::vector<Operator*>{&scan_op, &filter_op, &project_op}));
+  EXPECT_TRUE(producer->source()->IsSource());  // scan has the source role
 
   EXPECT_EQ(consumer->operators(), (std::vector<Operator*>{&collector_op}));
-  EXPECT_TRUE(consumer->sink()->IsSink());       // collector has the sink role
+  EXPECT_TRUE(consumer->sink()->IsSink());  // collector has the sink role
   ASSERT_EQ(consumer->FullBarrierProducers().size(), 1U);
   EXPECT_EQ(consumer->FullBarrierProducers()[0], producer.get());
 

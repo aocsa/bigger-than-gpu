@@ -10,23 +10,28 @@
 /// between operators via batch holders.
 ///
 /// Key responsibilities:
-/// - Building the graph topology using a fluent DSL (graph += scan >> filter)
+/// - Building the graph topology (edge specs; holders materialize in Prepare)
 /// - Managing operator lifecycle and connections
 /// - Scheduling parallel execution while respecting data dependencies
 /// - Tracking execution state and coordinating thread completion
 ///
-/// Example usage:
+/// Lifecycle (Phase 2.5):
 /// @code
 ///   auto graph = std::make_shared<Graph>();
-///   *graph += table_scan >> filter >> project >> output;
-///   graph->execute();
+///   // wire edges via GraphBuilder, then call Prepare
+///   ASSERT_OK_AND_ASSIGN(auto query, graph->Prepare(stats, hw));
+///   ASSERT_OK(query.Execute());
+///   // or: graph->Execute();  // == Prepare({},{}).Execute()
 /// @endcode
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
+#include <string>
+#include <string_view>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -34,39 +39,28 @@
 #include "quest/cache/batch_holder.hpp"
 #include "quest/memory/memory_resource.hpp"
 #include "quest/result.hpp"
-#include "quest/taskflow/kpair.hpp"
+#include "quest/taskflow/edge_config.hpp"
+#include "quest/taskflow/edge_ref.hpp"
 #include "quest/taskflow/operator.hpp"
+#include "quest/taskflow/prepared_query.hpp"
+#include "quest/taskflow/query_stats.hpp"
 
 namespace quest::taskflow {
+
+// Forward declaration — defined below Graph.
+class EdgeTuner;
 
 // =============================================================================
 // Graph Edge Representation
 // =============================================================================
 
 /// @brief Represents a directed edge in the execution graph.
-///
-/// Each edge connects a source operator's output port to a target operator's
-/// input port. Edges are stored in adjacency lists for efficient graph
-/// traversal during execution scheduling.
 struct Edge {
-  // The unique identifier of the source operator producing data.
   std::int32_t source_operator_id;
-
-  // The unique identifier of the target operator consuming data.
   std::int32_t target_operator_id;
-
-  // Name of the output port on the source operator.
-  // Empty string indicates the default port.
   std::string source_port_name;
-
-  // Name of the input port on the target operator.
-  // Empty string indicates the default port.
   std::string target_port_name;
 
-  /// @brief Compare edges for ordering in std::set containers.
-  ///
-  /// Edges are ordered first by target, then by source. This ordering
-  /// optimizes lookups when finding all incoming edges to a target.
   [[nodiscard]] auto operator<=>(const Edge& other) const noexcept {
     if (target_operator_id != other.target_operator_id) {
       return target_operator_id <=> other.target_operator_id;
@@ -74,7 +68,6 @@ struct Edge {
     return source_operator_id <=> other.source_operator_id;
   }
 
-  /// @brief Check equality based on source and target identifiers.
   [[nodiscard]] bool operator==(const Edge& other) const noexcept {
     return source_operator_id == other.source_operator_id &&
            target_operator_id == other.target_operator_id;
@@ -82,37 +75,35 @@ struct Edge {
 };
 
 // =============================================================================
+// Tuning policy type
+// =============================================================================
+
+/// @brief Ordered policy applied per edge at Prepare() after synthesis.
+using EdgeTuningPolicy = std::function<EdgeConfig(const EdgeInfo& edge, const QueryStats& stats,
+                                                  const HardwareInfo& hw)>;
+
+// =============================================================================
 // Graph Class
 // =============================================================================
 
 /// @brief Execution graph managing operators and their data flow connections.
-///
-/// The Graph class implements a directed acyclic graph (DAG) where:
-/// - Nodes are Operator instances representing computation units
-/// - Edges are BatchHolder connections carrying data between operators
-///
-/// The graph supports a fluent domain-specific language (DSL) for construction:
-/// @code
-///   *graph += scan >> filter;           // Default ports
-///   *graph += scan_a >> join["left"];   // Named input port
-///   *graph += link(a, b, config);       // With edge configuration
-/// @endcode
-///
-/// During execution, the graph performs topological scheduling to ensure
-/// operators run only after their dependencies are satisfied, while maximizing
-/// parallelism for independent operators.
 class Graph : public std::enable_shared_from_this<Graph> {
  public:
-  /// @brief Constructs an empty execution graph.
-  ///
-  /// @param memory_manager Optional memory manager for controlling memory
-  ///        allocation and disk spilling. If null, a default manager is used.
+  /// @brief Edge recorded at wiring time; holders are created in Prepare().
+  struct EdgeSpec {
+    Operator* source{nullptr};
+    Operator* target{nullptr};
+    std::string source_port_name;
+    std::string target_port_name;
+    EdgeConfig config;
+    std::string name;         ///< From GraphBuilder::Named(); empty if unnamed.
+    bool synthesized{false};  ///< True for edges injected by SynthesizeStructure.
+  };
+
   explicit Graph(std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr);
 
   ~Graph() = default;
 
-  // Non-copyable and non-movable due to internal state (atomic counters,
-  // operator pointers, enable_shared_from_this).
   Graph(const Graph&) = delete;
   Graph& operator=(const Graph&) = delete;
   Graph(Graph&&) = delete;
@@ -122,278 +113,150 @@ class Graph : public std::enable_shared_from_this<Graph> {
   // Graph Construction API
   // ===========================================================================
 
-  /// @brief Adds an edge to the graph using the fluent DSL.
-  ///
-  /// This operator enables the intuitive syntax for connecting operators:
-  /// @code
-  ///   *graph += scan >> filter >> project;
-  /// @endcode
-  ///
-  /// @param edge_pair The KPair describing source and target operators.
-  /// @return Reference to the stored edge for potential chaining.
-  KPair& operator+=(KPair edge_pair);
-
-  /// @brief Registers an operator as a node in the graph.
-  ///
-  /// Operators are automatically registered when edges are added, but this
-  /// method allows explicit registration for operators without connections.
-  ///
-  /// @param node_operator Pointer to the operator to add (must outlive the graph).
-  /// @return The operator's unique identifier.
   std::size_t AddNode(Operator* node_operator);
 
-  /// @brief Creates a directed edge between two operators.
+  /// @brief Records a directed edge (structure only; holders in Prepare).
   ///
-  /// This method:
-  /// - Registers both operators if not already present
-  /// - Creates batch holders for data transfer based on the configuration
-  /// - Establishes parent-child relationships for dependency tracking
-  /// - Connects source output ports to target input ports
-  ///
-  /// @param source_operator The operator producing data.
-  /// @param target_operator The operator consuming data.
-  /// @param source_port_name Name of the output port (or empty for default).
-  /// @param target_port_name Name of the input port (or empty for default).
-  /// @param edge_config Configuration for the batch holder connection.
+  /// @param edge_name Optional stable name from GraphBuilder::Named().
   void AddEdge(Operator* source_operator, Operator* target_operator,
                const std::string& source_port_name, const std::string& target_port_name,
-               const EdgeConfig& edge_config);
+               const EdgeConfig& edge_config, const std::string& edge_name = {});
+
+  // ===========================================================================
+  // Structural tuning (Built Graph only — before Prepare)
+  // ===========================================================================
+
+  void AddTuningPolicy(EdgeTuningPolicy policy);
+
+  [[nodiscard]] Result<EdgeTuner> Tune(const EdgeRef& ref);
+  [[nodiscard]] Result<EdgeTuner> Tune(std::string_view edge_name);
+
+  /// @brief Pre-synthesis / Built edge introspection view.
+  [[nodiscard]] std::vector<EdgeInfo> Edges() const;
+
+  // ===========================================================================
+  // Prepare / Materialize API
+  // ===========================================================================
+
+  [[nodiscard]] Result<PreparedQuery> Prepare(const QueryStats& stats, const HardwareInfo& hw);
+
+  void Materialize();
 
   // ===========================================================================
   // Graph Execution API
   // ===========================================================================
 
-  /// @brief Executes the graph. Since Stage 6 of
-  /// docs/dev/pipeline-execution-plan.md this delegates to the pipelined
-  /// engine (`ExecutePipelined()`).
-  ///
-  /// Operators therefore execute via their pipeline roles (`GetNextBatch`
-  /// / `ProcessBatch` / `Sink`), NOT via `run()`. Operators implementing
-  /// only the legacy `run()` contract must use `ExecuteLegacy()` until
-  /// they are migrated; the legacy path is retired once the last such
-  /// caller is gone.
-  ///
-  /// @return Status::OK() on successful completion, error status otherwise.
   [[nodiscard]] Status Execute();
-
-  /// @brief Executes via the legacy thread-per-operator engine
-  /// (DEPRECATED — migration escape hatch only).
-  ///
-  /// The pre-Stage-6 `Execute()` algorithm: BFS from root operators, one
-  /// `std::jthread` per operator running `run()`, holders on every edge.
-  /// Kept while `run()`-based operators still exist (tests/test_graph.cpp,
-  /// examples); scheduled for deletion once they migrate to the pipeline
-  /// roles — don't maintain two schedulers (plan Stage 6).
-  ///
-  /// @return Status::OK() on successful completion, error status otherwise.
   [[nodiscard]] Status ExecuteLegacy();
-
-  /// @brief Executes the graph via the pipelined engine:
-  /// `MetaPipeline::Build(*this)` followed by `PipelineExecutor::
-  /// Execute(...)` on a default-sized worker pool.
-  ///
-  /// This is what `Execute()` delegates to since Stage 6. Does not read
-  /// `FinalizeWorkflow()`'s sentinel edges, so calling it does not require
-  /// (or preclude) calling `FinalizeWorkflow()` first.
-  ///
-  /// @return Status::OK() if every pipeline finished without error, or the
-  ///         first error encountered (building the pipelines, or running
-  ///         them).
   [[nodiscard]] Status ExecutePipelined();
-
-  /// @brief Finalizes the graph structure before execution.
-  ///
-  /// This method identifies terminal operators (those with no outgoing edges)
-  /// and marks them appropriately for proper execution tracking.
   void FinalizeWorkflow();
-
-  /// @brief Checks for and optimizes simple scan-limit query patterns.
-  ///
-  /// When a query consists only of TableScan -> Limit -> Output, this
-  /// optimization pushes the limit down to the scan operator to avoid
-  /// reading unnecessary data.
   void OptimizeScanWithLimit();
 
   // ===========================================================================
   // Graph Query API
   // ===========================================================================
 
-  /// @brief Retrieves an operator by its unique identifier.
-  ///
-  /// @param operator_id The ID of the operator to find.
-  /// @return Pointer to the operator, or nullptr if not found.
   [[nodiscard]] Operator* GetNode(std::size_t operator_id) const;
-
-  /// @brief Gets the most recently added operator.
-  ///
-  /// Useful for building chains where you need a reference to the last
-  /// operator added without storing it separately.
-  ///
-  /// @return Reference to the last operator.
-  /// @throws std::runtime_error if the graph is empty.
   [[nodiscard]] Operator& GetLastOperator();
   [[nodiscard]] const Operator& GetLastOperator() const;
-
-  /// @brief Returns the total number of operators in the graph.
   [[nodiscard]] std::size_t GetNodeCount() const noexcept { return registered_operators_.size(); }
 
-  /// @brief Finds all outgoing edges from an operator.
-  ///
-  /// @param from_operator Pointer to the source operator.
-  /// @return Set of edges originating from this operator.
   [[nodiscard]] std::set<Edge> GetOutgoingEdges(Operator* from_operator) const;
   [[nodiscard]] std::set<Edge> GetOutgoingEdges(std::int32_t operator_id) const;
-
-  /// @brief Finds all incoming edges to an operator.
-  ///
-  /// @param to_operator Pointer to the target operator.
-  /// @return Set of edges pointing to this operator.
   [[nodiscard]] std::set<Edge> GetIncomingEdges(Operator* to_operator) const;
   [[nodiscard]] std::set<Edge> GetIncomingEdges(std::int32_t operator_id) const;
 
-  /// @brief Looks up the configuration an edge was created with.
-  ///
-  /// Used by pipeline construction (`MetaPipeline::Build`) to inspect an
-  /// edge's barrier semantics and partitioning while walking the DAG.
-  /// `AddEdge` populates this alongside the adjacency lists; it is a side
-  /// map rather than a field on `Edge` because `Edge::operator<=>` orders
-  /// the `std::set<Edge>` adjacency lists and must stay identity-only.
-  ///
-  /// @param source_operator_id The edge's source operator ID.
-  /// @param target_operator_id The edge's target operator ID.
-  /// @return The stored configuration, or a default `EdgeConfig{}` if no
-  ///         edge with these endpoints was ever added.
   [[nodiscard]] EdgeConfig GetEdgeConfig(std::int32_t source_operator_id,
                                          std::int32_t target_operator_id) const;
 
-  /// @brief Finds all operators with no outgoing edges (pipeline sinks/roots
-  /// of the upstream walk in `MetaPipeline::Build`).
-  ///
-  /// Unlike `FinalizeWorkflow()`, this is a pure query: it does not mutate
-  /// the graph with sentinel terminal edges.
-  ///
-  /// @warning Call this BEFORE `FinalizeWorkflow()` on the same graph.
-  ///          `FinalizeWorkflow()` inserts a sentinel `{terminal_id, -1}`
-  ///          outgoing edge for every real terminal, which makes every
-  ///          terminal's `GetOutgoingEdges()` non-empty; after that call
-  ///          this method would find zero terminals. `MetaPipeline::Build`
-  ///          only needs the real DAG shape, so it must not run
-  ///          `FinalizeWorkflow()` first — a future `ExecutePipelined()`
-  ///          must not reuse the legacy `Execute()`'s prep step.
-  ///
-  /// @return Operators with an empty `GetOutgoingEdges()` set, in
-  ///         registration order.
+  [[nodiscard]] const std::vector<EdgeSpec>& edge_specs() const noexcept { return edge_specs_; }
+
   [[nodiscard]] std::vector<Operator*> GetTerminalOperators() const;
 
-  /// @brief Estimates the number of input rows for an operator.
-  ///
-  /// Used for query optimization and progress tracking. Returns an estimate
-  /// based on upstream operator statistics when available.
-  ///
-  /// @param operator_id The target operator's ID.
-  /// @return Pair of (is_estimate_available, estimated_row_count).
   [[nodiscard]] std::pair<bool, std::uint64_t> EstimateInputRowCount(
       std::int32_t operator_id) const;
 
-  /// @brief Estimates input rows for a specific port of an operator.
-  ///
-  /// Useful for multi-input operators like joins where each input port
-  /// may have different cardinality.
-  ///
-  /// @param operator_id The target operator's ID.
-  /// @param port_name The specific input port name.
-  /// @return Pair of (is_estimate_available, estimated_row_count).
   [[nodiscard]] std::pair<bool, std::uint64_t> EstimateInputRowCountForPort(
       std::int32_t operator_id, const std::string& port_name) const;
 
-  // ===========================================================================
-  // Debug and Visualization API
-  // ===========================================================================
-
-  /// @brief Prints the graph structure to standard output.
-  ///
-  /// Displays all operators with their types and IDs, followed by
-  /// the edge connections in a human-readable format.
   void PrintStructure() const;
-
-  /// @brief Prints the graph backwards from a specific operator.
-  ///
-  /// Useful for debugging to see the dependency chain leading to
-  /// a particular operator.
-  ///
-  /// @param operator_id Starting point for backward traversal.
   void PrintBackwardsFrom(std::int32_t operator_id) const;
 
-  // ===========================================================================
-  // Memory Management API
-  // ===========================================================================
-
-  /// @brief Gets the memory resource manager for this graph.
   [[nodiscard]] std::shared_ptr<memory::MemoryResourceManager> GetMemoryManager() const {
     return memory_resource_manager_;
   }
 
-  /// @brief Sets the memory resource manager.
-  ///
-  /// @param manager The new memory manager to use.
   void SetMemoryManager(std::shared_ptr<memory::MemoryResourceManager> manager) {
     memory_resource_manager_ = std::move(manager);
   }
 
  private:
-  // Sentinel ID representing the virtual entry point of the graph.
-  // Root operators (sources) are connected from this sentinel node.
+  friend class EdgeTuner;
+
   static constexpr std::int32_t kGraphEntryPointId = -1;
 
-  /// @brief Creates batch holders for an edge based on configuration.
-  ///
-  /// For partitioned edges, creates multiple batch holders (one per partition).
-  /// For simple edges, creates a single batch holder.
-  ///
-  /// @param edge_config The configuration specifying holder type and count.
-  /// @return Vector of created batch holders.
+  void SynthesizeStructure();
+
+  /// @brief Apply policy chain; returns resolved configs without mutating Built specs.
+  ///        Updates edge_configs_ temporarily for MetaPipeline::Build.
+  [[nodiscard]] std::vector<EdgeConfig> ResolveConfigs(const QueryStats& stats,
+                                                       const HardwareInfo& hw);
+
+  /// @brief Materialize holders from resolved configs; restores edge_configs_ after.
+  [[nodiscard]] std::vector<PreparedEdge> MaterializeHolders(
+      const std::vector<EdgeConfig>& resolved_configs);
+
   [[nodiscard]] std::vector<std::shared_ptr<cache::IBatchHolder>> CreateBatchHolders(
       const EdgeConfig& edge_config);
 
-  /// @brief Generates a unique ID for a new batch holder.
+  /// @brief Restore edge_configs_ side map from Built (author/Tune) specs.
+  void RestoreAuthorEdgeConfigs();
+
+  [[nodiscard]] EdgeInfo MakeEdgeInfo(const EdgeSpec& spec) const;
+
+  [[nodiscard]] EdgeSpec* FindEdgeSpec(const EdgeRef& ref);
+  [[nodiscard]] EdgeSpec* FindEdgeSpecByName(std::string_view name);
+
   [[nodiscard]] std::uint64_t GenerateNextBatchHolderId() {
     return batch_holder_id_counter_.fetch_add(1);
   }
 
-  // Counter for generating unique batch holder identifiers.
   std::atomic<std::uint64_t> batch_holder_id_counter_{0};
-
-  // Ordered list of operators for iteration (maintains insertion order).
   std::vector<Operator*> registered_operators_;
-
-  // Map from operator ID to operator pointer for O(1) lookup.
   std::map<std::int32_t, Operator*> operator_lookup_table_;
-
-  // Adjacency list: operator_id -> set of outgoing edges.
   std::map<std::int32_t, std::set<Edge>> outgoing_edges_;
-
-  // Reverse adjacency list: operator_id -> set of incoming edges.
   std::map<std::int32_t, std::set<Edge>> incoming_edges_;
-
-  // Side map from (source_id, target_id) to the EdgeConfig it was created
-  // with. See GetEdgeConfig() for why this isn't a field on Edge itself.
   std::map<std::pair<std::int32_t, std::int32_t>, EdgeConfig> edge_configs_;
-
-  // Stores the most recently added edge for fluent DSL chaining.
-  std::unique_ptr<KPair> most_recent_edge_;
-
-  // Memory manager controlling allocation and disk spilling.
+  std::vector<EdgeSpec> edge_specs_;
+  std::vector<EdgeTuningPolicy> tuning_policies_;
   std::shared_ptr<memory::MemoryResourceManager> memory_resource_manager_;
 };
 
 // =============================================================================
-// Type Aliases
+// EdgeTuner — structural retune on Built Graph (§6.3)
 // =============================================================================
 
-/// @brief Thread type used for parallel operator execution.
-///
-/// Uses std::jthread for automatic joining on destruction, preventing
-/// resource leaks if exceptions occur during execution.
+/// @brief Fluent structural tuner returned by Graph::Tune().
+class EdgeTuner {
+ public:
+  EdgeTuner(Graph* graph, Graph::EdgeSpec* spec) noexcept : graph_(graph), spec_(spec) {}
+
+  EdgeTuner& Full() noexcept;
+  EdgeTuner& Streaming() noexcept;
+  EdgeTuner& Concatenating() noexcept;
+  EdgeTuner& Partitioned(std::size_t partition_count) noexcept;
+  EdgeTuner& PartitionedUpTo(std::size_t max_partitions) noexcept;
+  EdgeTuner& FlowControl(std::size_t max_batches, std::size_t max_bytes = kUnlimited) noexcept;
+  EdgeTuner& Spill(SpillPolicy policy) noexcept;
+  EdgeTuner& Config(EdgeConfig config) noexcept;
+
+ private:
+  void SyncSideMap() noexcept;
+
+  Graph* graph_;
+  Graph::EdgeSpec* spec_;
+};
+
 using ExecutionThread = std::jthread;
 
 }  // namespace quest::taskflow

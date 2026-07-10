@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include "quest/taskflow/graph_builder.hpp"
 #include "quest/taskflow/meta_pipeline.hpp"
 #include "quest/taskflow/pipeline.hpp"
 #include "quest/tests/utils.hpp"
@@ -109,13 +110,13 @@ class PassthroughOperator : public SimpleOperator {
 // =============================================================================
 
 TEST(MetaPipelineTest, LinearPlanFusesIntoOnePipeline) {
-  auto graph = std::make_shared<Graph>();
   MockOperator scan{0, OperatorType::TableScan};
   MockOperator filter{1, OperatorType::Filter};
   MockOperator project{2, OperatorType::Project};
 
-  *graph += scan >> filter;
-  *graph += filter >> project;
+  GraphBuilder gb;
+  gb.Chain(scan, filter, project);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto result = MetaPipeline::Build(*graph);
   ASSERT_TRUE(result.has_value());
@@ -138,15 +139,14 @@ TEST(MetaPipelineTest, LinearPlanFusesIntoOnePipeline) {
 // =============================================================================
 
 TEST(MetaPipelineTest, BlockingOperatorSplitsIntoTwoPipelinesWithFullDep) {
-  auto graph = std::make_shared<Graph>();
   MockOperator scan{0, OperatorType::TableScan};
   MockOperator filter{1, OperatorType::Filter};
   MockOperator agg{2, OperatorType::ComputeAggregate};  // blocking
   MockOperator project{3, OperatorType::Project};
 
-  *graph += scan >> filter;
-  *graph += filter >> agg;
-  *graph += agg >> project;
+  GraphBuilder gb;
+  gb.Chain(scan, filter, agg, project);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto result = MetaPipeline::Build(*graph);
   ASSERT_TRUE(result.has_value());
@@ -175,13 +175,14 @@ TEST(MetaPipelineTest, BlockingOperatorSplitsIntoTwoPipelinesWithFullDep) {
 // =============================================================================
 
 TEST(MetaPipelineTest, MultiInputOperatorGetsOneChildPerPortInOrder) {
-  auto graph = std::make_shared<Graph>();
   MockOperator source_a{0, OperatorType::TableScan};
   MockOperator source_b{1, OperatorType::TableScan};
   MockOperator join{2, OperatorType::PartwiseJoin};
 
-  *graph += source_a >> join["input_a"];
-  *graph += source_b >> join["input_b"];
+  GraphBuilder gb;
+  gb.Edge(source_a, join["input_a"]);
+  gb.Edge(source_b, join["input_b"]);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto result = MetaPipeline::Build(*graph);
   ASSERT_TRUE(result.has_value());
@@ -211,13 +212,14 @@ TEST(MetaPipelineTest, MultiInputOperatorGetsOneChildPerPortInOrder) {
 // =============================================================================
 
 TEST(MetaPipelineTest, ExplicitFullBarrierSplitsWithoutBlockingOperator) {
-  auto graph = std::make_shared<Graph>();
   MockOperator scan{0, OperatorType::TableScan};
   MockOperator filter{1, OperatorType::Filter};  // not blocking
   MockOperator out{2, OperatorType::Output};
 
-  *graph += scan >> filter;
-  *graph += link(filter, out, EdgeConfig::Simple().with_barrier(BarrierType::Full));
+  GraphBuilder gb;
+  gb.Chain(scan, filter);
+  gb.Edge(filter, out).Full();
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto result = MetaPipeline::Build(*graph);
   ASSERT_TRUE(result.has_value());
@@ -240,11 +242,12 @@ TEST(MetaPipelineTest, ExplicitFullBarrierSplitsWithoutBlockingOperator) {
 // =============================================================================
 
 TEST(MetaPipelineTest, PartitionedEdgeSplitsUnderPipelineBarrier) {
-  auto graph = std::make_shared<Graph>();
   MockOperator scan{0, OperatorType::TableScan};
   MockOperator worker{1, OperatorType::Project};
 
-  *graph += link(scan, worker, EdgeConfig::Partitioned(2));
+  GraphBuilder gb;
+  gb.Edge(scan, worker).Partitioned(2);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto result = MetaPipeline::Build(*graph);
   ASSERT_TRUE(result.has_value());
@@ -268,15 +271,16 @@ TEST(MetaPipelineTest, PartitionedEdgeSplitsUnderPipelineBarrier) {
 // =============================================================================
 
 TEST(MetaPipelineTest, SharedBlockingProducerIsBuiltOnce) {
-  auto graph = std::make_shared<Graph>();
   MockOperator scan{0, OperatorType::TableScan};
   MockOperator agg{1, OperatorType::ComputeAggregate};  // blocking, shared
   MockOperator project_a{2, OperatorType::Project};
   MockOperator project_b{3, OperatorType::Project};
 
-  *graph += scan >> agg;
-  *graph += agg >> project_a;
-  *graph += agg >> project_b;
+  GraphBuilder gb;
+  gb.Edge(scan, agg);
+  gb.Edge(agg, project_a);
+  gb.Edge(agg, project_b);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto result = MetaPipeline::Build(*graph);
   ASSERT_TRUE(result.has_value());
@@ -308,11 +312,12 @@ TEST(MetaPipelineTest, SharedBlockingProducerIsBuiltOnce) {
 // =============================================================================
 
 TEST(MetaPipelineTest, BuildStillFindsTerminalsAfterFinalizeWorkflow) {
-  auto graph = std::make_shared<Graph>();
   MockOperator scan{0, OperatorType::TableScan};
   MockOperator filter{1, OperatorType::Filter};
 
-  *graph += scan >> filter;
+  GraphBuilder gb;
+  gb.Chain(scan, filter);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
   graph->FinalizeWorkflow();  // adds sentinel (-1) edges to terminals
 
   auto result = MetaPipeline::Build(*graph);
@@ -325,15 +330,16 @@ TEST(MetaPipelineTest, BlockingProducerIntoMultiInputConsumerIsRejected) {
   // agg accumulates via Sink(); nothing would ever re-emit its state into
   // the join's input port (no relay pipeline yet), so Build must fail
   // loudly instead of producing an unexecutable shape.
-  auto graph = std::make_shared<Graph>();
   MockOperator scan{0, OperatorType::TableScan};
   MockOperator agg{1, OperatorType::ComputeAggregate};  // blocking
   MockOperator source_b{2, OperatorType::TableScan};
   MockOperator join{3, OperatorType::PartwiseJoin};
 
-  *graph += scan >> agg;
-  *graph += agg >> join["input_a"];
-  *graph += source_b >> join["input_b"];
+  GraphBuilder gb;
+  gb.Edge(scan, agg);
+  gb.Edge(agg, join["input_a"]);
+  gb.Edge(source_b, join["input_b"]);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto result = MetaPipeline::Build(*graph);
   ASSERT_FALSE(result.has_value());
@@ -432,13 +438,14 @@ TEST(PipelineRunTaskTest, NonBlockingSinkRunsProcessBatchThenAddToOutput) {
   // PublishOutput must call ProcessBatch then AddToOutput, which requires
   // a real registered output port -- build a tiny graph so AddEdge wires
   // one, then hand-assemble the Pipeline around the same operators.
-  auto graph = std::make_shared<Graph>();
   MockOperator scan{0, OperatorType::TableScan};
   PassthroughOperator sink{1};
   MockOperator downstream{2, OperatorType::Output};
 
-  *graph += scan >> sink;
-  *graph += sink >> downstream;
+  GraphBuilder gb;
+  gb.Chain(scan, sink, downstream);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
+  graph->Materialize();  // holders deferred from AddEdge until Prepare/Materialize
 
   Pipeline pipeline{0};
   pipeline.PrependOperator(&sink);

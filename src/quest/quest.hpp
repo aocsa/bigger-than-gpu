@@ -22,8 +22,10 @@
 #include "quest/taskflow/operator_type.hpp"
 #include "quest/taskflow/port.hpp"
 #include "quest/taskflow/operator.hpp"
-#include "quest/taskflow/kpair.hpp"
+#include "quest/taskflow/edge_config.hpp"
+#include "quest/taskflow/edge_ref.hpp"
 #include "quest/taskflow/graph.hpp"
+#include "quest/taskflow/graph_builder.hpp"
 
 namespace quest {
 

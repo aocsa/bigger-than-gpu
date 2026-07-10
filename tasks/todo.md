@@ -1,50 +1,64 @@
-# GraphBuilder DSL + Runtime Edge Tuning — Working Plan
+# GraphBuilder DSL Replacement — Working Plan
 
-Executing [docs/dev/graph-builder-dsl.md](../docs/dev/graph-builder-dsl.md) (design
-finalized 2026-07-09: fluent builder, `PreparedQuery` lifecycle, policy-chain tuning,
-phase-3/5/6 readiness per its §10 matrix).
+Executing [docs/dev/graph-builder-dsl.md](../docs/dev/graph-builder-dsl.md) as a
+**replacement** of the old taskflow wiring DSL (`>>` / `link()` / `operator+=` /
+`kpair.hpp`), not an additive surface. Logical-plan fluent API
+(`QueryBuilder::FromParquet.Where.Select`) stays.
 
-**Process:** one stage = one commit; each stage gets a review summary BEFORE committing;
-user reviews and may request changes. Keep this file updated while working.
+**Process:** one stage = one review gate; keep this file updated while working.
 
 **Decisions locked (design §9):** `Chain()` refines its LAST edge; `Prepare()` returns a
 `PreparedQuery` (states as types); `AddTuningPolicy` chain; `ScaleFlowControl` ships as a
 documented stopgap. **Ordering:** land before replication phase 4 — `Prepare(stats, hw)`
 is where reservation estimates plug in later.
 
-## Stage D0 — Design ✅ (docs/dev/graph-builder-dsl.md)
-- [x] Fluent builder API (Chain/Edge/EdgeBuilder/Apply/Build) fully documented
-- [x] Lifecycle: Graph (Built, structural tuning) → PreparedQuery (soft tuning)
-- [x] Runtime tuning: EdgeRef/names, introspection, policy chain, live soft knobs
-- [x] Phase 3/5/6 readiness pass: wake contract, Spill(SpillPolicy), Partial() reserved,
-      PartitionedUpTo (late-bound structural), synthesis-before-resolution + synthesized-edge names
-- [ ] REVIEW GATE: user reviews the design doc → then implementation stages below
+## Stage D0 — Rebaseline design for replacement ✅
+- [x] Design doc goals/non-goals: `GraphBuilder` is the single supported wiring API
+- [x] Old DSL (`>>` / `link()` / `operator+=`) marked as migration targets to delete
+- [x] §8 reframed as migration gallery (not coexistence)
+- [x] `sirius-replication-plan.md` Phase 2.5 updated to D0–D5 replacement stages
+- [x] This todo rewritten to the replacement plan
+- [x] REVIEW GATE
 
-## Stage D1 — Deferred holders + PreparedQuery (the load-bearing refactor)
-- [ ] Graph stores edge SPECS; holders materialize in `Prepare()` (retires Stage-6 debt)
-- [ ] `PreparedQuery` owns resolved configs, holders, pipelines, executor; `Graph::Execute()` = `Prepare({},{}).Execute()`
-- [ ] `ExecuteLegacy()` keeps eager semantics for its remaining callers
-- [ ] All 532 existing tests green (behavior-preserving)
-- [ ] REVIEW GATE
+## Stage D1 — Deferred holders + PreparedQuery (behavior-preserving) ✅
+- [x] `QueryStats` / `HardwareInfo` / `PreparedQuery` types
+- [x] Graph stores edge SPECS; holders materialize in `Prepare()` (retires Stage-6 debt)
+- [x] `PreparedQuery` owns resolved configs, holders, pipelines, executor
+- [x] `Graph::Execute()` = `Prepare({},{}).Execute()`
+- [x] Empty `SynthesizeStructure()` hook before resolution
+- [x] Temporary `Materialize()` public seam for hand-assembled tests
+- [x] Existing suite green + focused Prepare independence tests (`test_prepared_query`)
+- [x] REVIEW GATE
 
-## Stage D2 — GraphBuilder + EdgeBuilder/ChainBuilder + validation
-- [ ] Chain (last-edge refinement rule), Edge overloads, Named, Config, ThenTo, Apply(Shape)
-- [ ] Build(): port-declaration validation, acyclicity, contract-conflict, duplicate names, Partial() rejected
-- [ ] Examples from design §8 as tests (old-DSL parity where applicable)
-- [ ] REVIEW GATE
+## Stage D2 — GraphBuilder + port contracts + validation ✅
+- [x] Chain (last-edge refinement), Edge overloads, Named, Config, ThenTo, Apply(Shape)
+- [x] `DeclaredInputPorts()` / `InputEdgeContract()`; Collector contract = Full
+- [x] Build(): port-declaration validation, acyclicity, contract-conflict, duplicate names, Partial() rejected
+- [x] `test_graph_builder` covering §8 migration gallery + validation cases (22 tests)
+- [x] REVIEW GATE
 
-## Stage D3 — Port contracts
-- [ ] `DeclaredInputPorts()` / `InputEdgeContract()` virtuals; resolution layer 4
-- [ ] `CollectorOperator` contract = Full; `CreateGraph` loses its special-case link
-- [ ] Typed-port accessor pattern documented on one operator
-- [ ] REVIEW GATE
+## Stage D3 — Migrate all call sites onto GraphBuilder ✅
+- [x] `CreateGraph` uses `quest::taskflow::GraphBuilder` (collector Full via contract)
+- [x] Migrate tests: walkthrough, graph, meta_pipeline, pipeline_executor, barrier_config, graph_bridge, parity, prepared_query
+- [x] Migrate examples (`simple_graph.cpp`, `join_example.cpp`)
+- [x] Remaining old-DSL refs only in historical docs / kpair until D4
+- [x] REVIEW GATE
 
-## Stage D4 — Tuning: policy chain + live soft knobs
-- [ ] `AddTuningPolicy` (ordered), resolution precedence chain (§5) incl. synthesis hook stub
-- [ ] `Graph::Tune()` (structural, Built only by construction), `PreparedQuery::SetFlowControl/SetSpillPolicy/ScaleFlowControl`
-- [ ] Holder thresholds → atomics + `NotifySaturationWaiters()` re-wake; `SetMaxInFlightTasks` reserved (returns Invalid until phase 3)
-- [ ] Tests: precedence, policy ordering, live re-wake under a blocked producer, re-Prepare independence
-- [ ] REVIEW GATE
+## Stage D4 — Delete the old DSL surface ✅
+- [x] Remove `kpair.hpp`, `>>`, `link()`, `Graph::operator+=`
+- [x] Remove KPair tests; barrier_config uses `edge_config.hpp`
+- [x] Clean includes / CMake; search gate for old patterns outside docs
+- [x] Full graph-related suite green
+- [x] REVIEW GATE
+
+## Stage D5 — Runtime tuning + soft knobs ✅
+- [x] `EdgeRef` / names / `Edges()` introspection; synthesis naming stub
+- [x] `AddTuningPolicy` (ordered), resolution precedence chain (§5)
+- [x] `Graph::Tune()`; `PreparedQuery::SetFlowControl/SetSpillPolicy/ScaleFlowControl`
+- [x] Holder thresholds → atomics + `NotifySaturationWaiters()` re-wake
+- [x] `SetMaxInFlightTasks` reserved (returns Invalid until phase 3)
+- [x] Flagship tests: precedence, policy ordering, live re-wake, re-Prepare independence
+- [x] REVIEW GATE
 
 ---
 
@@ -94,6 +108,23 @@ Phase 2 semantics). Commits `d6685aa` + hardening `a65e447`.
 
 ## Review log
 
+### 2026-07-09 — Stage D5 runtime tuning + soft knobs
+Landed Phase 2.5 D5 against [graph-builder-dsl.md](../docs/dev/graph-builder-dsl.md) §5–§7.
+- `EdgeRef`/`EdgeInfo`, `Graph::Edges()` (Built), `PreparedQuery::Edges()` (resolved);
+  `Named()` propagated onto `Graph::EdgeSpec`.
+- `AddTuningPolicy` ordered chain + `Graph::Tune` / `EdgeTuner`; Prepare order is
+  synthesize → resolve (non-mutating Built specs) → materialize → MetaPipeline.
+- Live soft knobs on `PreparedQuery`; holder FC thresholds / auto_spill are atomics
+  with `NotifySaturationWaiters()` (+ phase-3 re-eval comment).
+- `SetMaxInFlightTasks` returns Invalid ("reserved until phase 3").
+- Scorecard Phase 2.5 row marked ☑ in `sirius-replication-plan.md`.
+- Tests: `test_runtime_tuning` **7/7 PASS** (PolicyOrdering, RePrepareIndependence,
+  LiveSetFlowControlReleasesBlockedProducer, ScaleFlowControlHalvesAllEdges,
+  SetMaxInFlightTasksReturnsInvalid, NamedEdgeTuneAndEdgesIntrospection,
+  SpillPolicyNeverMapsToAutoSpillFalse). Regression: prepared_query, graph_builder,
+  graph, batch_holder, barrier_config, meta_pipeline, pipeline_executor, graph_bridge,
+  walkthrough, execution_parity — all green.
+
 ### 2026-07-09 — Phase 1 independent review (review session; P1+P4 fixed, folded into the Phase 1 commit)
 Second-session review of the staged Phase 1 diff against the replication plan, focused on
 Phase 1 ⇄ Phase 2 integration. Verdict: the pipeline engine needed NO changes — all fixes are
@@ -126,4 +157,4 @@ Suite: **530 passed / 0 failed / 1 skipped**.
   PipelineExecutor edits.
 - Suite: all existing binaries green + 5 new `test_graph_bridge` tests; arithmetic
   `CreatePhysicalExpr` tests green. (CMake `gtest_discover_tests` 5s timeouts remain flaky
-  under load — run binaries directly.)
+  under load — run binaries directly).

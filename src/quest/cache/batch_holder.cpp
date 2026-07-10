@@ -13,7 +13,10 @@ BatchHolderBase::BatchHolderBase(std::uint64_t id, BatchHolderConfig config,
     : id_(id),
       config_(config),
       queue_(QueueConfig{.timeout = config_.timeout}),
-      memory_manager_(std::move(memory_manager)) {}
+      memory_manager_(std::move(memory_manager)),
+      flow_control_batches_threshold_(config.flow_control_batches_threshold),
+      flow_control_bytes_threshold_(config.flow_control_bytes_threshold),
+      auto_spill_(config.auto_spill) {}
 
 void BatchHolderBase::Finish() {
   queue_.Finish();
@@ -33,11 +36,24 @@ void BatchHolderBase::NotifySaturationWaiters() {
     std::lock_guard lock(saturation_mutex_);
   }
   saturation_cv_.notify_all();
+  // Phase 3: after Notify, also post a task-re-evaluation event to the
+  // task creator/scheduler so WAITING producers are re-armed without relying
+  // on an unrelated completion (today nobody blocks once phase 3 lands).
+}
+
+void BatchHolderBase::SetFlowControl(std::size_t max_batches, std::size_t max_bytes) {
+  flow_control_batches_threshold_.store(max_batches, std::memory_order_release);
+  flow_control_bytes_threshold_.store(max_bytes, std::memory_order_release);
+  NotifySaturationWaiters();
+}
+
+void BatchHolderBase::SetSpillPolicy(bool enable_auto_spill) {
+  auto_spill_.store(enable_auto_spill, std::memory_order_release);
 }
 
 void BatchHolderBase::TrackAdded(std::size_t bytes, std::size_t rows) {
-  bytes_added_.fetch_add(bytes);
-  rows_added_.fetch_add(rows);
+  bytes_added_.fetch_add(bytes, std::memory_order_relaxed);
+  rows_added_.fetch_add(rows, std::memory_order_relaxed);
 }
 
 // =============================================================================
@@ -57,7 +73,7 @@ Status BatchHolder::Add(DataBlockPtr data) {
   auto rows = data->num_rows();
 
   // Check for spilling if auto_spill is enabled
-  if (config_.auto_spill && memory_manager_) {
+  if (ShouldAutoSpill() && memory_manager_) {
     auto status = MaybeSpill(data);
     if (!status.ok()) {
       return status;
@@ -103,13 +119,13 @@ void BatchHolder::WaitIfSaturated() {
       return true;  // Don't block if finished
     }
 
-    // Check batch count threshold
-    if (queue_.BatchesCount() >= config_.flow_control_batches_threshold) {
+    // Check batch count threshold (live atomic)
+    if (queue_.BatchesCount() >= FlowControlBatches()) {
       return false;
     }
 
-    // Check bytes threshold
-    if (current_bytes_.load() >= config_.flow_control_bytes_threshold) {
+    // Check bytes threshold (live atomic)
+    if (current_bytes_.load(std::memory_order_acquire) >= FlowControlBytes()) {
       return false;
     }
 
@@ -193,7 +209,7 @@ void ConcatenatingBatchHolder::WaitIfSaturated() {
     if (queue_.IsFinished()) {
       return true;
     }
-    return queue_.BatchesCount() < config_.flow_control_batches_threshold;
+    return queue_.BatchesCount() < FlowControlBatches();
   });
 }
 

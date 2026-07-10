@@ -10,7 +10,7 @@
 
 #include <gtest/gtest.h>
 
-#include "quest/taskflow/kpair.hpp"
+#include "quest/taskflow/edge_config.hpp"
 #include "quest/taskflow/operator.hpp"
 #include "quest/taskflow/operator_type.hpp"
 
@@ -61,7 +61,7 @@ TEST(BarrierConfigTest, BarrierToString) {
 }
 
 // =============================================================================
-// DSL round-trip: the KPair must carry the barrier to the graph
+// Blocking-operator classification
 // =============================================================================
 
 class NoOpOperator : public Operator {
@@ -76,37 +76,6 @@ class NoOpOperator : public Operator {
     return true;
   }
 };
-
-TEST(BarrierConfigTest, LinkCarriesFullBarrierThroughKPair) {
-  NoOpOperator source{0, OperatorType::TableScan};
-  NoOpOperator sink{1, OperatorType::ComputeAggregate};
-
-  const KPair edge = link(source, sink, EdgeConfig::Concatenating());
-  EXPECT_EQ(edge.config().barrier, BarrierType::Full);
-  EXPECT_EQ(edge.config().type, cache::BatchHolderType::kConcatenating);
-}
-
-TEST(BarrierConfigTest, ShiftOperatorDefaultsToPipelineBarrier) {
-  NoOpOperator source{0, OperatorType::TableScan};
-  NoOpOperator sink{1, OperatorType::Filter};
-
-  const KPair edge = source >> sink;
-  EXPECT_EQ(edge.config().barrier, BarrierType::Pipeline);
-}
-
-TEST(BarrierConfigTest, LinkToNamedPortCarriesBarrier) {
-  NoOpOperator source{0, OperatorType::TableScan};
-  NoOpOperator join{1, OperatorType::PartwiseJoin};
-
-  const KPair edge = link(source, join["build"],
-                          EdgeConfig::Simple().with_barrier(BarrierType::Full));
-  EXPECT_EQ(edge.config().barrier, BarrierType::Full);
-  EXPECT_EQ(edge.destination_port(), "build");
-}
-
-// =============================================================================
-// Blocking-operator classification
-// =============================================================================
 
 TEST(BlockingOperatorTest, BlockingTypes) {
   EXPECT_TRUE(is_blocking_operator(OperatorType::ComputeAggregate));

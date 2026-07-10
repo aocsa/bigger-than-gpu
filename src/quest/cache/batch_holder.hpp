@@ -10,9 +10,13 @@
 ///          exhausted.
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <string_view>
 
@@ -87,6 +91,26 @@ class IBatchHolder {
 
   /// @brief Wait until the holder is not saturated (for flow control)
   virtual void WaitIfSaturated() = 0;
+
+  /// @brief Live-update flow-control thresholds and wake blocked producers.
+  ///
+  /// Today this unblocks threads in WaitIfSaturated() via NotifySaturationWaiters.
+  /// Phase 3: after Notify, also post a task-re-evaluation event to the creator
+  /// so WAITING producers are re-armed without an unrelated completion.
+  virtual void SetFlowControl(std::size_t max_batches, std::size_t max_bytes) = 0;
+
+  /// @brief Live-update spill eligibility. Never → auto_spill=false;
+  ///        Eligible/First → auto_spill=true (phase 5 will use richer semantics).
+  virtual void SetSpillPolicy(bool auto_spill) = 0;
+
+  /// @brief Current batch-count flow-control threshold (live-readable).
+  [[nodiscard]] virtual std::size_t flow_control_batches_threshold() const noexcept = 0;
+
+  /// @brief Current byte-count flow-control threshold (live-readable).
+  [[nodiscard]] virtual std::size_t flow_control_bytes_threshold() const noexcept = 0;
+
+  /// @brief Whether auto-spill on Add is enabled (maps from SpillPolicy today).
+  [[nodiscard]] virtual bool auto_spill() const noexcept = 0;
 };
 
 // =============================================================================
@@ -114,10 +138,23 @@ class BatchHolderBase : public IBatchHolder {
   [[nodiscard]] bool IsFinished() const override;
   [[nodiscard]] std::size_t batch_count() const override;
   [[nodiscard]] std::size_t bytes_added() const noexcept override {
-    return bytes_added_.load();
+    return bytes_added_.load(std::memory_order_relaxed);
   }
   [[nodiscard]] std::size_t rows_added() const noexcept override {
-    return rows_added_.load();
+    return rows_added_.load(std::memory_order_relaxed);
+  }
+
+  void SetFlowControl(std::size_t max_batches, std::size_t max_bytes) override;
+  void SetSpillPolicy(bool enable_auto_spill) override;
+
+  [[nodiscard]] std::size_t flow_control_batches_threshold() const noexcept override {
+    return flow_control_batches_threshold_.load(std::memory_order_acquire);
+  }
+  [[nodiscard]] std::size_t flow_control_bytes_threshold() const noexcept override {
+    return flow_control_bytes_threshold_.load(std::memory_order_acquire);
+  }
+  [[nodiscard]] bool auto_spill() const noexcept override {
+    return auto_spill_.load(std::memory_order_acquire);
   }
 
  protected:
@@ -127,13 +164,35 @@ class BatchHolderBase : public IBatchHolder {
   /// @brief Track bytes and rows added
   void TrackAdded(std::size_t bytes, std::size_t rows);
 
+  /// @brief Whether Add() should attempt spilling (reads live auto_spill_).
+  [[nodiscard]] bool ShouldAutoSpill() const noexcept {
+    return auto_spill_.load(std::memory_order_acquire);
+  }
+
+  /// @brief Live batch-count threshold used by WaitIfSaturated.
+  [[nodiscard]] std::size_t FlowControlBatches() const noexcept {
+    return flow_control_batches_threshold_.load(std::memory_order_acquire);
+  }
+
+  /// @brief Live byte-count threshold used by WaitIfSaturated.
+  [[nodiscard]] std::size_t FlowControlBytes() const noexcept {
+    return flow_control_bytes_threshold_.load(std::memory_order_acquire);
+  }
+
   std::uint64_t id_;
-  BatchHolderConfig config_;
+  BatchHolderConfig config_;  ///< Construction-time values (timeout); FC/spill live below.
   BlockingQueue<DataBlockPtr> queue_;
   std::shared_ptr<memory::MemoryResourceManager> memory_manager_;
 
   std::atomic<std::size_t> bytes_added_{0};
   std::atomic<std::size_t> rows_added_{0};
+
+  /// Live soft knobs — updated by SetFlowControl / SetSpillPolicy (Phase 2.5 D5).
+  std::atomic<std::size_t> flow_control_batches_threshold_{
+      std::numeric_limits<std::size_t>::max()};
+  std::atomic<std::size_t> flow_control_bytes_threshold_{
+      std::numeric_limits<std::size_t>::max()};
+  std::atomic<bool> auto_spill_{true};
 
   mutable std::mutex saturation_mutex_;
   std::condition_variable saturation_cv_;
