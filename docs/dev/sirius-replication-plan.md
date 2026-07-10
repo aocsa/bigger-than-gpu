@@ -34,7 +34,7 @@ reservations (5 after 4), out-of-core joins need downgrade for their flagship (6
 
 ## Where QUEST stands (status snapshot, 2026-07-09, post-2.7)
 
-Phases 1, 2, 2.5, 2.6, and 2.7 are landed (606 tests green, 1 skipped; through commit `5179bcf`):
+Phases 1, 2, 2.5, 2.6, and 2.7 are landed (606 tests green, 1 skipped; phase 2.7 commits `cd3560a..d9e7b1f`):
 
 - **The two-engines gap is closed.** `QueryBuilder::ExecuteOnGraph()` → `CreateGraph` gate
   (error = fallback to the callback engine) → `MetaPipeline::Build` → `PipelineExecutor`.
