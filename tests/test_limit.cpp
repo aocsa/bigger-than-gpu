@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -19,6 +20,8 @@
 #include "quest/physical_plan/physical_plan.hpp"
 #include "quest/taskflow/meta_pipeline.hpp"
 #include "quest/taskflow/operators/limit_operator.hpp"
+#include "quest/taskflow/pipeline.hpp"
+#include "quest/taskflow/pipeline_executor.hpp"
 #include "quest/tests/utils.hpp"
 
 using namespace quest;
@@ -42,7 +45,7 @@ namespace {
   return total;
 }
 
-/// @brief Stub physical source that emits a fixed list of batches.
+/// @brief Stub physical source that emits a fixed list of batches (one-shot).
 class VectorSourceExec : public PhysicalPlan {
  public:
   VectorSourceExec(Schema schema, std::vector<RecordBatch> batches)
@@ -54,7 +57,9 @@ class VectorSourceExec : public PhysicalPlan {
 
   [[nodiscard]] Status Execute(const ResultCallback& callback) override {
     for (auto& batch : batches_) {
-      callback(std::move(batch));
+      if (!callback(std::move(batch))) {
+        break;
+      }
     }
     batches_.clear();
     return Status::OK();
@@ -65,6 +70,97 @@ class VectorSourceExec : public PhysicalPlan {
  private:
   Schema schema_;
   std::vector<RecordBatch> batches_;
+};
+
+/// @brief Physical source that regenerates fixed-size batches and counts yields.
+///
+/// Used to prove LimitExec early-stop (yield count) and re-Execute (remaining_ reset).
+class CountingBatchSourceExec : public PhysicalPlan {
+ public:
+  CountingBatchSourceExec(Schema schema, std::size_t batch_count, std::size_t rows_per_batch)
+      : schema_(std::move(schema)),
+        batch_count_(batch_count),
+        rows_per_batch_(rows_per_batch) {}
+
+  [[nodiscard]] Schema schema() const override { return schema_; }
+
+  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override { return {}; }
+
+  [[nodiscard]] std::size_t yield_count() const noexcept { return yield_count_; }
+
+  [[nodiscard]] Status Execute(const ResultCallback& callback) override {
+    for (std::size_t i = 0; i < batch_count_; ++i) {
+      ++yield_count_;
+      if (!callback(MakeTestRecordBatch(rows_per_batch_))) {
+        break;
+      }
+    }
+    return Status::OK();
+  }
+
+  [[nodiscard]] std::string ToString() const override { return "CountingBatchSourceExec"; }
+
+ private:
+  Schema schema_;
+  std::size_t batch_count_;
+  std::size_t rows_per_batch_;
+  std::size_t yield_count_{0};
+};
+
+/// @brief Graph source that counts GetNextBatch calls.
+class CountingVectorSource : public Operator {
+ public:
+  CountingVectorSource(std::uint32_t id, std::size_t batch_count, std::size_t rows_per_batch)
+      : Operator(id, "counting_vector_source", OperatorType::TableScan),
+        remaining_(batch_count),
+        rows_per_batch_(rows_per_batch) {}
+
+  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
+  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
+  [[nodiscard]] bool IsSource() const noexcept override { return true; }
+
+  [[nodiscard]] std::size_t get_next_batch_calls() const noexcept {
+    return get_next_batch_calls_.load(std::memory_order_relaxed);
+  }
+
+  [[nodiscard]] Result<std::optional<cache::DataBlockPtr>> GetNextBatch() override {
+    get_next_batch_calls_.fetch_add(1, std::memory_order_relaxed);
+    if (remaining_ == 0) {
+      return std::optional<cache::DataBlockPtr>{std::nullopt};
+    }
+    --remaining_;
+    return std::optional<cache::DataBlockPtr>{std::make_shared<cache::HostMemoryBlock>(
+        "b" + std::to_string(remaining_), MakeTestRecordBatch(rows_per_batch_))};
+  }
+
+ private:
+  std::size_t remaining_;
+  std::size_t rows_per_batch_;
+  std::atomic<std::size_t> get_next_batch_calls_{0};
+};
+
+/// @brief Collecting sink for pipeline early-stop tests.
+class CollectingSink : public Operator {
+ public:
+  explicit CollectingSink(std::uint32_t id)
+      : Operator(id, "collecting_sink", OperatorType::Filter) {}
+
+  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
+  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
+  [[nodiscard]] bool IsSink() const noexcept override { return true; }
+
+  [[nodiscard]] Status Sink(cache::DataBlockPtr batch) override {
+    total_rows_ += batch->num_rows();
+    ++batch_count_;
+    return Status::OK();
+  }
+
+  [[nodiscard]] std::size_t total_rows() const noexcept { return total_rows_; }
+  [[nodiscard]] std::size_t batch_count() const noexcept { return batch_count_; }
+
+ private:
+  std::size_t total_rows_{0};
+  std::size_t batch_count_{0};
 };
 
 }  // namespace
@@ -114,6 +210,7 @@ TEST(LimitOperatorTest, ExactBoundaryPassesThrough) {
   ASSERT_NE(out, nullptr);
   EXPECT_EQ(out->num_rows(), 5U);
   EXPECT_EQ(op.remaining(), 0U);
+  EXPECT_TRUE(op.ShouldStopSource());
 }
 
 TEST(LimitOperatorTest, TruncatesMidBatch) {
@@ -124,11 +221,13 @@ TEST(LimitOperatorTest, TruncatesMidBatch) {
   ASSERT_NE(out, nullptr);
   EXPECT_EQ(out->num_rows(), 3U);
   EXPECT_EQ(op.remaining(), 0U);
+  EXPECT_TRUE(op.ShouldStopSource());
 }
 
 TEST(LimitOperatorTest, LimitZeroEmitsEmpty) {
   LimitOperator op{1, 0};
   Operator& role = op;
+  EXPECT_TRUE(op.ShouldStopSource());
   auto block = std::make_shared<cache::HostMemoryBlock>("in", MakeTestRecordBatch(5));
   ASSERT_OK_AND_ASSIGN(auto out, role.ProcessBatch(std::move(block)));
   ASSERT_NE(out, nullptr);
@@ -143,6 +242,7 @@ TEST(LimitOperatorTest, LimitExceedsRowsPassesThrough) {
   ASSERT_NE(out, nullptr);
   EXPECT_EQ(out->num_rows(), 7U);
   EXPECT_EQ(op.remaining(), 93U);
+  EXPECT_FALSE(op.ShouldStopSource());
 }
 
 TEST(LimitOperatorTest, ExhaustedSubsequentBatchesEmpty) {
@@ -151,6 +251,7 @@ TEST(LimitOperatorTest, ExhaustedSubsequentBatchesEmpty) {
   auto first = std::make_shared<cache::HostMemoryBlock>("a", MakeTestRecordBatch(5));
   ASSERT_OK_AND_ASSIGN(auto out1, role.ProcessBatch(std::move(first)));
   EXPECT_EQ(out1->num_rows(), 2U);
+  EXPECT_TRUE(op.ShouldStopSource());
 
   auto second = std::make_shared<cache::HostMemoryBlock>("b", MakeTestRecordBatch(5));
   ASSERT_OK_AND_ASSIGN(auto out2, role.ProcessBatch(std::move(second)));
@@ -186,7 +287,10 @@ TEST(LimitPlanTest, LimitExecCollectsFirstN) {
   LimitExec limit(std::move(input), 4);
 
   std::size_t total = 0;
-  ASSERT_OK(limit.Execute([&](RecordBatch b) { total += b.num_rows(); }));
+  ASSERT_OK(limit.Execute([&](RecordBatch b) {
+    total += b.num_rows();
+    return true;
+  }));
   EXPECT_EQ(total, 4U);
   EXPECT_EQ(limit.ToString(), "LimitExec(4)");
 }
@@ -202,6 +306,75 @@ TEST(LimitPlanTest, CreatePhysicalPlanBuildsLimitExec) {
   ASSERT_OK_AND_ASSIGN(auto physical, CreatePhysicalPlan(*plan));
   EXPECT_NE(dynamic_cast<LimitExec*>(physical.get()), nullptr);
   EXPECT_EQ(physical->ToString(), "LimitExec(5)");
+}
+
+TEST(LimitPlanTest, LimitExecStopsUpstreamAfterLimit) {
+  // 10 batches of 3 rows; Limit(4) needs only 2 batches (3+1), not all 10.
+  auto schema = MakeTestRecordBatch(1).schema();
+  auto source =
+      std::make_unique<CountingBatchSourceExec>(schema, /*batch_count=*/10,
+                                                /*rows_per_batch=*/3);
+  CountingBatchSourceExec* observer = source.get();
+  LimitExec limit(std::move(source), 4);
+
+  std::size_t total = 0;
+  ASSERT_OK(limit.Execute([&](RecordBatch b) {
+    total += b.num_rows();
+    return true;
+  }));
+  EXPECT_EQ(total, 4U);
+  EXPECT_EQ(observer->yield_count(), 2U);
+}
+
+TEST(LimitPlanTest, LimitExecReExecuteResetsRemaining) {
+  auto schema = MakeTestRecordBatch(1).schema();
+  auto source = std::make_unique<CountingBatchSourceExec>(schema, /*batch_count=*/5,
+                                                          /*rows_per_batch=*/3);
+  LimitExec limit(std::move(source), 4);
+
+  auto collect = [&]() -> std::size_t {
+    std::size_t total = 0;
+    EXPECT_TRUE(limit
+                    .Execute([&](RecordBatch b) {
+                      total += b.num_rows();
+                      return true;
+                    })
+                    .has_value());
+    return total;
+  };
+
+  EXPECT_EQ(collect(), 4U);
+  EXPECT_EQ(collect(), 4U);
+}
+
+// =============================================================================
+// Graph early-stop (ShouldStopSource)
+// =============================================================================
+
+TEST(LimitOperatorTest, PipelineStopsClaimingAfterLimit) {
+  // 10 batches of 3 rows available; Limit(4) should claim only 2 source batches
+  // (+ possibly one EOS check is not done because we break before next claim).
+  CountingVectorSource source{0, /*batch_count=*/10, /*rows_per_batch=*/3};
+  LimitOperator limit{1, 4};
+  CollectingSink sink{2};
+
+  auto pipeline = std::make_unique<Pipeline>(0);
+  pipeline->PrependOperator(&sink);
+  pipeline->PrependOperator(&limit);
+  pipeline->PrependOperator(&source);
+
+  std::vector<PipelinePtr> pipelines;
+  pipelines.push_back(std::move(pipeline));
+
+  PipelineExecutor executor{1};
+  ASSERT_OK(executor.Execute(std::move(pipelines)));
+
+  EXPECT_EQ(sink.total_rows(), 4U);
+  EXPECT_EQ(limit.remaining(), 0U);
+  EXPECT_TRUE(limit.ShouldStopSource());
+  // Two successful claims (3+1 rows), then ShouldStopSource breaks before a
+  // third GetNextBatch. No EOS claim.
+  EXPECT_EQ(source.get_next_batch_calls(), 2U);
 }
 
 // =============================================================================

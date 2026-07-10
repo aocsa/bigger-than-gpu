@@ -111,6 +111,7 @@ int main(int argc, char* argv[]) {
   status = physical_plan->Execute([&batch_num](RecordBatch batch) {
     std::cout << "Batch " << batch_num++ << ":\n";
     std::cout << batch.ToString() << "\n";
+    return true;
   });
 
   if (!status.ok()) {

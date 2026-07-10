@@ -7,8 +7,9 @@
 /// @file limit_operator.hpp
 /// @brief Streaming Limit that truncates the pipeline to the first N rows.
 ///
-/// v1 truncates downstream via an atomic remaining-rows claim; true source
-/// cancellation (stop the scan early) is a phase-3 concern.
+/// When remaining hits 0, ShouldStopSource() becomes true so the pipeline
+/// drain loop stops claiming further source batches (single-pipeline early
+/// stop). Cross-pipeline / multi-barrier cancellation is out of scope.
 
 #include <algorithm>
 #include <atomic>
@@ -28,8 +29,8 @@ namespace quest::taskflow {
 /// @brief Streaming limit: claim rows from an atomic remaining counter.
 ///
 /// After remaining hits 0, subsequent ProcessBatch calls return empty
-/// HostMemoryBlocks so the pipeline continues until source EOS (no early
-/// source cancellation in v1).
+/// HostMemoryBlocks, and ShouldStopSource() is true so PipelineExecutor
+/// stops claiming further source batches in this pipeline.
 class LimitOperator : public SimpleOperator {
  public:
   /// @param memory_manager Stamped onto output blocks so they stay visible
@@ -45,6 +46,11 @@ class LimitOperator : public SimpleOperator {
   /// @brief Rows still available to claim (for tests / introspection).
   [[nodiscard]] std::size_t remaining() const noexcept {
     return remaining_.load(std::memory_order_relaxed);
+  }
+
+  /// @brief Stop further source claims once the limit is satisfied.
+  [[nodiscard]] bool ShouldStopSource() const noexcept override {
+    return remaining_.load(std::memory_order_relaxed) == 0;
   }
 
  protected:

@@ -33,18 +33,27 @@ accessors + gate translation + tests via `/new-node` & `/new-op`.
 - [x] Gate translation in `CreateGraph`; **retire the hardcoded-1000
       `OptimizeScanWithLimit` hack** (deleted — unused; LimitOperator handles
       truncation; scan pushdown deferred)
-- [x] Early-termination note: v1 truncates downstream (correct, not optimal); true
-      source cancellation is a phase-3 concern (task admission) — documented on
-      `LimitOperator`
+- [x] Early termination (adversarial-review fixes):
+      - Physical: `ResultCallback` returns `bool`; `ScanExec` breaks on false;
+        `LimitExec` returns false once remaining hits 0 (stops upstream I/O)
+      - Physical: `remaining_ = limit_` at start of each `Execute()` (re-Execute safe)
+      - Graph: `Operator::ShouldStopSource()` + `LimitOperator` when remaining==0;
+        `PipelineExecutor::DrainPipeline` breaks the claim loop (single-pipeline)
 - [x] Tests: unit truncation incl. exact-boundary batch; e2e
       `FromParquet(...).Limit(n).ExecuteOnGraph()` == first n rows of the oracle;
-      Limit(0); Limit > total rows (`tests/test_limit.cpp`, 16 tests green)
+      Limit(0); Limit > total rows; physical early-stop yield count; re-Execute;
+      pipeline ShouldStopSource claim count (`tests/test_limit.cpp`)
 - [ ] REVIEW GATE
 
 **F1 review log:** End-to-end Limit landed — logical/physical/graph + fluent API;
 `OptimizeScanWithLimit` + `kDefaultOptimizedLimitRows` deleted (never called);
 `TruncateRecordBatch` shared by LimitExec/LimitOperator; empty batches after
 exhaustion (pipeline short-circuits like Filter).
+
+**Adversarial-review fixes landed:** (1) LIMIT stops upstream scan via bool
+`ResultCallback` + `ShouldStopSource` pipeline break; (2) `LimitExec::remaining_`
+reset at each `Execute()`. Residual: multi-pipeline / cross-barrier source
+cancellation still out of scope (single-pipeline drain only).
 
 ## Stage F2 — Union (first real multi-input streaming operator)
 - [ ] ENGINE PREREQ: generalize the executor's claim path from numeric lanes to

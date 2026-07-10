@@ -127,7 +127,11 @@ class QueryBuilder {
     if (!physical_result) {
       return std::unexpected(physical_result.error());
     }
-    return physical_result.value()->Execute(std::forward<F>(callback));
+    return physical_result.value()->Execute(
+        [&callback](datasource::RecordBatch batch) {
+          std::forward<F>(callback)(std::move(batch));
+          return true;
+        });
   }
 
   /// @brief Execute with early termination support (callback returns bool).
@@ -142,13 +146,13 @@ class QueryBuilder {
     }
 
     bool cancelled = false;
-    auto status =
-        physical_result.value()->Execute([&callback, &cancelled](datasource::RecordBatch batch) {
-          if (!cancelled) {
-            if (!std::forward<F>(callback)(std::move(batch))) {
-              cancelled = true;
-            }
+    auto status = physical_result.value()->Execute(
+        [&callback, &cancelled](datasource::RecordBatch batch) {
+          if (!std::forward<F>(callback)(std::move(batch))) {
+            cancelled = true;
+            return false;  // Stop Scan — do not drain remaining batches.
           }
+          return true;
         });
 
     if (cancelled) {
@@ -167,7 +171,10 @@ class QueryBuilder {
       return std::unexpected(physical_result.error());
     }
     auto status = physical_result.value()->Execute(
-        [&results](datasource::RecordBatch batch) { results.push_back(std::move(batch)); });
+        [&results](datasource::RecordBatch batch) {
+          results.push_back(std::move(batch));
+          return true;
+        });
     if (!status) {
       return std::unexpected(status.error());
     }
@@ -204,7 +211,10 @@ class QueryBuilder {
       return std::unexpected(graph_result.error());
     }
     auto status = physical_result.value()->Execute(
-        [&results](datasource::RecordBatch batch) { results.push_back(std::move(batch)); });
+        [&results](datasource::RecordBatch batch) {
+          results.push_back(std::move(batch));
+          return true;
+        });
     if (!status) {
       return std::unexpected(status.error());
     }

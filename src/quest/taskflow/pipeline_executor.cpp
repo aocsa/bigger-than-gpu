@@ -211,6 +211,21 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
   std::size_t lane_cursor = 0;
 
   while (true) {
+    // Single-pipeline early stop (e.g. Limit remaining == 0): do not claim
+    // further source batches. Checked before each claim so Limit(0) never
+    // pulls. FinishOnExit still finishes sink outputs.
+    // Multi-pipeline / cross-barrier cancellation is out of scope.
+    bool stop_source = false;
+    for (const Operator* op : pipeline.operators()) {
+      if (op != nullptr && op->ShouldStopSource()) {
+        stop_source = true;
+        break;
+      }
+    }
+    if (stop_source) {
+      break;
+    }
+
     std::optional<cache::DataBlockPtr> batch;
     {
       // Load-bearing (plan §2.5): claim input -> construct task ->

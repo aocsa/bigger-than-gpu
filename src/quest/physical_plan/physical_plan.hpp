@@ -34,7 +34,10 @@ using datasource::RecordBatch;
 using datasource::Schema;
 
 /// @brief Callback for streaming batch results.
-using ResultCallback = std::function<void(RecordBatch)>;
+///
+/// Return `true` to continue producing batches; `false` to stop early
+/// (e.g. Limit satisfied, or ExecuteWithControl cancellation).
+using ResultCallback = std::function<bool(RecordBatch)>;
 
 // =============================================================================
 // Abstract Base Class
@@ -49,7 +52,7 @@ class PhysicalPlan {
   [[nodiscard]] virtual Schema schema() const = 0;
 
   /// @brief Executes the plan and calls the callback for each result batch.
-  /// @param callback The callback to invoke for each batch.
+  /// @param callback Invoked per batch; return false to stop producing.
   /// @return Status indicating success or failure.
   [[nodiscard]] virtual Status Execute(const ResultCallback& callback) = 0;
 
@@ -109,7 +112,9 @@ class ScanExec : public PhysicalPlan {
       if (!batch_result) {
         return std::unexpected(batch_result.error());
       }
-      callback(std::move(*batch_result));
+      if (!callback(std::move(*batch_result))) {
+        break;  // Early terminate — do not read further batches.
+      }
     }
     return Status::OK();
   }
@@ -156,8 +161,9 @@ class SelectionExec : public PhysicalPlan {
     return input_->Execute([this, &callback](RecordBatch batch) {
       auto filtered_result = FilterBatch(batch);
       if (filtered_result.has_value() && filtered_result.value().num_rows() > 0) {
-        callback(std::move(filtered_result.value()));
+        return callback(std::move(filtered_result.value()));
       }
+      return true;  // Keep scanning (empty / filter error skip).
     });
   }
 
@@ -334,8 +340,9 @@ class ProjectionExec : public PhysicalPlan {
         }
       }
       if (columns.size() == expressions_.size()) {
-        callback(RecordBatch(schema_, std::move(columns)));
+        return callback(RecordBatch(schema_, std::move(columns)));
       }
+      return true;  // Skip bad batch; keep scanning.
     });
   }
 
@@ -375,23 +382,30 @@ class LimitExec : public PhysicalPlan {
   }
 
   [[nodiscard]] Status Execute(const ResultCallback& callback) override {
-    return input_->Execute([this, &callback](RecordBatch batch) {
+    remaining_ = limit_;
+    if (remaining_ == 0) {
+      return Status::OK();  // Nothing to emit; do not touch upstream.
+    }
+    return input_->Execute([this, &callback](RecordBatch batch) -> bool {
       if (remaining_ == 0) {
-        return;
+        return false;  // Stop upstream scan.
       }
       if (batch.num_rows() <= remaining_) {
         remaining_ -= batch.num_rows();
-        callback(std::move(batch));
-        return;
+        if (!callback(std::move(batch))) {
+          return false;
+        }
+        return remaining_ > 0;
       }
       auto truncated = execution::TruncateRecordBatch(batch, remaining_);
       if (!truncated.has_value()) {
-        return;
+        return true;  // Skip bad batch; keep scanning.
       }
       remaining_ = 0;
       if (truncated->num_rows() > 0) {
-        callback(std::move(*truncated));
+        (void)callback(std::move(*truncated));
       }
+      return false;  // Limit exhausted — stop upstream.
     });
   }
 

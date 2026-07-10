@@ -224,6 +224,13 @@ class Operator {
     return is_source_operator(operator_type_);
   }
 
+  /// @brief When true, the pipeline drain loop stops claiming further source
+  ///        batches after the current RunTask (single-pipeline early stop).
+  ///
+  /// Default false. LimitOperator returns true once remaining rows hit 0.
+  /// Multi-pipeline / cross-barrier cancellation is out of scope here.
+  [[nodiscard]] virtual bool ShouldStopSource() const noexcept { return false; }
+
   /// @brief Produces the next batch from this source (the source role).
   ///
   /// End-of-stream is a value, not an error: an exhausted source returns

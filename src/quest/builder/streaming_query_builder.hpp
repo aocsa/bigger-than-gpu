@@ -147,6 +147,7 @@ class StreamingQueryBuilder {
     auto status = physical_plan->Execute(
         [&batches](datasource::RecordBatch batch) {
           batches.push_back(std::move(batch));
+          return true;
         });
 
     if (!status) {
