@@ -104,14 +104,18 @@ pass-through batches keep them. Suite: 585 passed / 0 failed / 1 skipped.
       assertion ([bindable_scan, limit], the fold applies under Limit)
 - [x] REVIEW GATE: build clean, 601 passed / 0 failed / 1 skipped
 
-## Stage F4 — Print + Generate (utilities)
-- [ ] `GenerateOperator`: configurable synthetic source (row count, batch size,
-      schema) with the source role — replaces ad-hoc test VectorSources over time
-- [ ] `PrintOperator`: pass-through debug sink (`RecordBatch::ToCSV` to an
-      injectable ostream), `IsSink() = true`
-- [ ] Tests: Generate feeds a full pipeline; Print captures expected CSV
-- [ ] Update replication-plan scorecard (2.7 flagship proofs) + catalog checkmarks
-- [ ] REVIEW GATE
+## Stage F4 — Print + Generate (utilities) ✅
+- [x] `GenerateOperator`: configurable synthetic source (batch_count, rows_per_batch,
+      num_columns int32) with the source role (`GetNextBatch`) — replaces ad-hoc
+      VectorSources; deterministic values so moved rows are recoverable
+- [x] `PrintOperator`: terminal debug sink (`IsSink() = true`) writing each batch's
+      `RecordBatch::ToCSV()` to an injectable `std::ostream&` (tests capture it)
+- [x] Tests (`tests/test_generate_print.cpp`, 5): Generate emits configured batches
+      then EOS; multi-column schema; Print captures CSV + ignores empty; Generate→
+      Print pipeline through the executor (12 rows)
+- [x] Updated replication-plan scorecard (2.7 ☑) + catalog checkmarks (all five
+      simple kernels done); status snapshot "9 of 19 operators"
+- [x] REVIEW GATE: build clean, 606 passed / 0 failed / 1 skipped
 
 **Out of scope (stays where it is):** heavy decomposed kernels (phase 6:
 ComputeAggregate/MergeAggregate, SortAndSample/PartitionSingleNode/MergeStream,

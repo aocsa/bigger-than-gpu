@@ -18,7 +18,7 @@ knowledge-transfer page for the ancestor engine (`/Users/aocsa/git/blazingsql`).
 
 ## Implementation order
 
-**1 ✅ → 2 ✅ → 2.5 ✅ (DSL) → 2.6 ✅ (BlazingSQL edge parity) → 2.7 (single-node operator catalog, new) → 3 → 4 → 5 → 6 → 7 → 8.**
+**1 ✅ → 2 ✅ → 2.5 ✅ (DSL) → 2.6 ✅ (BlazingSQL edge parity) → 2.7 ✅ (single-node operator catalog) → 3 → 4 → 5 → 6 → 7 → 8.**
 
 Phase 2.5 (GraphBuilder DSL + `PreparedQuery` lifecycle + runtime tuning,
 [graph-builder-dsl.md](graph-builder-dsl.md)) was inserted after phases 1+2 landed. It goes
@@ -32,9 +32,9 @@ reservations (5 after 4), out-of-core joins need downgrade for their flagship (6
 7 and 8 are orthogonal tails. Phases 4/5/6 each consume something 2.5 provides
 (`Prepare(stats, hw)`; `SpillPolicy`; port contracts + `PartitionedUpTo` + the synthesis hook).
 
-## Where QUEST stands (status snapshot, 2026-07-09, post-2.6)
+## Where QUEST stands (status snapshot, 2026-07-09, post-2.7)
 
-Phases 1, 2, 2.5, and 2.6 are landed (568/568 tests green; commits `b789943..62bdf5b`):
+Phases 1, 2, 2.5, 2.6, and 2.7 are landed (606 tests green, 1 skipped; through commit `5179bcf`):
 
 - **The two-engines gap is closed.** `QueryBuilder::ExecuteOnGraph()` → `CreateGraph` gate
   (error = fallback to the callback engine) → `MetaPipeline::Build` → `PipelineExecutor`.
@@ -48,9 +48,10 @@ Phases 1, 2, 2.5, and 2.6 are landed (568/568 tests green; commits `b789943..62b
   `Prepare(stats, hw)` → `PreparedQuery`, with the policy-chain tuning, live soft knobs,
   and all four BlazingSQL cache flavors (SIMPLE / CONCATENATING+byte-cap / NON_WAITING /
   FOR_EACH lanes) — phases 2.5 + 2.6.
-- **4 of 19 operators wired end-to-end** (Scan, Filter, Projection, Output/Collector).
-  The five simple kernels (Limit, Union, BindableTableScan, Print, Generate) are
-  **phase 2.7**; the heavy decomposed kernels are phase 6.
+- **9 of 19 operators wired end-to-end** (Scan, Filter, Projection, Output/Collector,
+  plus phase 2.7's Limit, Union, BindableTableScan, Print, Generate). The heavy
+  decomposed kernels (aggregate/sort/join, `*SingleNode` partition/merge) are phase 6;
+  the `Distribute*`/shuffle kernels stay reserved (multi-node, out of scope).
 - **Known-bug ledger** (original baseline list, annotated):
   - ~~`CreatePhysicalExpr` arithmetic~~ — **fixed in phase 1** (`d6685aa`).
   - ~~`ConcatenatingBatchHolder` multi-block~~ — **fixed in phase 1** (`ConcatenateHostBlocks`).
@@ -224,11 +225,11 @@ rows, no compute).
 | `filter` | `Filter` | predicate → mask → compacted batch | ✅ `FilterOperator` (phase 1) |
 | `project` | `Project` | evaluates expressions per batch | ✅ `ProjectOperator` (phase 1) |
 | output kernel | `Output` | terminal sink; the query result | ✅ `CollectorOperator` (phase 1) |
-| `limit` | `Limit` | truncate the stream to n rows (atomic claim — no compute) | ☐ **phase 2.7** — retires the hardcoded-1000 `OptimizeScanWithLimit` hack |
-| `union` | `Union` | concatenate two streams (UNION ALL); multi-input `input_a`/`input_b` | ☐ **phase 2.7** — first real multi-input streaming operator |
-| `bindable_tablescan` | `BindableTableScan` | scan with column pruning + folded filters — reads less | ☐ **phase 2.7** (projection pruning now; predicate pushdown completes in phase 8) |
-| debug print sink | `Print` | row-dump sink for debugging pipelines | ☐ **phase 2.7** (small utility) |
-| row generator | `Generate` | synthetic source (dev/test utility, real source role) | ☐ **phase 2.7** (small utility) |
+| `limit` | `Limit` | truncate the stream to n rows (atomic claim — no compute) | ✅ **phase 2.7** — `LimitOperator`; retired the hardcoded-1000 `OptimizeScanWithLimit`; stops the upstream scan early |
+| `union` | `Union` | concatenate two streams (UNION ALL); multi-input `input_a`/`input_b` | ✅ **phase 2.7** — `UnionOperator`; executor drains declared named ports in order |
+| `bindable_tablescan` | `BindableTableScan` | scan with column pruning + folded filters — reads less | ✅ **phase 2.7** — gate folds `Projection(Scan)` of pure column refs (predicate pushdown completes in phase 8) |
+| debug print sink | `Print` | row-dump sink for debugging pipelines | ✅ **phase 2.7** — `PrintOperator` (CSV to injectable ostream) |
+| row generator | `Generate` | synthetic source (dev/test utility, real source role) | ✅ **phase 2.7** — `GenerateOperator` (configurable synthetic source) |
 | `ComputeAggregateKernel` | `ComputeAggregate` | local groupby partials (sink role) | ☐ phase 6 (groupby: Compute → Merge) |
 | `MergeAggregateKernel` | `MergeAggregate` | re-aggregates partials (COUNT partials merge by SUM) | ☐ phase 6 |
 | `SortAndSample` | `SortAndSample` | per-batch local sort + sample pivots; two output ports (`output_a` data, `output_b` plan) | ☐ phase 6 (orderby, 3-stage) |
@@ -392,7 +393,7 @@ the shuffle stages.
 | 2 — Pipelines | ☑ | fused pipeline ~5× faster than thread-per-operator (21 ms → 4 ms, 10k batches × 1k rows, Debug) |
 | 2.5 — DSL + tuning | ☑ | same Graph `Prepare()`d twice with different stats → different holder configs; live threshold raise releases a blocked producer |
 | 2.6 — BlazingSQL parity | ☑ | pre-filled NonWaiting edge executes single-shot; ConcatenatingUpTo chunks at a policy-tuned byte cap; Partitioned(2) FOR_EACH fan-out/drain runs end-to-end (`test_blazing_parity`, 8 tests) |
-| 2.7 — Operator catalog | ☐ | Limit through the gate (no hardcoded 1000); UNION ALL of two scans; BindableTableScan provably reads fewer columns |
+| 2.7 — Operator catalog | ☑ | Limit through the gate (no hardcoded 1000, early source stop); UNION ALL via named multi-port drain; BindableTableScan folds Projection→scan (provably fewer columns); Generate/Print utilities (`test_limit`/`test_union`/`test_bindable_scan`/`test_generate_print`, 40 tests) |
 | 3 — Tasks | ☐ | 4-worker pool, barrier ordering test |
 | 4 — Reservations | ☐ | 500 MB query under 100 MB budget: spill or clean error |
 | 5 — Downgrade | ☐ | spills idle-only, stops when reservation fits |
