@@ -150,7 +150,6 @@ class Graph : public std::enable_shared_from_this<Graph> {
   [[nodiscard]] Status ExecuteLegacy();
   [[nodiscard]] Status ExecutePipelined();
   void FinalizeWorkflow();
-  void OptimizeScanWithLimit();
 
   // ===========================================================================
   // Graph Query API

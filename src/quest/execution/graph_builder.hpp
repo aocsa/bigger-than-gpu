@@ -21,6 +21,7 @@
 #include "quest/taskflow/graph_builder.hpp"
 #include "quest/taskflow/operators/collector_operator.hpp"
 #include "quest/taskflow/operators/filter_operator.hpp"
+#include "quest/taskflow/operators/limit_operator.hpp"
 #include "quest/taskflow/operators/project_operator.hpp"
 #include "quest/taskflow/operators/table_scan_operator.hpp"
 
@@ -110,6 +111,16 @@ namespace detail {
     return Status::OK();
   }
 
+  if (const auto* limit = dynamic_cast<const Limit*>(&plan)) {
+    auto child = TranslateChain(limit->input(), memory_manager, ops, next_id);
+    if (!child) {
+      return child;
+    }
+    ops.push_back(std::make_unique<taskflow::LimitOperator>(next_id++, limit->limit(),
+                                                            std::move(memory_manager)));
+    return Status::OK();
+  }
+
   return Status::PhysicalPlanError("CreateGraph: unsupported logical plan node: " +
                                    plan.ToString());
 }
@@ -118,7 +129,7 @@ namespace detail {
 
 /// @brief Translate a supported LogicalPlan into a push-pipeline ExecutableGraph.
 ///
-/// Supported: Scan, Selection, Projection (and chains thereof). Unsupported
+/// Supported: Scan, Selection, Projection, Limit (and chains thereof). Unsupported
 /// nodes return an error — callers fall back to the callback physical engine.
 [[nodiscard]] inline Result<ExecutableGraphPtr> CreateGraph(
     const LogicalPlan& plan,

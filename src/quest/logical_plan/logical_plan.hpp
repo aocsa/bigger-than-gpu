@@ -10,6 +10,7 @@
 /// This file defines the logical plan tree nodes used to represent
 /// query operations before physical execution planning.
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -195,6 +196,34 @@ class Projection : public LogicalPlan {
  private:
   LogicalPlanPtr input_;
   std::vector<LogicalExprPtr> expressions_;
+};
+
+// =============================================================================
+// Limit Node
+// =============================================================================
+
+/// @brief Limit node - truncates the stream to the first @p limit rows.
+class Limit : public LogicalPlan {
+ public:
+  Limit(LogicalPlanPtr input, std::size_t limit)
+      : input_(std::move(input)), limit_(limit) {}
+
+  [[nodiscard]] Schema schema() const override { return input_->schema(); }
+
+  [[nodiscard]] std::vector<const LogicalPlan*> Children() const override {
+    return {input_.get()};
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "Limit: " + std::to_string(limit_);
+  }
+
+  [[nodiscard]] const LogicalPlan& input() const { return *input_; }
+  [[nodiscard]] std::size_t limit() const noexcept { return limit_; }
+
+ private:
+  LogicalPlanPtr input_;
+  std::size_t limit_;
 };
 
 // =============================================================================

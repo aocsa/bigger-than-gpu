@@ -96,6 +96,11 @@ class QueryBuilder {
     return QueryBuilder(std::move(plan_).Select(exprs));
   }
 
+  /// @brief Truncate the result to the first @p n rows.
+  [[nodiscard]] QueryBuilder Limit(std::size_t n) && {
+    return QueryBuilder(std::move(plan_).Limit(n));
+  }
+
   // ===========================================================================
   // Plan Building
   // ===========================================================================

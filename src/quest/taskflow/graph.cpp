@@ -12,10 +12,6 @@
 
 namespace quest::taskflow {
 
-// Default limit value used when optimizing scan-with-limit queries.
-// This is a placeholder; a full implementation would parse the actual limit.
-constexpr std::int64_t kDefaultOptimizedLimitRows = 1000;
-
 // =============================================================================
 // Graph Construction
 // =============================================================================
@@ -685,47 +681,6 @@ void Graph::PrintBackwardsFrom(std::int32_t operator_id) const {
   }
 
   std::println("=========================================");
-}
-
-// =============================================================================
-// Query Optimization
-// =============================================================================
-
-void Graph::OptimizeScanWithLimit() {
-  // This optimization only applies to simple three-operator queries.
-  if (registered_operators_.size() != 3) {
-    return;
-  }
-
-  // Identify operators by their type.
-  Operator* scan_operator = nullptr;
-  Operator* limit_operator = nullptr;
-  Operator* output_operator = nullptr;
-
-  for (auto* current_operator : registered_operators_) {
-    switch (current_operator->type()) {
-      case OperatorType::TableScan:
-      case OperatorType::BindableTableScan:
-        scan_operator = current_operator;
-        break;
-      case OperatorType::Limit:
-        limit_operator = current_operator;
-        break;
-      case OperatorType::Output:
-        output_operator = current_operator;
-        break;
-      default:
-        // Unknown operator type breaks the pattern.
-        return;
-    }
-  }
-
-  // Apply optimization if the pattern matches.
-  if (scan_operator != nullptr && limit_operator != nullptr && output_operator != nullptr) {
-    // Push limit down to scan operator.
-    // In a full implementation, this would parse the limit expression.
-    scan_operator->set_limit(kDefaultOptimizedLimitRows);
-  }
 }
 
 }  // namespace quest::taskflow

@@ -1,4 +1,94 @@
-# Phase 2.6 — BlazingSQL Edge/Kernel Parity (CPU-only) — Working Plan
+# Phase 2.7 — Single-Node Operator Catalog — Working Plan
+
+Executing Phase 2.7 from
+[docs/dev/sirius-replication-plan.md](../docs/dev/sirius-replication-plan.md) (the
+authoritative catalog table lives there). References:
+[kt-bigger-than-gpu.html §kernels](../docs/kt-bigger-than-gpu.html) (BlazingSQL
+simple-kernel catalog), Sirius `src/op/sirius_physical_limit.cpp` (atomic
+remaining-rows claim), and
+[sirius-vs-blazingsql.html §quest-study](../docs/sirius-vs-blazingsql.html#quest-study)
+(why 2.7 precedes phase 3: the scheduler needs real multi-input ports, early
+termination, and gate rewrites to stress — not mocks).
+
+**Process:** one stage = one review gate; keep this file updated while working.
+**Recipe per operator** (from phase 2.5/2.6): pipeline roles (`ProcessBatch`/
+`GetNextBatch`/`Sink`) + `DeclaredInputPorts`/`InputEdgeContract` + typed port
+accessors + gate translation + tests via `/new-node` & `/new-op`.
+
+## Stage F0 — Plan + docs rebaseline ✅ (this update)
+- [x] Reviewed `sirius-vs-blazingsql.html`; replication plan absorbed: status snapshot
+      refreshed (post-2.6, 568 tests, 4/19 operators), 2.7 "why before phase 3" +
+      read-first, phase-4 control-plane warning (counter demotion = wrong template),
+      phase-6 v0.14 gated-transform footnote
+- [x] This todo rewritten for Phase 2.7
+- [x] REVIEW GATE: user approved ("ok now implement phase 2.7")
+
+## Stage F1 — Limit (the flagship)
+- [x] Logical `Limit` node (`limit`, optional `offset` later) + `QueryPlan::Limit(n)`
+      fluent + `LimitExec` physical node (callback engine keeps parity — the
+      /new-node recipe covers both engines)
+- [x] `LimitOperator` (streaming): atomic remaining-rows claim per batch (the Sirius
+      pattern — no compute); truncate the batch that crosses the boundary; emit
+      nothing after exhaustion
+- [x] Gate translation in `CreateGraph`; **retire the hardcoded-1000
+      `OptimizeScanWithLimit` hack** (deleted — unused; LimitOperator handles
+      truncation; scan pushdown deferred)
+- [x] Early-termination note: v1 truncates downstream (correct, not optimal); true
+      source cancellation is a phase-3 concern (task admission) — documented on
+      `LimitOperator`
+- [x] Tests: unit truncation incl. exact-boundary batch; e2e
+      `FromParquet(...).Limit(n).ExecuteOnGraph()` == first n rows of the oracle;
+      Limit(0); Limit > total rows (`tests/test_limit.cpp`, 16 tests green)
+- [ ] REVIEW GATE
+
+**F1 review log:** End-to-end Limit landed — logical/physical/graph + fluent API;
+`OptimizeScanWithLimit` + `kDefaultOptimizedLimitRows` deleted (never called);
+`TruncateRecordBatch` shared by LimitExec/LimitOperator; empty batches after
+exhaustion (pipeline short-circuits like Filter).
+
+## Stage F2 — Union (first real multi-input streaming operator)
+- [ ] ENGINE PREREQ: generalize the executor's claim path from numeric lanes to
+      **declared multi-ports** — a holder-fed source with `DeclaredInputPorts()`
+      drains its ports in declared order (UNION ALL semantics = sequential
+      concatenation; same drain-a-port-to-EOS-then-next shape as E3 lanes)
+- [ ] `UnionOperator`: `DeclaredInputPorts() = {"input_a","input_b"}`, streaming
+      contracts, typed accessors `input_a()`/`input_b()`, `UnionShape` helper
+- [ ] Logical `Union` node (two children — first multi-child logical node) +
+      `QueryPlan::UnionAll(QueryPlan)` + gate translation of both subtrees
+- [ ] Tests: shape (two child pipelines before parent, per-port deps); e2e UNION ALL
+      of two Parquet scans == sum of both row sets; schema-mismatch rejected at
+      plan time
+- [ ] REVIEW GATE
+
+## Stage F3 — BindableTableScan (the gate's first rewrite)
+- [ ] Gate rewrite in `CreateGraph`: `Projection(Scan)` where every expression is a
+      pure column ref → emit ONE `TableScanOperator` with the projection folded
+      (type `BindableTableScan`), skipping the `ProjectOperator`
+- [ ] Non-trivial projections (arithmetic) keep today's two-operator shape
+- [ ] Tests: shape (one operator, not two); output schema correct; the parquet
+      reader provably reads fewer columns (assert via scan schema / reader
+      behavior); parity vs the unfolded path
+- [ ] REVIEW GATE
+
+## Stage F4 — Print + Generate (utilities)
+- [ ] `GenerateOperator`: configurable synthetic source (row count, batch size,
+      schema) with the source role — replaces ad-hoc test VectorSources over time
+- [ ] `PrintOperator`: pass-through debug sink (`RecordBatch::ToCSV` to an
+      injectable ostream), `IsSink() = true`
+- [ ] Tests: Generate feeds a full pipeline; Print captures expected CSV
+- [ ] Update replication-plan scorecard (2.7 flagship proofs) + catalog checkmarks
+- [ ] REVIEW GATE
+
+**Out of scope (stays where it is):** heavy decomposed kernels (phase 6:
+ComputeAggregate/MergeAggregate, SortAndSample/PartitionSingleNode/MergeStream,
+PartwiseJoin); reserved multinode enums (DistributeAggregate, JoinPartition,
+Partition); predicate pushdown for BindableTableScan (phase 8 completes it).
+
+---
+
+# ✅ COMPLETED — Phase 2.6: BlazingSQL Edge/Kernel Parity (CPU-only) — Working Plan
+
+Commit `62bdf5b`.
 
 Executing the Phase 2.6 insert from
 [docs/dev/sirius-replication-plan.md](../docs/dev/sirius-replication-plan.md), designed in
@@ -56,7 +146,7 @@ reserved); FOR_EACH lane naming keeps BlazingSQL's `output_0…N-1`/`input_0…N
       sample-stage shape — the engine-side lane infra is proven; the gate-side
       decomposition lands with the first real decomposed operator (phase 6's sort),
       since a mock-only gate rewrite would be scaffolding without a consumer
-- [ ] REVIEW GATE: summary delivered, awaiting approval → commit
+- [x] REVIEW GATE: user approved → committed 62bdf5b
 
 ---
 
@@ -170,7 +260,7 @@ Phase 2 semantics). Commits `d6685aa` + hardening `a65e447`.
 
 ## Phase 2.7 — Single-node operator catalog (NEXT, planned)
 Catalog + build order in [sirius-replication-plan.md Phase 2.7](../docs/dev/sirius-replication-plan.md).
-- [ ] **Limit** — atomic remaining-rows claim; retire the hardcoded-1000 `OptimizeScanWithLimit`; `QueryPlan::Limit()`
+- [x] **Limit** — atomic remaining-rows claim; retire the hardcoded-1000 `OptimizeScanWithLimit`; `QueryPlan::Limit()` (F1 done; REVIEW GATE open)
 - [ ] **Union** — multi-input streaming (`input_a`/`input_b` contracts); first consumer of multi-input claims
 - [ ] **BindableTableScan** — gate folds `Projection`-on-`Scan` into a pruned scan (first gate rewrite)
 - [ ] **Print** — debug row-dump sink (`ToCSV`)

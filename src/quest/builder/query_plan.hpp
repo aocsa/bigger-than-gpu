@@ -8,6 +8,7 @@
 /// @brief Shared query plan building logic used by both sync and streaming query builders.
 
 #include <concepts>
+#include <cstddef>
 #include <functional>
 #include <initializer_list>
 #include <memory>
@@ -137,6 +138,13 @@ class QueryPlan {
     }
     return QueryPlan(
         std::make_unique<Projection>(std::move(plan_), std::move(expr_list)));
+  }
+
+  /// @brief Truncate the result to the first @p n rows.
+  /// @param n Maximum number of rows to keep.
+  /// @return QueryPlan with the limit applied.
+  [[nodiscard]] QueryPlan Limit(std::size_t n) && {
+    return QueryPlan(std::make_unique<quest::Limit>(std::move(plan_), n));
   }
 
   // ===========================================================================

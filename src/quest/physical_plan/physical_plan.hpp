@@ -20,6 +20,7 @@
 #include "quest/datasource/data_source.hpp"
 #include "quest/datasource/record_batch.hpp"
 #include "quest/datasource/schema.hpp"
+#include "quest/execution/batch_kernels.hpp"
 #include "quest/logical_plan/logical_expr.hpp"
 #include "quest/logical_plan/logical_plan.hpp"
 #include "quest/physical_plan/expressions/physical_expr.hpp"
@@ -358,6 +359,53 @@ class ProjectionExec : public PhysicalPlan {
 };
 
 // =============================================================================
+// Limit Execution Node
+// =============================================================================
+
+/// @brief Limit execution node - emits at most @p limit rows across batches.
+class LimitExec : public PhysicalPlan {
+ public:
+  LimitExec(PhysicalPlanPtr input, std::size_t limit)
+      : input_(std::move(input)), limit_(limit), remaining_(limit) {}
+
+  [[nodiscard]] Schema schema() const override { return input_->schema(); }
+
+  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override {
+    return {input_.get()};
+  }
+
+  [[nodiscard]] Status Execute(const ResultCallback& callback) override {
+    return input_->Execute([this, &callback](RecordBatch batch) {
+      if (remaining_ == 0) {
+        return;
+      }
+      if (batch.num_rows() <= remaining_) {
+        remaining_ -= batch.num_rows();
+        callback(std::move(batch));
+        return;
+      }
+      auto truncated = execution::TruncateRecordBatch(batch, remaining_);
+      if (!truncated.has_value()) {
+        return;
+      }
+      remaining_ = 0;
+      if (truncated->num_rows() > 0) {
+        callback(std::move(*truncated));
+      }
+    });
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "LimitExec(" + std::to_string(limit_) + ")";
+  }
+
+ private:
+  PhysicalPlanPtr input_;
+  std::size_t limit_;
+  std::size_t remaining_;
+};
+
+// =============================================================================
 // Physical Plan Factory Functions
 // =============================================================================
 
@@ -489,6 +537,14 @@ class ProjectionExec : public PhysicalPlan {
 
     return std::make_unique<ProjectionExec>(std::move(*input_result), Schema(std::move(fields)),
                                             std::move(exprs));
+  }
+
+  if (const auto* limit = dynamic_cast<const Limit*>(&plan)) {
+    auto input_result = CreatePhysicalPlan(limit->input());
+    if (!input_result) {
+      return std::unexpected(input_result.error());
+    }
+    return std::make_unique<LimitExec>(std::move(*input_result), limit->limit());
   }
 
   return std::unexpected(Status::PhysicalPlanError("Unsupported logical plan type"));

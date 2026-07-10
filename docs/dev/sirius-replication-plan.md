@@ -2,7 +2,7 @@
 
 **Purpose:** understand how Sirius (NVIDIA's DuckDB-based GPU query engine) works internally, then replicate its core architectural ideas in QUEST — this CPU/Disk engine — at a small scale, one concept at a time. The goal is *learning*, not feature parity: each phase teaches one Sirius idea by making you build its CPU-scale equivalent with your own hands.
 
-**Companion:** interactive architecture page at [`docs/quest-internals.html`](../quest-internals.html) — the component map and comparison there mirror the phases here.
+**Companion:** interactive architecture page at [`docs/quest-internals.html`](../quest-internals.html) — the component map and comparison there mirror the phases here. GPU-engine lineage + QUEST study destination (pipelines shipped / scheduling next): [`docs/sirius-vs-blazingsql.html#quest-study`](../sirius-vs-blazingsql.html#quest-study).
 
 **Sirius source:** `/Users/aocsa/git/aocsa/sirius` (branch `docs-tutorial`). Layout note: implementation in `src/<subsys>/*.cpp`, headers mirrored under `src/include/<subsys>/*.hpp`.
 
@@ -32,9 +32,9 @@ reservations (5 after 4), out-of-core joins need downgrade for their flagship (6
 7 and 8 are orthogonal tails. Phases 4/5/6 each consume something 2.5 provides
 (`Prepare(stats, hw)`; `SpillPolicy`; port contracts + `PartitionedUpTo` + the synthesis hook).
 
-## Where QUEST stands (status snapshot, 2026-07-09)
+## Where QUEST stands (status snapshot, 2026-07-09, post-2.6)
 
-Phases 1+2 are landed (532/532 tests green; commits `b789943..a65e447`):
+Phases 1, 2, 2.5, and 2.6 are landed (568/568 tests green; commits `b789943..62bdf5b`):
 
 - **The two-engines gap is closed.** `QueryBuilder::ExecuteOnGraph()` → `CreateGraph` gate
   (error = fallback to the callback engine) → `MetaPipeline::Build` → `PipelineExecutor`.
@@ -44,8 +44,13 @@ Phases 1+2 are landed (532/532 tests green; commits `b789943..a65e447`):
   spills through the collector's Full-barrier holder and returns correct results
   (`test_graph_bridge` flagship). Fused pipelines measured ~5× faster than
   thread-per-operator on per-batch overhead.
-- **Still 3 of 19 operators wired end-to-end** (Scan, Filter, Projection). No Limit,
-  Aggregate/GroupBy, Sort, Join, Union — that's phase 6.
+- **The wiring layer is fully modernized:** `GraphBuilder` → `Graph` (Built) →
+  `Prepare(stats, hw)` → `PreparedQuery`, with the policy-chain tuning, live soft knobs,
+  and all four BlazingSQL cache flavors (SIMPLE / CONCATENATING+byte-cap / NON_WAITING /
+  FOR_EACH lanes) — phases 2.5 + 2.6.
+- **4 of 19 operators wired end-to-end** (Scan, Filter, Projection, Output/Collector).
+  The five simple kernels (Limit, Union, BindableTableScan, Print, Generate) are
+  **phase 2.7**; the heavy decomposed kernels are phase 6.
 - **Known-bug ledger** (original baseline list, annotated):
   - ~~`CreatePhysicalExpr` arithmetic~~ — **fixed in phase 1** (`d6685aa`).
   - ~~`ConcatenatingBatchHolder` multi-block~~ — **fixed in phase 1** (`ConcatenateHostBlocks`).
@@ -203,6 +208,16 @@ QUEST's `OperatorType` enum (which IS BlazingSQL's v0.14 kernel list) crossed wi
 KT doc's kernel catalog, scoped to **single-node execution only**. Every distributed/
 shuffle kernel stays a reserved enum value.
 
+**Why before phase 3** (from [sirius-vs-blazingsql.html §quest-study](../sirius-vs-blazingsql.html#quest-study)):
+the task scheduler needs a wider operator surface to stress — multi-input ports (Union),
+early pipeline termination (Limit), and gate rewrites (BindableTableScan) all exist
+*before* the executor is rewritten, so phase 3 lands against real shapes instead of mocks.
+
+**Read first:** the KT doc's simple-kernel catalog
+([kt-bigger-than-gpu.html §kernels](../kt-bigger-than-gpu.html)) and Sirius's streaming
+LIMIT claim pattern (`src/op/sirius_physical_limit.cpp` — an atomic claim on remaining
+rows, no compute).
+
 | Kernel (BlazingSQL) | QUEST `OperatorType` | What it does | Status / owner |
 |---|---|---|---|
 | `table_scan` | `TableScan` | drives the DataSource, pushes batches as they load | ✅ `TableScanOperator` (phase 1) |
@@ -248,6 +263,17 @@ fewer columns.
 
 **Sirius idea:** work exists only when data does. Operators answer `get_next_task_hint() -> READY{producer} | WAITING_FOR_INPUT_DATA{producer}`; on WAITING the task creator **recurses into the producer** until something is READY; a task = (pipeline, one input batch); a scheduler matches tasks to ready workers. Read: `src/creator/task_creator.cpp` (`get_operator_for_next_task`, `manager_loop`) and `src/pipeline/task_scheduler.cpp` (374 lines).
 
+> **Notation (2026-07-09) — BlazingSQL has no analogue; do not port from RAL.**
+> After reviewing [`docs/blazingsql-internals.html`](../blazingsql-internals.html) and
+> [`docs/kt-bigger-than-gpu.html`](../kt-bigger-than-gpu.html): v0.14.0
+> `graph.execute()` is **thread-per-kernel** with blocking `pullFromCache` only —
+> there is no task unit, no hint chain, no worker-pool scheduler, and no
+> reserve-before-dispatch. Phase 3 is therefore **Sirius-guided** (see
+> [`docs/sirius.html`](../sirius.html) tasks section), not a BlazingSQL heritage
+> port. Contrast with phases 2 / 2.6, where the lineage *is* BlazingSQL → Sirius →
+> QUEST (flat kernel graph → meta-pipelines → `MetaPipeline`; CacheMachine flavors →
+> `EdgeConfig`). Teaching summary: [`docs/sirius-vs-blazingsql.html#quest-study`](../sirius-vs-blazingsql.html#quest-study).
+
 **Build in QUEST:**
 - `TaskCreationHint {Ready, WaitingForInput}` + `GetNextTaskHint()` / `GetNextTaskInputData()` virtuals on `Operator`.
 - `Task = {Pipeline*, DataBlockPtr input}`; `TaskCreator` implementing the recursion; a `TaskScheduler` over a fixed worker pool (`std::jthread` × N, one shared queue — skip per-device executors, you have one "device").
@@ -271,6 +297,12 @@ fewer columns.
 - Plug into phase 2.5's seam: reservation sizing happens at/under `Prepare(stats, hw)` —
   `QueryStats`/`HardwareInfo` are already the shared vocabulary, and the macOS
   `sysctl(HW_MEMSIZE)` fix doubles as `HardwareInfo` probing.
+- **Control-plane warning** ([sirius-vs-blazingsql.html §gap](../sirius-vs-blazingsql.html#gap)):
+  BlazingSQL's ancestor mechanism — counter-based demotion at `addToCache` ("spill because
+  the cache is full") — is a useful CONTRAST but the wrong template. This phase builds the
+  Sirius control plane: "refuse to run until memory is reserved, then spill until the
+  reservation fits." QUEST's current `MaybeSpill` IS the BlazingSQL pattern; phases 4+5
+  replace it, not extend it.
 
 **Done when:** with a 100 MB budget, a query whose working set is 500 MB either succeeds via spill or fails with a clean `ResourceExhausted` — never OOM-kills the process. A test asserts estimates converge (ring average within 2× of observed after 10 batches).
 
@@ -306,6 +338,10 @@ those enum values stay reserved): orderby = `SortAndSample → PartitionSingleNo
 The sample stage keeps BlazingSQL's two-output-port shape (`output_a` data, `output_b`
 partition plan). `Prepare()`'s `SynthesizeStructure()` hook stays for structure that
 genuinely needs stats, but the gate is the default place structure is born.
+Historical note: BlazingSQL's own gate decomposition
+(`transform_operator_bigger_than_gpu`) was hard-coded OFF at v0.14 — QUEST's phase 6
+effectively ships what the ancestor gated: the mature always-on decomposition, minus
+the shuffle stages.
 
 1. **Limit** — the warm-up. `StreamingLimit` with an atomic claim on remaining rows (Sirius does exactly this — no compute, just arithmetic). Replace the hardcoded 1000-row hack in `Graph::OptimizeScanWithLimit` (`graph.cpp:12`) with a real pushed limit. *Teaches:* early pipeline termination.
 2. **Hash aggregate** — the first cross-batch state. `HashGroupBy` (sink accumulates per-batch partial aggregates into a hash table keyed by group columns) → `Merge` (combines partials). Support SUM/COUNT/MIN/MAX/AVG — and follow Sirius: **AVG = SUM + COUNT finalized at merge**, don't implement it as a primitive. Add `GroupBy()` to `QueryPlan`'s fluent API. *Teaches:* sink role, partial/final decomposition, why merges exist.

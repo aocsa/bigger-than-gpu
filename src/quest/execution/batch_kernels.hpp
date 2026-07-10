@@ -7,6 +7,7 @@
 /// @file batch_kernels.hpp
 /// @brief Shared RecordBatch filter/project helpers for physical + taskflow paths.
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -137,6 +138,29 @@ namespace quest::execution {
 
   if (indices.empty()) {
     return datasource::RecordBatch(batch.schema(), {});
+  }
+
+  std::vector<std::shared_ptr<datasource::ColumnVector>> new_columns;
+  new_columns.reserve(batch.num_columns());
+  for (size_t col_idx = 0; col_idx < batch.num_columns(); ++col_idx) {
+    new_columns.push_back(GatherColumn(batch.column(col_idx), indices));
+  }
+  return datasource::RecordBatch(batch.schema(), std::move(new_columns));
+}
+
+/// @brief Truncate a RecordBatch to its first @p n_rows rows via GatherColumn.
+///
+/// If @p n_rows is 0, returns an empty batch with the same schema. If
+/// @p n_rows >= batch.num_rows(), gathers every row (a full copy).
+[[nodiscard]] inline Result<datasource::RecordBatch> TruncateRecordBatch(
+    const datasource::RecordBatch& batch, std::size_t n_rows) {
+  if (n_rows == 0) {
+    return datasource::RecordBatch(batch.schema(), {});
+  }
+  const std::size_t take = std::min(n_rows, batch.num_rows());
+  std::vector<size_t> indices(take);
+  for (std::size_t i = 0; i < take; ++i) {
+    indices[i] = i;
   }
 
   std::vector<std::shared_ptr<datasource::ColumnVector>> new_columns;

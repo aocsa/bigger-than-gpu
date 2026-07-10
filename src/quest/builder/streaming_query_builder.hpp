@@ -100,6 +100,11 @@ class StreamingQueryBuilder {
     return StreamingQueryBuilder(std::move(plan_).Select(exprs));
   }
 
+  /// @brief Truncate the result to the first @p n rows.
+  [[nodiscard]] StreamingQueryBuilder Limit(std::size_t n) && {
+    return StreamingQueryBuilder(std::move(plan_).Limit(n));
+  }
+
   // ===========================================================================
   // Plan Building
   // ===========================================================================
