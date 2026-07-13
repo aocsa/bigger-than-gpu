@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <quest/quest.hpp>
+#include "quest/taskflow/graph_builder.hpp"
 #include "quest/tests/utils.hpp"
 
 using namespace quest;
@@ -167,14 +168,14 @@ TEST(GraphConstructionTest, SingleNode) {
 }
 
 TEST(GraphConstructionTest, SimpleEdge) {
-  auto graph = std::make_shared<Graph>();
-
   std::size_t counter_a = 0;
   std::size_t counter_b = 0;
   CountingOperator operator_a(0, counter_a);
   CountingOperator operator_b(1, counter_b);
 
-  *graph += operator_a >> operator_b;
+  GraphBuilder gb;
+  gb.Chain(operator_a, operator_b);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   EXPECT_EQ(graph->GetNodeCount(), 2);
   EXPECT_EQ(graph->GetNode(0), &operator_a);
@@ -190,15 +191,13 @@ TEST(GraphConstructionTest, SimpleEdge) {
 }
 
 TEST(GraphConstructionTest, LinearChain) {
-  auto graph = std::make_shared<Graph>();
-
   std::size_t counters[4] = {0, 0, 0, 0};
   CountingOperator operators[4] = {
       {0, counters[0]}, {1, counters[1]}, {2, counters[2]}, {3, counters[3]}};
 
-  *graph += operators[0] >> operators[1];
-  *graph += operators[1] >> operators[2];
-  *graph += operators[2] >> operators[3];
+  GraphBuilder gb;
+  gb.Chain(operators[0], operators[1], operators[2], operators[3]);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   EXPECT_EQ(graph->GetNodeCount(), 4);
 
@@ -210,18 +209,18 @@ TEST(GraphConstructionTest, LinearChain) {
 }
 
 TEST(GraphConstructionTest, DiamondTopology) {
-  auto graph = std::make_shared<Graph>();
-
   std::size_t counters[4] = {0, 0, 0, 0};
   CountingOperator operator_a(0, counters[0]);
   CountingOperator operator_b(1, counters[1]);
   CountingOperator operator_c(2, counters[2]);
   CountingOperator operator_d(3, counters[3]);
 
-  *graph += operator_a >> operator_b;
-  *graph += operator_a >> operator_c;
-  *graph += operator_b >> operator_d;
-  *graph += operator_c >> operator_d;
+  GraphBuilder gb;
+  gb.Edge(operator_a, operator_b);
+  gb.Edge(operator_a, operator_c);
+  gb.Edge(operator_b, operator_d);
+  gb.Edge(operator_c, operator_d);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   EXPECT_EQ(graph->GetNodeCount(), 4);
 
@@ -237,38 +236,35 @@ TEST(GraphConstructionTest, DiamondTopology) {
 // =============================================================================
 
 TEST(GraphExecutionTest, SimpleExecution) {
-  auto graph = std::make_shared<Graph>();
-
   std::size_t received_count = 0;
   SourceOperator source(0, 5);
   SinkOperator sink(1, received_count);
 
-  *graph += source >> sink;
+  GraphBuilder gb;
+  gb.Chain(source, sink);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
-  auto status = graph->Execute();
+  auto status = graph->ExecuteLegacy();
   ASSERT_TRUE(status.ok());
   EXPECT_EQ(received_count, 5);
 }
 
 TEST(GraphExecutionTest, PassthroughExecution) {
-  auto graph = std::make_shared<Graph>();
-
   std::size_t received_count = 0;
   SourceOperator source(0, 10);
   PassthroughOperator passthrough(1);
   SinkOperator sink(2, received_count);
 
-  *graph += source >> passthrough;
-  *graph += passthrough >> sink;
+  GraphBuilder gb;
+  gb.Chain(source, passthrough, sink);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
-  auto status = graph->Execute();
+  auto status = graph->ExecuteLegacy();
   ASSERT_TRUE(status.ok());
   EXPECT_EQ(received_count, 10);
 }
 
 TEST(GraphExecutionTest, NamedPortsExecution) {
-  auto graph = std::make_shared<Graph>();
-
   std::size_t left_count = 0;
   std::size_t right_count = 0;
 
@@ -276,29 +272,32 @@ TEST(GraphExecutionTest, NamedPortsExecution) {
   SourceOperator source_b(1, 4);
   JoinOperator join_op(2, left_count, right_count);
 
-  *graph += source_a >> join_op["left_input"];
-  *graph += source_b >> join_op["right_input"];
+  GraphBuilder gb;
+  gb.Edge(source_a, join_op["left_input"]);
+  gb.Edge(source_b, join_op["right_input"]);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
-  auto status = graph->Execute();
+  auto status = graph->ExecuteLegacy();
   ASSERT_TRUE(status.ok());
   EXPECT_EQ(left_count, 3);
   EXPECT_EQ(right_count, 4);
 }
 
 TEST(GraphExecutionTest, ConcatenatingBatchHolder) {
-  auto graph = std::make_shared<Graph>();
-
   std::size_t received_count = 0;
-  // Use 1 batch since RecordBatch concatenation is not yet implemented
-  SourceOperator source(0, 1);
+  // Multiple source batches: the concatenating holder merges them all into
+  // ONE block delivered at Pull (multi-block concat implemented in Phase 1
+  // via execution::ConcatenateHostBlocks).
+  SourceOperator source(0, 3);
   SinkOperator sink(1, received_count);
 
-  *graph +=
-      link(source, sink, EdgeConfig::Concatenating().with_flow_control(10, 1024 * 1024));
+  GraphBuilder gb;
+  gb.Edge(source, sink).Concatenating().FlowControl(10, 1024 * 1024);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
-  auto status = graph->Execute();
+  auto status = graph->ExecuteLegacy();
   ASSERT_TRUE(status.ok());
-  EXPECT_EQ(received_count, 1);
+  EXPECT_EQ(received_count, 1);  // 3 batches in, 1 merged batch out
 }
 
 // =============================================================================
@@ -350,15 +349,14 @@ TEST(EdgeStructureTest, EdgeSetUniqueness) {
 // =============================================================================
 
 TEST(GraphQueryTest, GetLastOperator) {
-  auto graph = std::make_shared<Graph>();
-
   std::size_t counter = 0;
   CountingOperator op1(0, counter);
   CountingOperator op2(1, counter);
   CountingOperator op3(2, counter);
 
-  *graph += op1 >> op2;
-  *graph += op2 >> op3;
+  GraphBuilder gb;
+  gb.Chain(op1, op2, op3);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   EXPECT_EQ(&graph->GetLastOperator(), &op3);
 }
@@ -380,7 +378,7 @@ TEST(GraphQueryTest, GetNonexistentNode) {
 }
 
 // =============================================================================
-// KPair and EdgeConfig Tests
+// EdgeConfig Tests
 // =============================================================================
 
 TEST(EdgeConfigTest, Simple) {
@@ -411,40 +409,11 @@ TEST(EdgeConfigTest, FlowControl) {
   EXPECT_EQ(config.flow_control_bytes_threshold, 1024);
 }
 
-TEST(KPairTest, Accessors) {
-  std::size_t counter = 0;
-  CountingOperator source(0, counter);
-  CountingOperator dest(1, counter);
-
-  KPair pair(source, dest);
-
-  EXPECT_EQ(pair.source(), &source);
-  EXPECT_EQ(pair.destination(), &dest);
-  EXPECT_FALSE(pair.has_custom_source());
-  EXPECT_FALSE(pair.has_custom_destination());
-}
-
-TEST(KPairTest, WithNamedPorts) {
-  std::size_t counter = 0;
-  CountingOperator source(0, counter);
-  CountingOperator dest(1, counter);
-
-  KPair pair(source, dest["input_port"]);
-
-  EXPECT_EQ(pair.source(), &source);
-  EXPECT_EQ(pair.destination(), &dest);
-  EXPECT_FALSE(pair.has_custom_source());
-  EXPECT_TRUE(pair.has_custom_destination());
-  EXPECT_EQ(pair.destination_port(), "input_port");
-}
-
 // =============================================================================
 // Operator Parent Relationship Tests
 // =============================================================================
 
 TEST(OperatorRelationshipTest, ParentRelationship) {
-  auto graph = std::make_shared<Graph>();
-
   std::size_t counter = 0;
   CountingOperator op1(0, counter);
   CountingOperator op2(1, counter);
@@ -452,7 +421,9 @@ TEST(OperatorRelationshipTest, ParentRelationship) {
   EXPECT_FALSE(op1.has_parent());
   EXPECT_FALSE(op2.has_parent());
 
-  *graph += op1 >> op2;
+  GraphBuilder gb;
+  gb.Chain(op1, op2);
+  ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   EXPECT_FALSE(op1.has_parent());
   EXPECT_TRUE(op2.has_parent());
@@ -486,18 +457,6 @@ TEST(OperatorStateTest, ExecutionState) {
 
   test_operator.mark_done();
   EXPECT_TRUE(test_operator.is_done());
-}
-
-TEST(OperatorStateTest, LimitOptimization) {
-  std::size_t counter = 0;
-  CountingOperator test_operator(0, counter);
-
-  EXPECT_FALSE(test_operator.has_limit());
-  EXPECT_EQ(test_operator.limit_rows(), -1);
-
-  test_operator.set_limit(100);
-  EXPECT_TRUE(test_operator.has_limit());
-  EXPECT_EQ(test_operator.limit_rows(), 100);
 }
 
 // =============================================================================

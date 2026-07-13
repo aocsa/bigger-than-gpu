@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BlazingSQL Internals — from SQL text to a distributed GPU kernel graph (v0.14.0)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#faf7f3; --panel:#ffffff; --ink:#1d1813; --muted:#6b6055;
+  --accent:#e8590c; --accent-ink:#b23c00; --accent-soft:#fdeadd;
+  --amber:#b26a00; --amber-soft:#fdf3e3;
+  --red:#b3341f; --red-soft:#fbeae6;
+  --blue:#2a5d8f; --blue-soft:#e8f0f8;
+  --code-bg:#201611; --code-ink:#f0dcc4;
+  --line:#e4ddd4; --r:12px;
+  --shadow:0 1px 2px rgba(29,24,19,.05),0 4px 16px rgba(29,24,19,.06);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Source Sans 3',sans-serif;font-size:16.5px;line-height:1.62}
+::selection{background:var(--accent);color:#fff}
+code{font-family:'JetBrains Mono',monospace;font-size:.85em;background:#f3ede5;border:1px solid var(--line);border-radius:5px;padding:.08em .35em;white-space:nowrap}
+pre{background:var(--code-bg);color:var(--code-ink);border-radius:var(--r);padding:16px 18px;overflow:auto;position:relative;font-size:13.5px;line-height:1.55}
+pre code{background:none;border:none;padding:0;color:inherit;white-space:pre;font-size:1em}
+a{color:var(--accent-ink)}
+h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;line-height:1.15;letter-spacing:-.01em}
+h2{font-size:30px;margin:.2em 0 .45em}
+h3{font-size:20px;margin:1.6em 0 .5em}
+p{margin:.55em 0 1em}
+ul{padding-left:22px}
+li{margin:.3em 0}
+.wrap{display:grid;grid-template-columns:236px minmax(0,1fr);max-width:1240px;margin:0 auto}
+nav.side{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:28px 14px 40px 20px}
+nav.side .brand{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:19px;margin-bottom:18px}
+nav.side .brand span{color:var(--accent-ink)}
+nav.side .grp{font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin:16px 0 6px}
+nav.side a{display:block;padding:5px 10px;border-radius:8px;color:var(--ink);text-decoration:none;font-size:14.5px}
+nav.side a:hover{background:#f1e9df}
+nav.side a.active{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+main{border-left:1px solid var(--line);padding:0 44px 90px;background:transparent;min-width:0}
+section{padding-top:64px}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:.16em;color:var(--accent-ink);display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.eyebrow::before{content:"";width:18px;height:3px;background:var(--accent);border-radius:2px}
+.lead{font-size:19px;color:#33291f;max-width:780px}
+.hero{padding-top:70px}
+.hero h1{font-size:44px;margin:.25em 0 .3em;max-width:860px}
+.hero .sub{font-size:20px;color:var(--muted);max-width:760px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.chip{font-family:'JetBrains Mono',monospace;font-size:12px;padding:5px 11px;border-radius:99px;border:1px solid var(--line);background:var(--panel)}
+.chip.g{background:var(--accent-soft);border-color:#f3c6a4;color:var(--accent-ink)}
+.chip.r{background:var(--red-soft);border-color:#ecc4bb;color:var(--red)}
+.chip.a{background:var(--amber-soft);border-color:#eed9b4;color:var(--amber)}
+.chip.b{background:var(--blue-soft);border-color:#c4d7ea;color:var(--blue)}
+.callout{border-radius:var(--r);padding:14px 18px;margin:18px 0;border:1px solid;font-size:15.5px}
+.callout.warn{background:var(--amber-soft);border-color:#eed9b4}
+.callout.bad{background:var(--red-soft);border-color:#ecc4bb}
+.callout.info{background:var(--blue-soft);border-color:#c4d7ea}
+.callout.good{background:var(--accent-soft);border-color:#f3c6a4}
+.callout b:first-child{display:block;margin-bottom:2px}
+/* architecture explorer */
+.arch-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:22px;align-items:start}
+.arch-stack{display:flex;flex-direction:column}
+.layer{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:13px 15px}
+.layer h4{margin:0 0 2px;font-family:'Bricolage Grotesque',sans-serif;font-size:16px}
+.layer .owns{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:9px}
+.blks{display:flex;flex-wrap:wrap;gap:7px}
+.blk{font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#fdfbf8;cursor:pointer;color:var(--ink)}
+.blk:hover{border-color:var(--accent);background:var(--accent-soft)}
+.blk.sel{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.blk:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+.blk.off{border-style:dashed;color:var(--muted)}
+.conn{display:flex;justify-content:center;padding:3px 0;color:var(--muted);font-size:15px}
+.conn::before{content:"↓"}
+.conn.jni::before{content:"JNI · in-process JVM";font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--blue);background:var(--blue-soft);border:1px dashed #c4d7ea;padding:3px 10px;border-radius:99px}
+.conn.cy::before{content:"cython · one call per node";font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--blue);background:var(--blue-soft);border:1px dashed #c4d7ea;padding:3px 10px;border-radius:99px}
+.detail{position:sticky;top:24px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;min-height:180px}
+.detail h4{margin:0 0 8px;font-family:'Bricolage Grotesque',sans-serif;font-size:17px}
+.detail ul{margin:.3em 0;padding-left:18px;font-size:14.5px}
+.detail li{margin:.35em 0}
+.detail .hint{color:var(--muted);font-size:14px}
+/* stepper */
+.stepper{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;margin:20px 0}
+.pipe{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:14px}
+.pnode{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 11px;border-radius:8px;border:1.5px solid var(--line);background:#fdfbf8;transition:all .2s}
+.pnode.ok{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.pnode.full{border-color:#e0b25a;background:var(--amber-soft);color:var(--amber);font-weight:600}
+.pnode.stall{border-color:#d98070;background:var(--red-soft);color:var(--red);font-weight:600}
+.parrow{color:var(--muted);font-size:13px}
+.stepper h4{margin:4px 0 4px;font-family:'Bricolage Grotesque',sans-serif;font-size:16.5px}
+.stepper .sp{min-height:66px;font-size:15px;margin:0 0 12px;color:#33291f}
+.sbtns{display:flex;gap:8px;align-items:center}
+.sbtns button{font-family:'JetBrains Mono',monospace;font-size:12.5px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:#fdfbf8;cursor:pointer}
+.sbtns button:hover:not(:disabled){border-color:var(--accent);background:var(--accent-soft)}
+.sbtns button:disabled{opacity:.4;cursor:default}
+.bp-dots{display:flex;gap:5px;margin-left:auto}
+.bp-dots i{width:8px;height:8px;border-radius:99px;background:#e2d9cd}
+.bp-dots i.on{background:var(--accent)}
+/* two engines */
+.twins{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:20px 0}
+.twin{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 18px}
+.twin.live{border-top:4px solid var(--accent)}
+.twin.next{border-top:4px solid var(--blue)}
+.twin h4{margin:0 0 2px;font-family:'Bricolage Grotesque',sans-serif}
+.twin .tag{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.twin.live .tag{color:var(--accent-ink)}
+.twin.next .tag{color:var(--blue)}
+.twin .fl{display:flex;flex-direction:column;gap:5px;margin-top:12px}
+.twin .fn{font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#fdfbf8;text-align:center}
+.twin .fd{text-align:center;color:var(--muted);font-size:13px}
+/* plan lines (worked example) */
+.cmp-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:22px;align-items:start}
+.cmp-list{display:flex;flex-direction:column;gap:8px}
+.cmp{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 13px;cursor:pointer;text-align:left;font-family:inherit;font-size:14.5px;width:100%}
+.cmp:hover{border-color:var(--accent)}
+.cmp.sel{border-color:var(--accent);background:var(--accent-soft)}
+.cmp:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+.cmp .st{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);width:34px;text-align:right}
+.cmp .nm{font-weight:600}
+.cmp .nm small{display:block;font-weight:400;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cmp .lvl{font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.lvl.sim{background:var(--accent-soft);color:var(--accent-ink)}
+.lvl.part{background:var(--amber-soft);color:var(--amber)}
+.lvl.miss{background:var(--blue-soft);color:var(--blue)}
+/* before/after plan transform */
+.ba{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;margin:18px 0}
+.ba pre{margin:0}
+.ba .mid{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-ink);text-align:center}
+@media(max-width:960px){.ba{grid-template-columns:1fr}.ba .mid{transform:rotate(90deg)}}
+/* quiz */
+.qcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:9px;overflow:hidden}
+.qhead{display:flex;gap:11px;align-items:baseline;padding:12px 15px;cursor:pointer;font-size:15px}
+.qhead:hover{background:#fcf9f5}
+.qhead .qtag{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--accent-ink);background:var(--accent-soft);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.qhead .tick{margin-left:auto;color:var(--accent-ink);opacity:0;font-weight:700}
+.qcard.open .tick{opacity:1}
+.qans{display:none;padding:0 15px 13px 15px;font-size:14.5px;color:#33291f;border-top:1px dashed var(--line);padding-top:10px;margin:0 15px 13px;padding-left:0;padding-right:0}
+.qcard.open .qans{display:block}
+.qctrl{display:flex;gap:10px;align-items:center;margin-bottom:14px}
+.qctrl button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 13px;border-radius:8px;border:1px solid var(--line);background:var(--panel);cursor:pointer}
+.qctrl button:hover{border-color:var(--accent)}
+.qctrl .cnt{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-left:auto}
+table{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--panel);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow)}
+th{font-family:'JetBrains Mono',monospace;font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;text-align:left;background:#f3ede5;padding:9px 13px;color:#4a3f33}
+td{padding:9px 13px;border-top:1px solid var(--line);vertical-align:top}
+.copybtn{position:absolute;top:8px;right:8px;font-family:'JetBrains Mono',monospace;font-size:11px;background:#38271c;color:#e6c9a8;border:1px solid #4d3728;border-radius:6px;padding:3px 9px;cursor:pointer}
+.copybtn:hover{background:#46311f}
+footer{border-top:1px solid var(--line);margin-top:70px;padding-top:24px;color:var(--muted);font-size:14px}
+@media(max-width:960px){
+  .wrap{display:block}
+  nav.side{position:sticky;top:0;height:auto;background:var(--paper);border-bottom:1px solid var(--line);display:flex;gap:6px;overflow-x:auto;padding:10px 14px;z-index:5}
+  nav.side .brand,nav.side .grp{display:none}
+  nav.side a{white-space:nowrap;border:1px solid var(--line);border-radius:99px;padding:5px 13px;font-size:13px}
+  main{border-left:none;padding:0 20px 70px}
+  .hero h1{font-size:34px}
+}
+@media(max-width:860px){.arch-grid,.cmp-grid,.twins{grid-template-columns:1fr}.detail{position:static}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="side" id="sidenav">
+  <div class="brand">BlazingSQL <span>internals</span></div>
+  <div class="grp">Mental model</div>
+  <a href="#model">Architecture</a>
+  <a href="#lifecycle">Life of a query</a>
+  <a href="#engines">Two execution paths</a>
+  <div class="grp">Deep dives</div>
+  <a href="#plangraph">Plan → kernel graph</a>
+  <a href="#taskflow">TaskFlow &amp; cache</a>
+  <a href="#sort">Distributed sort</a>
+  <a href="#groupjoin">GroupBy &amp; Join</a>
+  <div class="grp">Worked example</div>
+  <a href="#example">The KT query</a>
+  <a href="#ktmap">KT ⇄ code map</a>
+  <div class="grp">Reference</div>
+  <a href="#quiz">Self-check</a>
+  <a href="#glossary">Glossary</a>
+</nav>
+<main>
+
+<section class="hero" id="top">
+  <div class="eyebrow">blazingsql · tag v0.14.0 · engine C++ (RAL)</div>
+  <h1>BlazingSQL Internals — from SQL text to a distributed GPU kernel graph</h1>
+  <p class="sub">A guided tour of the engine at tag <code>v0.14.0</code> — the snapshot behind the "KT Bigger than GPU" document. It traces how a query plan is created (Python → Calcite → RAL), how the plan becomes a graph of kernels connected by CacheMachines, and dissects the physical plan of the hardest operator: a distributed <b>ORDER BY</b> built as a sample sort.</p>
+  <div class="chips">
+    <span class="chip g">Calcite in-process via jpype/JNI</span>
+    <span class="chip g">plan = indented text → JSON tree</span>
+    <span class="chip a">2 execution paths in runQuery()</span>
+    <span class="chip g">sample-sort distribution</span>
+    <span class="chip b">GPU ⇄ ORC-on-disk cache</span>
+    <span class="chip r">"bigger than GPU" transform present, gated off</span>
+  </div>
+</section>
+
+<!-- ============ ARCHITECTURE ============ -->
+<section id="model">
+  <div class="eyebrow">01 · Mental model</div>
+  <h2>Architecture explorer</h2>
+  <p class="lead">Six layers from <code>bc.sql()</code> to cudf. Click any block for what it does and exactly where it lives at v0.14.0. Dashed blocks exist in the tree but are not on the default execution path.</p>
+  <div class="arch-grid">
+    <div class="arch-stack">
+      <div class="layer">
+        <h4>Layer 1 — Python front-end</h4>
+        <div class="owns">pyblazing/apiv2/context.py · owns the user's query &amp; cluster fan-out</div>
+        <div class="blks">
+          <button class="blk" data-c="py_sql">BlazingContext.sql()</button>
+          <button class="blk" data-c="py_explain">explain()</button>
+          <button class="blk" data-c="py_json">get_plan() / visit()</button>
+          <button class="blk" data-c="py_dask">dask fan-out</button>
+        </div>
+      </div>
+      <div class="conn jni"></div>
+      <div class="layer">
+        <h4>Layer 2 — SQL → relational algebra (Apache Calcite, Java)</h4>
+        <div class="owns">algebra/blazingdb-calcite-application · owns parsing, validation, optimization</div>
+        <div class="blks">
+          <button class="blk" data-c="j_gen">RelationalAlgebraGenerator</button>
+          <button class="blk" data-c="j_rules">HepPlanner rule program</button>
+        </div>
+      </div>
+      <div class="conn cy"></div>
+      <div class="layer">
+        <h4>Layer 3 — The bridge</h4>
+        <div class="owns">engine/bsql_engine/io/io.pyx + engine/src/cython/engine.cpp · owns marshalling</div>
+        <div class="blks">
+          <button class="blk" data-c="c_iopyx">runQueryCaller</button>
+          <button class="blk" data-c="c_runquery">runQuery()</button>
+          <button class="blk" data-c="c_loaders">loaders &amp; parsers</button>
+        </div>
+      </div>
+      <div class="conn"></div>
+      <div class="layer">
+        <h4>Layer 4 — Plan interpreters <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--accent-ink);background:var(--accent-soft);padding:2px 8px;border-radius:99px;vertical-align:2px">the fork</span></h4>
+        <div class="owns">engine/src/CalciteInterpreter.cpp + parser/ · owns text/JSON plan → work</div>
+        <div class="blks">
+          <button class="blk" data-c="i_eval">evaluate_query</button>
+          <button class="blk" data-c="i_exec">execute_plan</button>
+          <button class="blk" data-c="i_match">is_* matchers</button>
+          <button class="blk off" data-c="i_transform">transform_operator_bigger_than_gpu</button>
+        </div>
+      </div>
+      <div class="conn"></div>
+      <div class="layer">
+        <h4>Layer 5 — TaskFlow runtime</h4>
+        <div class="owns">execution_graph/logic_controllers/{TaskFlowProcessor.h, CacheMachine.h} · owns kernels + data flow</div>
+        <div class="blks">
+          <button class="blk" data-c="t_kernel">kernel &amp; port</button>
+          <button class="blk" data-c="t_dsl">kpair &gt;&gt; DSL</button>
+          <button class="blk" data-c="t_graph">graph.execute()</button>
+          <button class="blk" data-c="t_simple">simple kernels</button>
+          <button class="blk" data-c="t_complex">complex kernels</button>
+          <button class="blk" data-c="cm_machine">CacheMachine</button>
+          <button class="blk" data-c="cm_data">CacheData tiers</button>
+          <button class="blk" data-c="cm_queue">WaitingQueue</button>
+        </div>
+      </div>
+      <div class="conn"></div>
+      <div class="layer">
+        <h4>Layer 6 — Operators, distribution &amp; comms</h4>
+        <div class="owns">operators/ + distribution/ + communication/ · owns cudf calls &amp; the network</div>
+        <div class="blks">
+          <button class="blk" data-c="o_orderby">OrderBy.cpp</button>
+          <button class="blk" data-c="o_groupby">GroupBy.cpp</button>
+          <button class="blk" data-c="o_exprs">projection / filter / join</button>
+          <button class="blk" data-c="d_prims">distribution primitives</button>
+          <button class="blk" data-c="d_comms">TCP transport</button>
+        </div>
+      </div>
+    </div>
+    <div class="detail" id="archDetail" aria-live="polite">
+      <h4>Pick a component</h4>
+      <p class="hint">Click any block on the left. Every claim maps to a file:line at tag v0.14.0. Dashed = present in the tree but off the default path.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LIFECYCLE ============ -->
+<section id="lifecycle">
+  <div class="eyebrow">02 · Mental model</div>
+  <h2>Life of a query</h2>
+  <p class="lead">What happens for <code>bc.sql("SELECT ... ORDER BY ...")</code>, end to end. The plan is born as an <em>indented text tree</em>; it only becomes JSON if the taskflow engine is requested.</p>
+  <div class="stepper" data-stepper="lc">
+    <div class="pipe" data-nodes></div>
+    <h4 data-t></h4>
+    <p class="sp" data-p></p>
+    <div class="sbtns">
+      <button data-back>← Back</button>
+      <button data-next>Next →</button>
+      <button data-reset>Reset</button>
+      <div class="bp-dots" data-dots></div>
+    </div>
+  </div>
+  <div class="callout info"><b>Where the plan format changes</b> Calcite returns one string like <code>LogicalSort(...)</code> over <code>LogicalProject(...)</code> over <code>BindableTableScan(...)</code>, indentation = tree depth. The legacy interpreter consumes that string directly. Only when <code>use_execution_graph=True</code> does Python's <code>get_plan()/visit()</code> (context.py:462/391) convert it to the JSON <code>{"expr": ..., "children": [...]}</code> tree that C++'s <code>expr_tree_processor</code> parses with boost property_tree. The KT doc's "PhysicalPlanGenerator.h transforms the json query plan" is exactly this mechanism.</div>
+</section>
+
+<!-- ============ TWO ENGINES ============ -->
+<section id="engines">
+  <div class="eyebrow">03 · Mental model</div>
+  <h2>Two execution paths in one <code>runQuery()</code></h2>
+  <p class="lead">v0.14.0 is a snapshot mid-metamorphosis: the battle-tested recursive interpreter still answers every default query, while the kernel-graph engine — the architecture the KT doc describes — ships beside it behind a flag.</p>
+  <pre><code>// engine/src/cython/engine.cpp:118-124
+std::unique_ptr&lt;ral::frame::BlazingTable&gt; frame;
+if (use_execution_graph) {
+    frame = execute_plan(input_loaders, schemas, tableNames, query, accessToken, queryContext);
+} else {
+    frame = evaluate_query(input_loaders, schemas, tableNames, query, accessToken, queryContext);
+}</code></pre>
+  <div class="twins">
+    <div class="twin live">
+      <div class="tag">Path A — default (use_execution_graph=False)</div>
+      <h4>evaluate_query — recursive line interpreter</h4>
+      <div class="fl">
+        <div class="fn">split(plan, "\n")</div><div class="fd">↓ CalciteInterpreter.cpp:355-363</div>
+        <div class="fn">evaluate_split_query(lines, depth)</div><div class="fd">↓ recursion by 2-space indentation (:116-342)</div>
+        <div class="fn">is_project / is_sort / is_join …</div><div class="fd">↓ substring dispatch per line</div>
+        <div class="fn">process_* operator → BlazingTable</div>
+      </div>
+      <p style="font-size:14px;margin-top:12px">One materialized <code>BlazingTable</code> per plan node, passed up the C++ call stack. Joins/unions find the second child by scanning for the next line at depth 1 (<code>:196-221</code>). No caches, no kernels — but fully distributed via the same operators.</p>
+    </div>
+    <div class="twin next">
+      <div class="tag">Path B — opt-in (use_execution_graph=True)</div>
+      <h4>execute_plan — the kernel graph</h4>
+      <div class="fl">
+        <div class="fn">get_plan(algebra) → JSON in Python</div><div class="fd">↓ context.py:462</div>
+        <div class="fn">expr_tree_processor.build_graph(json)</div><div class="fd">↓ TaskFlowProcessor.h:1416</div>
+        <div class="fn">graph += kernel &gt;&gt; kernel edges</div><div class="fd">↓ CacheMachine per edge</div>
+        <div class="fn">graph.execute() → OutputKernel</div>
+      </div>
+      <p style="font-size:14px;margin-top:12px">One <code>BlazingThread</code> per kernel, tables flowing through <code>CacheMachine</code>s (<code>CalciteInterpreter.cpp:376-417</code>). This is the architecture that becomes the whole engine in 0.15+, where it grows batching, a host-memory tier, and <code>PhysicalPlanGenerator.h</code>.</p>
+    </div>
+  </div>
+  <div class="callout good"><b>Why the same operators serve both</b> Both paths bottom out in <code>ral::processor::*</code> / <code>ral::operators::experimental::*</code> functions (process_project, process_filter, process_sort, process_aggregate, process_logical_join). Path B merely wraps them in kernels: <code>SortKernel = SingleSourceKernel&lt;process_sort&gt;</code> (TaskFlowProcessor.h:543). The taskflow is a re-plumbing of dataflow, not a rewrite of compute.</div>
+</section>
+
+<!-- ============ PLAN → GRAPH ============ -->
+<section id="plangraph">
+  <div class="eyebrow">04 · Deep dive</div>
+  <h2>Plan → kernel graph: <code>expr_tree_processor</code></h2>
+  <p>The ancestor of the KT doc's <code>PhysicalPlanGenerator.h</code> lives at <code>TaskFlowProcessor.h:1153-1474</code>. Three moves: parse JSON into a node tree, map each <code>expr</code> string to a kernel, wire kernels with the right cache type per edge.</p>
+  <h3>1 · Kernel dispatch is substring matching</h3>
+  <pre><code>// TaskFlowProcessor.h:1238-1301 (abridged) — make_kernel(expr)
+if      ( is_project(expr) )         k = std::make_shared&lt;ProjectKernel&gt;(expr, kernel_context);
+else if ( is_filter(expr) )          k = std::make_shared&lt;FilterKernel&gt;(expr, kernel_context);
+else if ( is_join(expr) )            k = std::make_shared&lt;JoinKernel&gt;(expr, kernel_context);
+else if ( is_sort(expr) )            k = std::make_shared&lt;SortKernel&gt;(expr, kernel_context);
+else if ( is_merge(expr) )           k = std::make_shared&lt;MergeStreamKernel&gt;(expr, kernel_context);
+else if ( is_partition(expr) )       k = std::make_shared&lt;PartitionKernel&gt;(expr, kernel_context);
+else if ( is_sort_and_sample(expr) ) k = std::make_shared&lt;SortAndSampleKernel&gt;(expr, kernel_context);
+// ... aggregate variants, LogicalTableScan, BindableTableScan</code></pre>
+  <p>Each <code>is_*</code> is a <code>find()</code> against a constant (<code>expression_utils.cpp:80-110</code>): <code>"LogicalSort"</code>, <code>"LogicalMerge"</code>, <code>"LogicalPartition"</code>, <code>"Logical_SortAndSample"</code>, <code>"Logical_AggregateMerge"</code>… (<code>expression_utils.hpp:94-107</code>). The scan kernels also resolve the table: <code>get_table_index(table_names, extract_table_name(expr))</code> picks the right <code>data_loader</code> + <code>Schema</code>, and the loader is <code>clone()</code>d per kernel (:1288).</p>
+  <h3>2 · The namesake rewrite: <code>transform_operator_bigger_than_gpu</code></h3>
+  <p>A sort result can be bigger than one GPU. The fix (TaskFlowProcessor.h:1322-1361): rewrite the <em>plan string itself</em>, splicing one logical node into a three-kernel pipeline before any kernel is built.</p>
+  <div class="ba">
+    <pre><code>LogicalSort(sort0=[$1], dir0=[ASC])
+  LogicalProject(...)
+    BindableTableScan(...)</code></pre>
+    <div class="mid">findAndReplaceAll(expr,<br>"LogicalSort", …) ⟶</div>
+    <pre><code>LogicalMerge(sort0=[$1], dir0=[ASC])
+  LogicalPartition(sort0=[$1], dir0=[ASC])
+    Logical_SortAndSample(sort0=[$1], dir0=[ASC])
+      LogicalProject(...)
+        BindableTableScan(...)</code></pre>
+  </div>
+  <p>The same rewrite handles aggregation: <code>LogicalAggregate</code> → <code>Logical_AggregateMerge(Logical_AggregatePartition(Logical_AggregateAndSample(...)))</code> (:1362-1400). Since each new string still contains the original arguments, the freshly minted kernels re-parse <code>sort0/dir0/fetch</code> or <code>group=[{...}]</code> from their own expression — the plan string is the only contract between planner and kernels.</p>
+  <div class="callout warn"><b>Gated off at this tag</b> <code>transform_operators_bigger_than_gpu</code> is hard-coded <code>false</code> — both at the struct default (TaskFlowProcessor.h:1220) and at the call site (CalciteInterpreter.cpp:397). So at v0.14.0 a <code>LogicalSort</code> becomes a single <code>SortKernel</code> running the monolithic <code>process_sort</code>; the decomposed pipeline is fully implemented but waiting. In 0.15+ this transform graduates into <code>PhysicalPlanGenerator.h</code> and becomes the only path — exactly the architecture the KT doc describes.</div>
+  <h3>3 · Wiring rules: <code>visit()</code> knows the special edges</h3>
+  <pre><code>// TaskFlowProcessor.h:1439-1471 (abridged)
+// SortAndSample has TWO outputs: sorted data and the partition plan
+graph += (*child)["output_a"] &gt;&gt; (*parent)["input_a"];
+graph += (*child)["output_b"] &gt;&gt; (*parent)["input_b"];
+// Partition → MergeStream: one cache PER partition (FOR_EACH)
+graph += link(*child, *parent, cache_settings{.type = CacheType::FOR_EACH,
+                                              .num_partitions = context-&gt;getTotalNodes()});
+// MergeStream → parent: concatenate everything into one table
+graph += link(*child, *parent, cache_settings{.type = CacheType::CONCATENATING, ...});
+// everything else: plain SIMPLE cache
+graph += *child-&gt;kernel_unit &gt;&gt; (*parent-&gt;kernel_unit);</code></pre>
+  <p>Binary nodes (join/union) get named ports <code>input_a</code>/<code>input_b</code> by child index. Finally <code>execute_plan</code> appends the sink: <code>graph += link(graph.get_last_kernel(), output, {.type = CONCATENATING})</code> and calls <code>graph.execute()</code> (CalciteInterpreter.cpp:399-405).</p>
+</section>
+
+<!-- ============ TASKFLOW & CACHE ============ -->
+<section id="taskflow">
+  <div class="eyebrow">05 · Deep dive</div>
+  <h2>TaskFlow &amp; CacheMachine — kernels, ports, and the GPU ⇄ disk cache</h2>
+  <h3>The runtime in four types</h3>
+  <ul>
+    <li><b>kernel</b> (TaskFlowProcessor.h:126) — a computation unit: <code>virtual kstatus run()</code>, a monotonically assigned <code>kernel_id</code>, and two <code>port</code>s (<code>input_</code>, <code>output_</code>). <code>k["portname"]</code> yields a <code>kernel_pair</code> for wiring.</li>
+    <li><b>port</b> (:78) — a name → <code>CacheMachine</code> map. Multi-input kernels register <code>"input_a"/"input_b"</code>; PartitionKernel writes to <code>"output_0"… "output_N"</code>.</li>
+    <li><b>kpair / link()</b> (:169-238) — the wiring DSL: <code>a &gt;&gt; b</code>, <code>a &gt;&gt; b["input_a"]</code>, <code>link(a, b, cache_settings{...})</code>. Each edge materializes one (or N, for FOR_EACH) cache machines registered on both ports (:406-437).</li>
+    <li><b>graph</b> (:269) — adjacency sets keyed by kernel id with a sentinel head <code>-1</code>; <code>execute()</code> (:318-356) BFS-walks the edges and launches one <code>BlazingThread</code> per kernel, running <code>run()</code> to completion, then <code>output_.finish()</code>; all threads joined at the end.</li>
+  </ul>
+  <div class="callout info"><b>Execution model</b> This is thread-per-kernel with blocking pulls — not a task scheduler. A kernel's <code>run()</code> typically does <code>pullFromCache()</code> (blocks on a condition variable), computes via a <code>ral::operators</code> function, <code>addToCache(result)</code>, returns <code>proceed</code>. EOS propagates by <code>finish()</code>: the queue's <code>finished</code> latch flips, and blocked consumers wake to a <code>nullptr</code>.</div>
+  <h3>CacheData — where a table physically lives</h3>
+  <p>The KT doc's cache vocabulary maps to <code>CacheMachine.h</code>. A <code>CacheData</code> is a claim check for a table in some tier; <code>decache()</code> redeems it back into a GPU <code>BlazingTable</code>:</p>
+  <table>
+    <tr><th>Class</th><th>Tier</th><th>Storage</th><th>decache()</th></tr>
+    <tr><td><code>GPUCacheData</code> (CacheMachine.h:36)</td><td>GPU</td><td>owns the <code>BlazingTable</code> (device cudf columns)</td><td>moves the pointer — free</td></tr>
+    <tr><td><code>CacheDataLocalFile</code> (:50)</td><td>Disk</td><td>ORC file at <code>/tmp/.blazing-temp-&lt;64 rand chars&gt;.orc</code> (CacheMachine.cpp:41-53)</td><td><code>cudf_io::read_orc</code> back to device (:35-39)</td></tr>
+  </table>
+  <p style="margin-top:12px">Messages wrap CacheData with a global auto-increment id — <code>message&lt;T&gt;</code> (:65-87), the KT doc's "message class to represent a CacheData object and its ID". The <code>WaitingQueue</code> (:90-165) is the conduit: <code>put()</code> + <code>notify_all</code>, blocking <code>pop_or_wait()</code>, drain-everything <code>get_all_or_wait()</code> (used by the concatenating variant), and the <code>finished</code> atomic as the end-of-stream latch.</p>
+  <h3>addToCache — the tier decision, verbatim</h3>
+  <pre><code>// CacheMachine.cpp:81-106 (abridged)
+void CacheMachine::addToCache(std::unique_ptr&lt;ral::frame::BlazingTable&gt; table) {
+  for(int cacheIndex = 0; cacheIndex &lt; memoryPerCache.size(); cacheIndex++) {
+    if(usedMemory[cacheIndex] &lt;= (memoryPerCache[cacheIndex] + table-&gt;sizeInBytes())) {
+      usedMemory[cacheIndex] += table-&gt;sizeInBytes();
+      if(cacheIndex == 0) {                     // tier 0: stay on GPU
+        auto cache_data = std::make_unique&lt;GPUCacheData&gt;(std::move(table));
+        this-&gt;waitingCache-&gt;put(std::make_unique&lt;message&lt;CacheData&gt;&gt;(std::move(cache_data), cacheIndex));
+      } else {                                  // tier 1+: spill to ORC, off-thread
+        std::thread t([table = std::move(table), this, cacheIndex]() mutable {
+          if(this-&gt;cachePolicyTypes[cacheIndex] == LOCAL_FILE) {
+            auto cache_data = std::make_unique&lt;CacheDataLocalFile&gt;(std::move(table));
+            this-&gt;waitingCache-&gt;put(std::make_unique&lt;message&lt;CacheData&gt;&gt;(std::move(cache_data), cacheIndex));
+          }
+        });
+        t.detach();
+      }
+      break;
+    }
+  }
+}</code></pre>
+  <p>Budgets come from <code>create_cache_machine</code> (TaskFlowProcessor.h:244-260): tier 0 = <code>gpuMemorySize() * 0.75</code> — 75% of <em>free</em> device memory via <code>cudaMemGetInfo</code> (GPUManager.cu:11-20) — and tier 1 = <code>INT_MAX</code> with policy <code>LOCAL_FILE</code>. Accounting is a pair of plain counter vectors (<code>usedMemory</code> / <code>memoryPerCache</code>), incremented on add, decremented on pull.</p>
+  <div class="stepper" data-stepper="cm">
+    <div class="pipe" data-nodes></div>
+    <h4 data-t></h4>
+    <p class="sp" data-p></p>
+    <div class="sbtns">
+      <button data-back>← Back</button>
+      <button data-next>Next →</button>
+      <button data-reset>Reset</button>
+      <div class="bp-dots" data-dots></div>
+    </div>
+  </div>
+  <div class="callout warn"><b>v0.14.0 vs the KT doc's memory model</b> The KT describes <code>BlazingMemoryResource</code> with Device/Host/Disk tiers and <code>CPUCacheData</code> over <code>BlazingHostTable</code>. None of that exists at this tag (verified by grep): the enum already reserves <code>CPU</code> and <code>IO_FILE</code> slots, but only GPU and LOCAL_FILE are instantiated, and there is no host tier between them — spilling goes straight to ORC. The host tier, real memory resources, and config thresholds (<code>BLAZING_DEVICE_MEM_CONSUMPTION_THRESHOLD</code>) land in 0.15+. Also mid-construction honesty: the spill thread is detached fire-and-forget, the threshold comparison adds the incoming size to the <em>budget</em> side, and spilled ORC files are never deleted.</div>
+</section>
+
+<!-- ============ SORT ============ -->
+<section id="sort">
+  <div class="eyebrow">06 · Deep dive</div>
+  <h2>The physical plan for ORDER BY — a distributed sample sort</h2>
+  <p class="lead">Sort is the operator that forces every hard problem at once: global order across nodes, data movement, and results bigger than one GPU. BlazingSQL answers with a classic <b>sample sort</b>: sample → global pivots → range-partition → all-to-all shuffle → k-way merge.</p>
+  <h3>Parsing <code>LogicalSort</code></h3>
+  <pre><code>// OrderBy.cpp:207-223 — given LogicalSort(sort0=[$1], dir0=[ASC], fetch=[10])
+std::string limitRowsStr = get_named_expression(combined_expression, "fetch");   // "10" → limit
+cudf::size_type limitRows = !limitRowsStr.empty() ? std::stoi(limitRowsStr) : -1;
+size_t num_sort_columns = count_string_occurrence(combined_expression, "sort");  // sort0, sort1, ...
+for(int i = 0; i &lt; num_sort_columns; i++) {
+  sortColIndices[i] = get_index(get_named_expression(combined_expression, "sort" + std::to_string(i)));  // "$1" → 1
+  sortOrderTypes[i] = (get_named_expression(combined_expression, "dir" + std::to_string(i)) == "DESC");
+}</code></pre>
+  <p><code>process_sort</code> then branches on <code>context-&gt;getTotalNodes()</code>: single node = <code>logicalSort</code> (cudf <code>sorted_order</code> + <code>gather</code>, nulls hard-coded <code>AFTER</code>, OrderBy.cpp:34-55) plus an optional <code>logicalLimit</code>. More than one node = the algorithm below.</p>
+  <h3>The distributed algorithm — <code>distributed_sort</code> (OrderBy.cpp:88-194)</h3>
+  <div class="stepper" data-stepper="ds">
+    <div class="pipe" data-nodes></div>
+    <h4 data-t></h4>
+    <p class="sp" data-p></p>
+    <div class="sbtns">
+      <button data-back>← Back</button>
+      <button data-next>Next →</button>
+      <button data-reset>Reset</button>
+      <div class="bp-dots" data-dots></div>
+    </div>
+  </div>
+  <h3>The two snippets that carry the algorithm</h3>
+  <pre><code>// distribution/primitives.cpp:333-341 — getPivotPointsTable: N-1 global pivots
+cudf::size_type pivotsSize = outputRowSize &gt; 0 ? context-&gt;getTotalNodes() - 1 : 0;
+int32_t step = outputRowSize / context-&gt;getTotalNodes();
+// gather rows at indices step, 2*step, ..., (N-1)*step of the sorted sample union
+auto pivots = cudf::experimental::gather( sortedSamples.view(), gather_map );</code></pre>
+  <pre><code>// distribution/primitives.cpp:196-217 — partitionData: split local sorted table at the pivots
+std::unique_ptr&lt;cudf::column&gt; pivot_indexes = cudf::experimental::upper_bound(
+    columns_to_search, pivots.view(), column_order, null_orders);
+CUDA_TRY(cudaMemcpy(host_data.data(), ...));                       // indices to host
+std::vector&lt;CudfTableView&gt; partitioned_data =
+    cudf::experimental::split(table.view(), host_data);            // zero-copy slices
+// slice i → all_nodes[i]</code></pre>
+  <p>And the merge: <code>sortedMerger</code> (primitives.cpp:296-328) left-folds pairwise <code>cudf::experimental::merge</code> over the received slices — each is already sorted, so the fold yields this node's globally-contiguous sorted range. Concatenating node 0..N-1 outputs in node order gives the total order. A trailing <code>LIMIT</code> becomes a per-node limit via <code>determine_local_limit</code> (OrderBy.cpp:196-205), which exchanges row counts (<code>distributeNumRows</code>/<code>collectNumRows</code>) so each node keeps only <code>min(max(limit − rows_before_me, 0), local_rows)</code>.</p>
+  <div class="callout good"><b>Why sample sort?</b> Pivots are order statistics of a 10% random sample of every node's sort keys (<code>generateSamplesFromRatio(sortColumns, 0.1)</code>, OrderBy.cpp:96-99 — a random gather map, random_generator.cu:65-82). Even sample quantiles ⇒ roughly equal-sized ranges ⇒ balanced nodes without hashing, and — unlike hash partitioning — range ownership preserves order, so the final merge is linear and never re-sorts.</div>
+  <h3>The same algorithm, kernelized — the "bigger than GPU" pipeline</h3>
+  <p>With the transform on, the monolithic function splits at its natural seams into the KT doc's three kernels, connected by caches so no stage must hold everything at once:</p>
+  <div class="twins">
+    <div class="twin live">
+      <div class="tag">kernel pipeline (TaskFlowProcessor.h)</div>
+      <h4>Logical_SortAndSample → LogicalPartition → LogicalMerge</h4>
+      <div class="fl">
+        <div class="fn">SortAndSampleKernel (:642) — sort_and_sample()</div>
+        <div class="fd">↓ output_a = sorted table · output_b = partition plan (multinode only)</div>
+        <div class="fn">PartitionKernel (:674) — partition_sort()</div>
+        <div class="fd">↓ FOR_EACH caches: output_0 … output_N (one per node/partition)</div>
+        <div class="fn">MergeStreamKernel (:775) — merge()</div>
+        <div class="fd">↓ CONCATENATING cache to parent</div>
+        <div class="fn">sorted stream</div>
+      </div>
+    </div>
+    <div class="twin next">
+      <div class="tag">what each stage adds</div>
+      <h4>Streaming details</h4>
+      <div class="fl" style="gap:9px">
+        <div class="fd" style="text-align:left"><b>SortAndSample</b> reuses <code>sort()</code> + <code>sample()</code> (OrderBy.cpp:294-348) — the sample/pivot network round-trip only happens when <code>getTotalNodes() &gt; 1</code>.</div>
+        <div class="fd" style="text-align:left"><b>Partition</b> exchanges ranges via <code>partition_sort</code> (:350-383), then <em>re-samples locally at 25%</em> and cuts each range into 3 sub-partitions with fresh pivots + <code>upper_bound</code> + <code>split</code> (TaskFlowProcessor.h:701-761) — smaller units for the merge to stream.</div>
+        <div class="fd" style="text-align:left"><b>MergeStream</b> loops until <code>input_0</code> reports finished, each round pulling one batch per input cache and merging (:781-820) — merge work starts before partitioning ends.</div>
+      </div>
+    </div>
+  </div>
+  <div class="callout warn"><b>Reality check at this tag</b> Because the transform is gated off, the default v0.14.0 runtime executes <code>LogicalSort</code> as one <code>SortKernel</code> → monolithic <code>distributed_sort</code>. The three-kernel pipeline is real, tested code reachable via <code>build_graph</code> with the flag flipped — and it still carries its scaffolding (debug <code>print_blazing_table_view</code> calls live in MergeStreamKernel's hot path, :804-805). In 0.15+ these kernels mature into <code>BatchOrderByProcessing</code> with single-node variants (<code>LogicalSingleNodeSortAndSample</code>…) — the names the KT doc uses.</div>
+</section>
+
+<!-- ============ GROUPBY & JOIN ============ -->
+<section id="groupjoin">
+  <div class="eyebrow">07 · Deep dive</div>
+  <h2>GroupBy &amp; Join — the same tricks, different seams</h2>
+  <h3>Distributed GROUP BY: aggregate twice, partition once</h3>
+  <p><code>aggregations_with_groupby</code> (GroupBy.cpp:346-493) runs in five beats: <b>(1)</b> local partial aggregation with cudf groupby (in a background thread); <b>(2)</b> sample the <em>group-key</em> columns at 10% and build pivots with <code>generatePartitionPlansGroupBy</code> — which de-duplicates keys before sorting (primitives.cpp:347-372); <b>(3)</b> sort the partials by key and <code>partitionData</code> at the pivots — <em>range</em> partitioning reused verbatim from sort, not hash partitioning; <b>(4)</b> shuffle with <code>distributePartitions</code>/<code>collectPartitions</code>; <b>(5)</b> re-aggregate the collected partials, rewriting <code>COUNT → SUM</code> so counts of counts combine correctly:</p>
+  <pre><code>// GroupBy.cpp:477-480
+if (mod_aggregation_types[i] == AggregateKind::COUNT_VALID || mod_aggregation_types[i] == AggregateKind::COUNT_ALL){
+    mod_aggregation_types[i] = AggregateKind::SUM; // COUNT partials are merged by SUMming
+}</code></pre>
+  <p>Without GROUP BY (<code>aggregations_without_groupby</code>, :215-282) every worker sends its single-row partial to the master, which concatenates and re-reduces. The kernelized form mirrors sort exactly: <code>AggregateAndSampleKernel → AggregatePartitionKernel → AggregateMergeStreamKernel</code> (TaskFlowProcessor.h:827/859/970), where the partition kernel short-circuits when <code>is_aggregations_without_groupby</code> (:872-876).</p>
+  <h3>Join: whole-table at this tag</h3>
+  <p><code>JoinKernel</code> (TaskFlowProcessor.h:545-588) pulls <em>both</em> inputs entirely from <code>input_a</code>/<code>input_b</code>, normalizes <code>IS NOT DISTINCT FROM</code> to <code>=</code>, splits inequality conditions into an equijoin + residual filter (<code>split_inequality_join_into_join_and_filter</code>), then calls <code>process_logical_join</code> — with a <code>process_filter</code> chaser when a residual exists. Distribution happens inside the operator, not the kernel. The KT doc's <code>PartwiseJoin</code> / <code>JoinPartitionKernel</code> — joining cached partition pairs incrementally — is the 0.15+ evolution of this kernel.</p>
+</section>
+
+<!-- ============ WORKED EXAMPLE ============ -->
+<section id="example">
+  <div class="eyebrow">08 · Worked example</div>
+  <h2>The KT query, from SQL to kernels</h2>
+  <p class="lead">The exact example from the KT document — a join + group-by over TPC-H tables:</p>
+  <pre><code>SELECT count(c.c_custkey), sum(c.c_nationkey), n.n_regionkey
+FROM customer AS c
+INNER JOIN nation AS n ON c.c_nationkey = n.n_nationkey
+GROUP BY n.n_regionkey</code></pre>
+  <p>Calcite returns this optimized plan. Two rules from the Hep program are visible in it: <code>AggregateReduceFunctionsRule</code> decomposed <code>SUM</code> into <code>$SUM0</code> + <code>COUNT</code> + a <code>CASE</code> (null when the count is 0), and the custom <code>ProjectTableScanRule</code> folded column pruning into <code>BindableTableScan(projects=[[...]])</code>:</p>
+  <pre><code>LogicalProject(EXPR$0=[$1], EXPR$1=[$2], n_regionkey=[$0])
+  LogicalProject(n_regionkey=[$0], EXPR$0=[$1], EXPR$1=[CASE(=($3, 0), null:INTEGER, $2)])
+    LogicalAggregate(group=[{0}], EXPR$0=[COUNT($1)], EXPR$1=[$SUM0($2)], agg#2=[COUNT($2)])
+      LogicalProject(n_regionkey=[$3], c_custkey=[$0], c_nationkey=[$1])
+        LogicalJoin(condition=[=($1, $2)], joinType=[inner])
+          BindableTableScan(table=[[main, customer]], projects=[[0, 3]], aliases=[[c_custkey, c_nationkey]])
+          BindableTableScan(table=[[main, nation]], projects=[[0, 2]], aliases=[[n_nationkey, n_regionkey]])</code></pre>
+  <p class="lead" style="font-size:16.5px">The KT doc then shows the <em>transformed</em> plan, each step tagged <code>kernelType_kernelId</code> as a debugging hint. Click each line to see which kernel executes it and how it's wired:</p>
+  <div class="cmp-grid">
+    <div class="cmp-list" id="exList"></div>
+    <div class="detail" id="exDetail" aria-live="polite">
+      <h4>Pick a plan line</h4>
+      <p class="hint">Each row is one line of the transformed plan from the KT document. The badge tells you whether a simple or complex kernel runs it.</p>
+    </div>
+  </div>
+  <div class="callout info"><b>About those names</b> The KT doc's transformed plan uses the mature names (<code>ComputeAggregate</code>, <code>MergeAggregate</code>, <code>PartwiseJoin</code>) from the 0.15+ engine, in single-node configuration (no partition step between compute and merge). At v0.14.0 the same decomposition exists with the <code>Logical_Aggregate*</code> constants and always includes the partition kernel. The mapping table below reconciles every term.</div>
+</section>
+
+<!-- ============ KT MAP ============ -->
+<section id="ktmap">
+  <div class="eyebrow">09 · Worked example</div>
+  <h2>KT document ⇄ v0.14.0 code map</h2>
+  <p class="lead">Every concept in "KT Bigger than GPU", located in this exact tag — and where it went next.</p>
+  <table>
+    <tr><th>KT term</th><th>At v0.14.0</th><th>In 0.15+</th></tr>
+    <tr><td><b>TaskFlow</b>: Graph / Kernel / Port</td><td><code>ral::cache::graph</code> (:269) / <code>kernel</code> (:126) / <code>port</code> (:78), all in <code>TaskFlowProcessor.h</code></td><td>split into <code>kernel.h</code>, <code>graph.h</code>, <code>port.h</code>; kernels gain multi-batch loops</td></tr>
+    <tr><td><b>PhysicalPlanGenerator.h</b> (JSON plan → execution graph, single/multi-node configs)</td><td><code>parser::expr_tree_processor::build_graph</code> (TaskFlowProcessor.h:1416) + <code>transform_operator_bigger_than_gpu</code> (:1322, gated off)</td><td>becomes a real <code>PhysicalPlanGenerator.h</code> with per-node-count configurations, always on</td></tr>
+    <tr><td><b>CacheMachine</b> / <b>ConcatenatingCacheMachine</b></td><td>same names, <code>CacheMachine.h:167</code> / CacheMachine.cpp:151 (plus <code>NonWaitingCacheMachine</code>)</td><td>same, plus batch-level pulls and cache events</td></tr>
+    <tr><td><b>GPUCacheData</b> (BlazingTable)</td><td>✓ CacheMachine.h:36</td><td>✓</td></tr>
+    <tr><td><b>CPUCacheData</b> (BlazingHostTable)</td><td><b>not yet</b> — enum slot <code>CPU</code> reserved (:23) but no class, no host tier</td><td>arrives with <code>BlazingHostTable</code> and pinned-host serialization</td></tr>
+    <tr><td><b>CacheDataLocalFile</b> (ORC file)</td><td>✓ CacheMachine.h:50 — <code>/tmp/.blazing-temp-*.orc</code> via <code>cudf_io::write_orc</code></td><td>✓ (configurable paths, cleanup)</td></tr>
+    <tr><td><b>message</b> class (CacheData + ID)</td><td>✓ <code>message&lt;T&gt;</code> with global <code>message_count</code>, CacheMachine.h:65</td><td>✓ ids become strings, used for routing</td></tr>
+    <tr><td><b>WaitingQueue</b> (based on comms MessageQueue)</td><td>✓ CacheMachine.h:90 — mutex + condvar + <code>finished</code> latch; same blocking-mailbox shape as <code>Server::getMessage</code></td><td>✓ gains <code>get_or_wait(id)</code> — its dead precursor is already visible at :148</td></tr>
+    <tr><td><b>BlazingMemoryResource</b> (Device/Host/Disk)</td><td><b>not yet</b> — plain counter vectors; budgets: 75% of free GPU (<code>gpuMemorySize()*0.75</code>) then <code>INT_MAX</code> local-file</td><td>real resource classes with consumption thresholds + config knobs</td></tr>
+    <tr><td><b>Simple kernels</b> (project, filter, union, limit, table_scan, bindable_tablescan)</td><td>all present except a Limit kernel — <code>fetch=[n]</code> is handled inside <code>process_sort</code></td><td>Limit becomes its own kernel</td></tr>
+    <tr><td><b>OrderBy multinode</b>: Logical_SortAndSample, LogicalPartition, LogicalMerge</td><td>✓ exact constants (expression_utils.hpp:103-106) → the three kernels (:642/:674/:775)</td><td>renamed into <code>BatchOrderByProcessing.h</code></td></tr>
+    <tr><td><b>OrderBy single node</b>: LogicalSingleNodeSortAndSample / Partition</td><td>no separate variants — the same kernels branch on <code>getTotalNodes()</code></td><td>dedicated single-node kernel classes (the KT names)</td></tr>
+    <tr><td><b>GroupBy</b>: ComputeAggregateKernel, DistributeAggregateKernel, MergeAggregateKernel</td><td><code>AggregateAndSampleKernel</code> / <code>AggregatePartitionKernel</code> / <code>AggregateMergeStreamKernel</code> (:827/:859/:970)</td><td>renamed to the KT names in <code>BatchAggregationProcessing</code></td></tr>
+    <tr><td><b>Join</b>: PartwiseJoin, JoinPartitionKernel</td><td>single whole-table <code>JoinKernel</code> (:545); distribution inside the operator</td><td>partition-wise incremental join, the KT names</td></tr>
+    <tr><td><b>&lt;kernel_id, context_id&gt;</b> debug hints</td><td><code>kernel::get_id()</code> from static <code>kernel_count</code> (:128); <code>setKernelId</code> per cloned context; network messages keyed <code>MessageID_kernelId_querySubstep</code> (Context.cc:67)</td><td>plan prints annotated <code>type_id</code> per step — the KT screenshot</td></tr>
+  </table>
+</section>
+
+<!-- ============ QUIZ ============ -->
+<section id="quiz">
+  <div class="eyebrow">10 · Reference</div>
+  <h2>Self-check</h2>
+  <div class="qctrl">
+    <button id="qAll">Reveal all</button>
+    <button id="qNone">Hide all</button>
+    <span class="cnt" id="qCnt"></span>
+  </div>
+  <div id="quizList"></div>
+</section>
+
+<!-- ============ GLOSSARY ============ -->
+<section id="glossary">
+  <div class="eyebrow">11 · Reference</div>
+  <h2>Glossary</h2>
+  <table>
+    <tr><th>Term</th><th>Meaning</th></tr>
+    <tr><td>RAL</td><td>Relational Algebra Layer — the C++ engine (<code>engine/src</code>, namespace <code>ral</code>) that executes Calcite plans on GPUs.</td></tr>
+    <tr><td><code>BlazingTable</code> / <code>BlazingTableView</code></td><td>Owning / non-owning wrappers over cudf device columns + column names (LogicPrimitives.h:32/63). The engine's data currency.</td></tr>
+    <tr><td><code>kernel</code></td><td>A node of the execution graph: one computation unit with <code>run()</code>, an id, and input/output ports (TaskFlowProcessor.h:126).</td></tr>
+    <tr><td><code>port</code></td><td>Named slots on a kernel mapping to CacheMachines — <code>"input_a"</code>, <code>"output_b"</code>, <code>"output_0…N"</code> (:78).</td></tr>
+    <tr><td><code>CacheMachine</code></td><td>The edge between kernels: a WaitingQueue of CacheData with tiered placement (GPU or ORC-on-disk) and byte accounting (CacheMachine.h:167).</td></tr>
+    <tr><td><code>CacheData</code></td><td>Claim check for a table in some tier; <code>decache()</code> brings it back to GPU. Variants: <code>GPUCacheData</code>, <code>CacheDataLocalFile</code>.</td></tr>
+    <tr><td><code>WaitingQueue</code></td><td>Mutex + condition-variable deque with a <code>finished</code> latch: <code>put</code>, <code>pop_or_wait</code> (nullptr after finish+drain = EOS), <code>get_all_or_wait</code>.</td></tr>
+    <tr><td><code>kpair</code> / <code>link()</code></td><td>The wiring DSL: <code>a &gt;&gt; b</code>, <code>a &gt;&gt; b["input_a"]</code>, <code>link(a,b,cache_settings)</code> — each edge materializes cache machines (:169-238).</td></tr>
+    <tr><td><code>cache_settings</code> / <code>CacheType</code></td><td>Per-edge cache flavor: SIMPLE, NON_WAITING, CONCATENATING (drain + concat into one table), FOR_EACH (N parallel caches, one per partition).</td></tr>
+    <tr><td>partition plan / pivots</td><td>N−1 rows at even quantiles of the sorted sample union; <code>upper_bound</code> against them splits local data into per-node ranges (primitives.cpp:331).</td></tr>
+    <tr><td>sample sort</td><td>The distributed sort strategy: random 10% sample → global pivots → range partition → all-to-all → k-way merge. Preserves order; no re-sort after shuffle.</td></tr>
+    <tr><td><code>BindableTableScan</code></td><td>Scan with projection/filters folded in by BlazingSQL's custom Calcite rules — <code>projects=[[0,3]]</code> prunes columns at read time.</td></tr>
+    <tr><td><code>Context</code> / <code>ctxToken</code></td><td>Per-query cluster descriptor (nodes, master, token). The token keys the network Server's mailbox; <code>kernelId_querySubstep</code> keys each message exchange.</td></tr>
+    <tr><td><code>kstatus</code></td><td>What <code>run()</code> returns: <code>proceed</code> (output finished, downstream may drain) or <code>stop</code>.</td></tr>
+  </table>
+  <footer>
+    Generated 2026-07-09 from BlazingSQL tag <code>v0.14.0</code> (commit b882bb0) — <code>engine/src</code>, <code>pyblazing</code>, <code>algebra/</code> — cross-referenced against the "KT Bigger than GPU" document.
+    Companion pages: <a href="kt-bigger-than-gpu.html">Bigger than GPU — KT, rebuilt edition</a> · <a href="quest-internals.html">QUEST internals</a> · <a href="quest-pipeline-tutorial.html">QUEST pipeline tutorial</a>.
+    Background: <a href="https://www.youtube.com/watch?v=vhXy-LJCsOQ">interview on the Bigger-than-GPU design</a>.
+  </footer>
+</section>
+
+</main>
+</div>
+
+<script>
+/* ============ architecture explorer ============ */
+const ARCH = {
+py_sql:{t:"BlazingContext.sql() — the orchestrator",b:[
+"Signature: <code>sql(self, sql, table_list=[], algebra=None, use_execution_graph=False)</code> (context.py:1378).",
+"Steps: get algebra via <code>explain()</code> → collect table-scan info (<code>getTableScanInfoCaller</code>) → rewrite Arrow scans → slice tables per node (skip-data / <code>getSlices</code> / repartition) → mint <code>ctxToken = random.randint(0, 64000)</code> → dispatch.",
+"Single node: one direct <code>cio.runQueryCaller(...)</code>. Cluster: one <code>dask_client.submit(collectPartitionsRunQuery, ...)</code> per node, reassembled with <code>dask.dataframe.from_delayed</code> (context.py:1487-1515).",
+"<b>File:</b> pyblazing/apiv2/context.py"]},
+py_explain:{t:"explain() — SQL in, plan text out",b:[
+"One line of substance: <code>return str(self.generator.getRelationalAlgebraString(sql))</code> (context.py:936).",
+"The returned plan is an indented text tree — 2 spaces per level, one <code>LogicalXxx(...)</code> per line. This string is also the user-facing EXPLAIN output.",
+"<b>File:</b> pyblazing/apiv2/context.py:905-936"]},
+py_json:{t:"get_plan() / visit() — text → JSON tree",b:[
+"Only runs when <code>use_execution_graph=True</code> (context.py:1484-1485).",
+"<code>get_plan</code> (:462) converts 2-space indents to tabs and computes a level per line; <code>visit</code> (:391) uses a stack to build <code>{\"expr\": ..., \"children\": [...]}</code> and returns <code>json.dumps(...)</code>.",
+"Binary nodes detected by <code>is_double_children</code>: <code>\"LogicalJoin\" in expr or \"LogicalUnion\" in expr</code> (:388).",
+"This JSON is exactly what C++ <code>expr_tree_processor</code> parses with boost property_tree.",
+"<b>File:</b> pyblazing/apiv2/context.py:388-470"]},
+py_dask:{t:"dask fan-out — one engine call per node",b:[
+"<code>collectPartitionsRunQuery</code> (context.py:134-176) runs on each dask worker: materializes that worker's dask_cudf partitions (concatenating if several), then calls the same <code>cio.runQueryCaller</code> every node runs.",
+"So distribution is symmetric: every node executes the <em>whole</em> plan over its slice; the C++ distribution primitives do the cross-node choreography per operator.",
+"The JVM/Calcite lives only where <code>explain()</code> runs; workers receive the finished plan string.",
+"<b>File:</b> pyblazing/apiv2/context.py:134-176"]},
+j_gen:{t:"RelationalAlgebraGenerator — parse, validate, optimize",b:[
+"Runs inside an in-process JVM started by jpype at import (context.py:37-67) — jars <code>blazingsql-algebra(.core).jar</code>, no subprocess, no socket.",
+"Pipeline: <code>planner.parse(sql)</code> → <code>validate</code> → <code>planner.rel(...).project()</code> → HepPlanner optimization → <code>RelOptUtil.toString(...)</code> (RelationalAlgebraGenerator.java:150-247).",
+"Catalog: every create/drop table rebuilds <code>BlazingSchema</code> + a fresh generator (context.py:938-959), so Calcite always sees current schemas.",
+"<b>File:</b> algebra/blazingdb-calcite-application/.../RelationalAlgebraGenerator.java"]},
+j_rules:{t:"HepPlanner program — 13 rules, no cost model",b:[
+"Rule-based (Hep), not Volcano: deterministic rewrites (RelationalAlgebraGenerator.java:178-208).",
+"Pushdowns: <code>FilterJoinRule.*</code> (filters into joins), <code>FilterAggregateTransposeRule</code>, <code>ProjectJoinTransposeRule</code>, <code>ProjectFilterTransposeRule</code>.",
+"Cleanup: <code>FilterMergeRule</code>, <code>ProjectMergeRule</code>, <code>ProjectRemoveRule</code>.",
+"BlazingSQL customs: <code>ProjectTableScanRule</code> / <code>FilterTableScanRule</code> — fold pruning &amp; predicates into <code>BindableTableScan(projects=[[...]], filters=[[...]])</code>.",
+"<code>AggregateReduceFunctionsRule</code> — decomposes SUM/AVG (visible in the worked example: SUM → $SUM0 + COUNT + CASE)."]},
+c_iopyx:{t:"runQueryCaller — the cython marshaller",b:[
+"io.pyx:248-356: encodes the plan (<code>str.encode(queryPy)</code>), builds per-table vectors — files, uri_values, names, types, <code>calcite_to_file_indices</code>, <code>in_file</code>, <code>row_groups_ids</code> — and for in-memory cudf tables a <code>BlazingTableView</code> over the column views.",
+"TCP cluster metadata → <code>vector[NodeMetaDataTCP]</code> (ip + communication_port).",
+"Return trip: <code>unique_ptr[ResultSet]</code> → cudf DataFrame (:349-354).",
+"<b>File:</b> engine/bsql_engine/io/io.pyx"]},
+c_runquery:{t:"runQuery() — C++ entry per node",b:[
+"engine.cpp:84-135. Builds loaders/schemas, then a <code>Context{ctxToken, contextNodes, master, \"\"}</code> from the TCP metadata and registers the token with the network <code>Server</code> (:107-115).",
+"The fork: <code>use_execution_graph ? execute_plan(...) : evaluate_query(...)</code> (:118-124).",
+"Result: <code>frame-&gt;releaseCudfTable()</code> into a <code>ResultSet</code> back across cython.",
+"The flag is a plain Python kwarg threaded through — there is no config-file option for it at this tag.",
+"<b>File:</b> engine/src/cython/engine.cpp"]},
+c_loaders:{t:"get_loaders_and_schemas — one parser per format",b:[
+"engine.cpp:19-82: per table picks <code>parquet_parser</code>, <code>orc_parser</code>, <code>json_parser</code>, <code>csv_parser</code>, <code>gdf_parser</code> (cudf/dask tables), or <code>arrow_parser</code>.",
+"Provider: <code>uri_data_provider</code> for files (with per-file uri_values for s3/hdfs), <code>dummy_data_provider</code> for in-GPU tables.",
+"<code>data_loader = parser + provider</code>; scan kernels call <code>loader.load_data(context, ...)</code> which handles which files/row-groups this node reads."]},
+i_eval:{t:"evaluate_query — the default interpreter",b:[
+"CalciteInterpreter.cpp:344-374: <code>StringUtil::split(logicalPlan, \"\\n\")</code>, drop trailing blank, recurse.",
+"<code>evaluate_split_query</code> (:116-342): leaf = scan (load data); binary node = find the second child by scanning for the next line at relative depth 1 (indent/2 − call_depth, :196-221) and recurse on both ranges; unary node = recurse then dispatch self.",
+"Dispatch: <code>is_project → process_project</code>, <code>is_aggregate → process_aggregate</code>, <code>is_sort → process_sort</code>, <code>is_filter → process_filter</code>; join splits inequality conditions first.",
+"Everything is one materialized BlazingTable per node, up the call stack — simple, distributed, but nothing streams.",
+"<b>File:</b> engine/src/CalciteInterpreter.cpp"]},
+i_exec:{t:"execute_plan — the taskflow entry",b:[
+"CalciteInterpreter.cpp:376-417: constructs <code>expr_tree_processor{root, context.clone(), loaders, schemas, table_names, transform_operators_bigger_than_gpu = false}</code>.",
+"<code>build_graph(json)</code> → kernel graph; then <code>graph += link(last_kernel, OutputKernel, {CONCATENATING})</code>; <code>graph.execute()</code>; <code>output.release()</code> is the query result.",
+"Note the flag hard-coded false at the call site (:397) — the bigger-than-GPU rewrite never fires in the released path.",
+"<b>File:</b> engine/src/CalciteInterpreter.cpp:376-417"]},
+i_match:{t:"is_* matchers — the plan-string contract",b:[
+"Every dispatch decision is <code>query_part.find(CONSTANT) != npos</code> (expression_utils.cpp:80-110).",
+"Constants (expression_utils.hpp:94-107): LogicalProject, LogicalFilter, LogicalJoin, LogicalUnion, LogicalSort, LogicalAggregate, LogicalTableScan, BindableTableScan — plus the synthetic ones only the transform emits: <code>LogicalMerge</code>, <code>LogicalPartition</code>, <code>Logical_SortAndSample</code>, <code>Logical_Aggregate{Merge,Partition,AndSample}</code>.",
+"Helper parsing everywhere: <code>get_named_expression(expr, \"fetch\")</code> reads <code>name=[value]</code>; <code>get_index(\"$3\")</code> → 3.",
+"The plan string is the single source of truth — kernels re-parse their own expression at run()."]},
+i_transform:{t:"transform_operator_bigger_than_gpu — the namesake, gated off",b:[
+"TaskFlowProcessor.h:1322-1406. Pure string surgery: copy the node's expr three times, <code>findAndReplaceAll</code> LogicalSort → LogicalMerge / LogicalPartition / Logical_SortAndSample, build three nodes, splice them where the sort node was (parent-aware, handles root).",
+"Aggregate branch does the same with the <code>Logical_Aggregate*</code> constants (:1362-1400).",
+"Guarded by <code>transform_operators_bigger_than_gpu</code> — <code>const bool ... = false</code> at :1220, consulted only in <code>build_graph</code> (:1427); in <code>execute_plan</code> the call is commented out (:1313-1315).",
+"This function is the seed of 0.15+'s PhysicalPlanGenerator — where the decomposition becomes unconditional."]},
+t_kernel:{t:"kernel & port — the node contract",b:[
+"<code>kernel</code> (TaskFlowProcessor.h:126-157): <code>virtual kstatus run()</code>; auto-assigned <code>kernel_id</code> from a static counter; <code>input_</code>/<code>output_</code> ports; <code>k[\"port\"]</code> → <code>kernel_pair</code> for the DSL; <code>kernel_type</code> enum tag (:106-121).",
+"<code>port</code> (:78-104): <code>map&lt;string, shared_ptr&lt;CacheMachine&gt;&gt;</code>; <code>register_cache</code> wires an edge's cache to both ends; <code>finish()</code> propagates EOS to every cache.",
+"Default port name when unwired: the kernel's own id as a string (:289-290).",
+"KT mapping: Kernel = \"a node that represents a computation unit\", Port = \"a name and other properties for each graph edge\" — verbatim the same model."]},
+t_dsl:{t:"kpair >> DSL — wiring as expressions",b:[
+"<code>graph += a &gt;&gt; b;</code> — plain edge. <code>graph += a &gt;&gt; b[\"input_b\"];</code> — named target port. <code>graph += link(a, b, cache_settings{.type = CacheType::CONCATENATING});</code> — configured edge (TaskFlowProcessor.h:169-238).",
+"<code>graph::operator+=</code> (:288-300) resolves port names (custom or kernel-id default) and calls <code>add_edge</code>.",
+"<code>add_edge</code> (:406-437) creates the edge's cache machine(s) via <code>create_cache_machines</code> and registers them on source.output_ and target.input_; FOR_EACH registers <code>output_i/input_i</code> pairs per partition.",
+"Sources with no parent get a fake edge from sentinel <code>-1</code> so BFS can find them (:429-436)."]},
+t_graph:{t:"graph.execute() — thread-per-kernel BFS",b:[
+"TaskFlowProcessor.h:318-356. BFS from the sentinel head; for each unvisited (source→target) pair, spawn a <code>BlazingThread</code> running <code>source-&gt;run()</code>; on <code>kstatus::proceed</code>, call <code>source-&gt;output_.finish()</code> so consumers can drain and stop.",
+"All threads joined before <code>execute()</code> returns — the graph runs to completion, results landing in OutputKernel.",
+"Duplicate edges between the same pair (e.g. output_a + output_b) are deduped by the visited set — one run() per kernel.",
+"No scheduler, no backpressure beyond blocking pulls: v0.14.0 trusts the caches to buffer. Circular graphs: a TODO comment (:349)."]},
+t_simple:{t:"Simple kernels — thin wrappers over operators",b:[
+"<code>SingleSourceKernel&lt;F&gt;</code> template (:456-477): pull → <code>F(view, expr, context)</code> → push. Instantiations: <code>FilterKernel = SingleSourceKernel&lt;process_filter&gt;</code> (:512), <code>AggregateKernel&lt;process_aggregate&gt;</code> (:539), <code>SortKernel&lt;process_sort&gt;</code> (:543).",
+"<code>ProjectKernel</code> (:514) — same shape, explicit class. <code>TableScanKernel</code> (:1107) — <code>loader.load_data(...)</code> → push. <code>BindableTableScanKernel</code> (:1088) — <code>process_table_scan</code> honors projects/filters from the plan line.",
+"<code>JoinKernel</code> (:545) and <code>UnionKernel</code> (:589) pull two ports; union is UNION ALL only (throws otherwise, :617).",
+"<code>OutputKernel</code> (:1131) — pulls once, holds the final table for <code>release()</code>."]},
+t_complex:{t:"Complex kernels — the KT trio × 2",b:[
+"Sort: <code>SortAndSampleKernel</code> (:642) → <code>PartitionKernel</code> (:674) → <code>MergeStreamKernel</code> (:775). Two output ports on the first (sorted data + partition plan), FOR_EACH caches out of the second, streaming merge in the third.",
+"Aggregate: <code>AggregateAndSampleKernel</code> (:827) → <code>AggregatePartitionKernel</code> (:859) → <code>AggregateMergeStreamKernel</code> (:970) — same skeleton over group keys; partition kernel short-circuits for global aggregates (:872-876).",
+"All six re-parse their own expression string and call the decomposed operator functions in OrderBy.cpp / GroupBy.cpp.",
+"KT mapping: these are the \"complex kernels (orderby, groupby, join)\" — join's partitioned form arrives in 0.15+."]},
+cm_machine:{t:"CacheMachine — the edge with a memory policy",b:[
+"State (CacheMachine.h:167-190): one <code>WaitingQueue&lt;CacheData&gt;</code> + three parallel vectors — <code>cachePolicyTypes</code>, <code>memoryPerCache</code>, <code>usedMemory</code> — indexed by tier.",
+"<code>addToCache</code> (cpp:81-106): first tier whose counter fits takes the table; tier 0 = GPUCacheData inline, others = detached thread writing ORC.",
+"<code>pullFromCache</code> (cpp:116-125): blocking pop, decrement tier counter, <code>decache()</code> to GPU. <code>nullptr</code> = end of stream.",
+"Variants: <code>NonWaitingCacheMachine</code> (non-blocking pop, cpp:135) and <code>ConcatenatingCacheMachine</code> (wait for finish, drain all, <code>concatTables</code>, cpp:151-164)."]},
+cm_data:{t:"CacheData tiers — GPU or ORC file",b:[
+"<code>enum CacheDataType { GPU, CPU, LOCAL_FILE, IO_FILE }</code> (CacheMachine.h:23) — CPU and IO_FILE are reserved slots with no class at this tag.",
+"<code>GPUCacheData</code> (:36): owns the BlazingTable; decache is a move.",
+"<code>CacheDataLocalFile</code> (:50 + cpp:41-53): writes <code>/tmp/.blazing-temp-&lt;rand64&gt;.orc</code> with <code>cudf_io::write_orc</code>; decache = <code>read_orc</code> back to device; <code>sizeInBytes</code> = POSIX <code>stat().st_size</code>.",
+"KT says \"a simple ORC file\" — confirmed (the PDF's 'OCR' is a typo).",
+"Files are never deleted at this tag; cleanup lands later."]},
+cm_queue:{t:"WaitingQueue & message — flow control, v0",b:[
+"<code>message&lt;T&gt;</code> (CacheMachine.h:65-87): payload + tier index + global auto-increment <code>message_id</code> — the KT's \"message class\".",
+"<code>WaitingQueue</code> (:90-165): <code>put</code> (push + notify_all), <code>pop_or_wait</code> (condvar on finished‖non-empty; nullptr when finished+drained = EOS), <code>get_all_or_wait</code> (block until finished, drain everything), <code>notify()</code> = set the <code>finished</code> latch.",
+"No capacity bound — <code>put</code> never blocks; backpressure is only the consumer side. The spill tier is what keeps unbounded buffering survivable.",
+"A dead <code>getWaitingQueue(message_id)</code> (:148-156) foreshadows 0.15+'s id-matched <code>get_or_wait(id)</code>."]},
+o_orderby:{t:"OrderBy.cpp — parse, sort, distribute",b:[
+"<code>process_sort</code> (:207-261): parse <code>sort0/dir0/fetch</code>; ≤1 node → <code>logicalSort</code> (+<code>logicalLimit</code>); else <code>distributed_sort</code> + <code>determine_local_limit</code>.",
+"<code>logicalSort</code> (:34-55): cudf <code>sorted_order</code> on the key columns + <code>gather</code> of the full table; nulls AFTER (hard-coded, with a ToDo).",
+"<code>distributed_sort</code> (:88-194): the 8-step sample sort — see the deep dive.",
+"Decomposed forms for the kernels: <code>sort</code> :294, <code>sample</code> :308, <code>sort_and_sample</code> :340, <code>partition_sort</code> :350, <code>merge</code> :385."]},
+o_groupby:{t:"GroupBy.cpp — aggregate twice",b:[
+"<code>process_aggregate</code> (:57-91) parses <code>group=[{...}]</code> + aggregation expressions, dispatches to without-groupby / with-groupby / group-only variants.",
+"<code>aggregations_with_groupby</code> (:346-493): local cudf groupby partials → 10% sample of group keys → pivots (<code>generatePartitionPlansGroupBy</code> de-dups first) → sort partials by key → <code>partitionData</code> → shuffle → re-aggregate with COUNT→SUM rewrite (:477-486).",
+"Range partitioning by key order statistics — the sort machinery reused, not a hash exchange.",
+"<code>aggregations_without_groupby</code> (:215-282): workers send single-row partials to the master, master re-reduces."]},
+o_exprs:{t:"Projection / filter / join operators",b:[
+"<code>process_project</code> (LogicalProject.cpp): evaluates Calcite expressions per column via the interops GPU expression interpreter (Interpreter/), producing a new BlazingTable.",
+"<code>process_filter</code> (LogicalFilter.cpp): evaluates the predicate to a boolean mask, then applies it with cudf.",
+"<code>process_logical_join</code> (LogicalFilter.cpp / processor): equijoin via cudf join; inequality joins are pre-split by <code>split_inequality_join_into_join_and_filter</code> into equijoin + residual filter (used by both engines).",
+"Distributed joins/filters coordinate inside the operator using the same distribution primitives."]},
+d_prims:{t:"distribution/primitives.cpp — the sort toolbox",b:[
+"Samples: <code>sendSamplesToMaster</code> :49 / <code>collectSamples</code> :68 (master blocks per worker on <code>Server::getMessage</code>).",
+"Plan: <code>generatePartitionPlans</code> :100 (concat + cudf sort of all samples) → <code>getPivotPointsTable</code> :331 (N−1 quantile rows) → <code>distributePartitionPlan</code> :131 broadcast / <code>getPartitionPlan</code> :142.",
+"Split &amp; shuffle: <code>partitionData</code> :158 (<code>upper_bound</code> + zero-copy <code>split</code>), <code>distributePartitions</code> :222 (one thread per destination), <code>collectPartitions</code> :246.",
+"Merge: <code>sortedMerger</code> :296 — left-fold of pairwise <code>cudf::merge</code>.",
+"Counts for LIMIT: <code>distributeNumRows</code> :396 / <code>collectNumRows</code> :409."]},
+d_comms:{t:"TCP transport — GPU→host→socket→host→GPU",b:[
+"A BlazingTableView is wrapped in a <code>GPUComponentMessage</code> subclass (SampleToNodeMaster / PartitionPivots / ColumnData — ComponentMessages.h:15-71).",
+"<code>GetRawColumns</code> (GPUComponentMessage.h:70-163) emits raw device pointers + <code>ColumnTransport</code> metadata (strings and zero-copy split offsets handled specially).",
+"<code>Client::send</code> opens TCP to the node's ip:port; buffers are <code>cudaMemcpyAsync</code>'d device→host and streamed (reader_writer.cpp:158-160); the receiving Server reads host→device and <code>MakeFrom</code> rebuilds cudf columns.",
+"<code>Server::getMessage(ctxToken, message_id)</code> is a blocking mailbox keyed by query token + <code>MessageID_kernelId_querySubstep</code> — why every round-trip increments <code>querySubstep</code> first."]}
+};
+const detail=document.getElementById('archDetail');
+document.querySelectorAll('.blk').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.blk').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel');
+    const d=ARCH[b.dataset.c];
+    detail.innerHTML='<h4>'+d.t+'</h4><ul>'+d.b.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
+  });
+});
+
+/* ============ steppers ============ */
+const STEPPERS={
+lc:{nodes:[['sq','bc.sql()'],['ca','Calcite'],['pp','plan prep'],['rq','runQuery'],['ip','interpret'],['op','operators'],['df','DataFrame']],
+steps:[
+{t:"1 · Python receives the SQL",p:"bc.sql(query) (context.py:1378). Unless the caller passed a pre-built algebra, it calls explain(sql), which crosses into the in-process JVM via jpype — no subprocess, no service: Calcite is a library call away.",s:{sq:'ok'}},
+{t:"2 · Calcite parses, validates, optimizes",p:"RelationalAlgebraGenerator: planner.parse → validate → rel(), then a HepPlanner program of 13 rewrite rules — filter/project pushdowns, and BlazingSQL's ProjectTableScanRule/FilterTableScanRule which fold pruning into BindableTableScan. Returns RelOptUtil.toString(plan): an indented text tree.",s:{sq:'ok',ca:'full'}},
+{t:"3 · Python preps the plan and the cluster",p:"getTableScanInfoCaller extracts scan steps/columns; table slices are computed per node (skip-data for files, repartition for dask_cudf); ctxToken minted. If use_execution_graph=True, get_plan()/visit() converts the text tree into the JSON {expr, children} form here, in Python.",s:{sq:'ok',ca:'ok',pp:'full'}},
+{t:"4 · One runQuery per node",p:"cio.runQueryCaller marshals plan + schemas + files + TCP metadata through cython into C++ runQuery (engine.cpp:84). Each node builds its loaders (parser + provider per table), constructs the Context (nodes, master, ctxToken), and registers the token with the comms Server.",s:{sq:'ok',ca:'ok',pp:'ok',rq:'full'}},
+{t:"5 · The fork: interpret the plan",p:"use_execution_graph=False (default): evaluate_query splits the text on newlines and recurses by indentation, dispatching each LogicalXxx line. True: execute_plan parses the JSON, expr_tree_processor builds the kernel graph, and graph.execute() launches one thread per kernel.",s:{sq:'ok',ca:'ok',pp:'ok',rq:'ok',ip:'full'}},
+{t:"6 · Operators do the physical work",p:"Both paths call the same ral::operators / ral::processor functions: cudf kernels for compute, distribution primitives for cross-node exchanges (samples, pivots, partitions over TCP). Complex operators like ORDER BY run the full sample-sort choreography inside.",s:{ip:'ok',op:'full'}},
+{t:"7 · Results come home",p:"Each node ends with one BlazingTable: releaseCudfTable() → ResultSet → cython → cudf.DataFrame. Single node returns it directly; a cluster returns dask.dataframe.from_delayed over the per-node futures — the distributed result stays distributed.",s:{op:'ok',df:'ok'}}]},
+cm:{nodes:[['add','addToCache'],['t0','tier 0: GPU?'],['gpu','GPUCacheData'],['orc','ORC write'],['pull','pullFromCache'],['dec','decache()']],
+steps:[
+{t:"1 · A kernel pushes its output",p:"kernel::run() finishes computing and calls output_.get_cache()->addToCache(std::move(table)). The table's cost is BlazingTable::sizeInBytes() — an estimate over column widths + null bitmaps (LogicPrimitives.cpp:65-94). That number is all the accounting ever sees.",s:{add:'full'}},
+{t:"2 · Walk the tiers",p:"addToCache loops over the tier vectors (CacheMachine.cpp:81). Tier 0 is GPU with budget gpuMemorySize()*0.75 — 75% of free device memory sampled at cache construction. If the counter fits, the table stays on GPU.",s:{add:'ok',t0:'full'}},
+{t:"3 · Happy path: stay on device",p:"A GPUCacheData wrapping the live BlazingTable is enqueued into the WaitingQueue inside a message with an auto-increment id. Zero copies. usedMemory[0] += size.",s:{add:'ok',t0:'ok',gpu:'ok'}},
+{t:"4 · Pressure path: spill to ORC — 'bigger than GPU'",p:"If tier 0 is over budget, tier 1 (LOCAL_FILE, budget INT_MAX) takes it: a detached std::thread serializes the table to /tmp/.blazing-temp-<64 rand chars>.orc via cudf_io::write_orc and enqueues a CacheDataLocalFile claim check instead. GPU memory is freed; the queue only holds a file path.",s:{add:'ok',t0:'stall',orc:'full'}},
+{t:"5 · Consumer blocks politely",p:"The downstream kernel's pullFromCache() calls WaitingQueue::pop_or_wait() — a condition variable waiting on 'finished or non-empty'. When the producer's port finish() flips the finished latch and the queue is drained, the pull returns nullptr: end of stream.",s:{orc:'ok',pull:'full'}},
+{t:"6 · decache back to GPU",p:"Whatever tier the message landed in, decache() redeems it: GPUCacheData moves the pointer; CacheDataLocalFile runs cudf_io::read_orc back to device memory. usedMemory[tier] -= size. The consumer never knows the table took a detour through disk.",s:{orc:'ok',pull:'ok',dec:'ok'}}]},
+ds:{nodes:[['pr','parse'],['sm','sample 10%'],['ls','local sort ∥'],['pv','pivots @ master'],['sp','upper_bound + split'],['sh','all-to-all'],['mg','cudf::merge'],['lm','local limit']],
+steps:[
+{t:"1 · Parse LogicalSort",p:"process_sort extracts sortColIndices from sort0=[$1]..., directions from dir0=[ASC|DESC], and the optional fetch=[n] limit (OrderBy.cpp:207-224). With getTotalNodes() > 1, distributed_sort takes over.",s:{pr:'ok'}},
+{t:"2 · Every node samples its keys — 10%, random",p:"generateSamplesFromRatio(sortColumns, 0.1): a random gather map of ceil(rows*0.1) uniform indices over just the sort-key columns (primitives.cpp:564, random_generator.cu:65-82). Small, representative, cheap to ship.",s:{pr:'ok',sm:'full'}},
+{t:"3 · Local sort runs concurrently",p:"logicalSort (cudf sorted_order + gather) is kicked off on a std::thread (OrderBy.cpp:104-120) while the sampling round-trip is in flight — network latency hidden behind GPU work. Joined at :157.",s:{sm:'ok',ls:'full'}},
+{t:"4 · Master computes the partition plan",p:"Workers sendSamplesToMaster; master collectSamples (blocking mailbox per worker), concatenates every node's samples plus its own, sorts the union with cudf, and getPivotPointsTable gathers rows at indices step, 2·step, …, (N−1)·step — N−1 global pivots at even quantiles. distributePartitionPlan broadcasts them (OrderBy.cpp:124-154).",s:{ls:'ok',pv:'full'}},
+{t:"5 · Range-partition the sorted local table",p:"partitionData: cudf upper_bound finds where each pivot lands in the locally sorted keys; indices copy to host; cudf::split slices the table — zero-copy views, slice i owned by node i (primitives.cpp:196-217).",s:{pv:'ok',sp:'full'}},
+{t:"6 · All-to-all shuffle",p:"distributePartitions spawns one thread per foreign destination; each partition's columns stream GPU→host→TCP→host→GPU as a ColumnDataMessage. collectPartitions blocks for the N−1 ranges this node owns (primitives.cpp:222-282).",s:{sp:'ok',sh:'full'}},
+{t:"7 · K-way merge, no re-sort",p:"sortedMerger left-folds pairwise cudf::merge over the received slices plus the self-partition — every input is already sorted on the keys, so the fold is linear and the output is this node's contiguous slice of the global order (primitives.cpp:296-328, OrderBy.cpp:178-189).",s:{sh:'ok',mg:'full'}},
+{t:"8 · LIMIT becomes local arithmetic",p:"For fetch=[n], determine_local_limit exchanges row counts (distributeNumRows/collectNumRows) so node k computes rows_before_me and keeps min(max(n − rows_before_me, 0), local_rows) — a global top-n with zero extra data movement (OrderBy.cpp:196-205).",s:{mg:'ok',lm:'ok'}}]}
+};
+document.querySelectorAll('[data-stepper]').forEach(el=>{
+  const cfg=STEPPERS[el.dataset.stepper];let i=0;
+  const nodesEl=el.querySelector('[data-nodes]'),tEl=el.querySelector('[data-t]'),pEl=el.querySelector('[data-p]');
+  const back=el.querySelector('[data-back]'),next=el.querySelector('[data-next]'),reset=el.querySelector('[data-reset]'),dots=el.querySelector('[data-dots]');
+  nodesEl.innerHTML=cfg.nodes.map((n,k)=>(k?'<span class="parrow">→</span>':'')+'<span class="pnode" data-n="'+n[0]+'">'+n[1]+'</span>').join('');
+  dots.innerHTML=cfg.steps.map(()=>'<i></i>').join('');
+  function render(){
+    const st=cfg.steps[i];
+    nodesEl.querySelectorAll('.pnode').forEach(n=>{n.className='pnode '+(st.s[n.dataset.n]||'');});
+    tEl.textContent=st.t;pEl.innerHTML=st.p;
+    back.disabled=i===0;next.disabled=i===cfg.steps.length-1;
+    dots.querySelectorAll('i').forEach((d,k)=>d.classList.toggle('on',k<=i));
+  }
+  back.onclick=()=>{if(i>0){i--;render();}};
+  next.onclick=()=>{if(i<cfg.steps.length-1){i++;render();}};
+  reset.onclick=()=>{i=0;render();};
+  render();
+});
+
+/* ============ worked example plan lines ============ */
+const EXAMPLE=[
+{id:'0_1',lvl:'sim',n:'LogicalProject',ex:'EXPR$0=[$1], EXPR$1=[$2], n_regionkey=[$0]',d:'<b>ProjectKernel</b> (TaskFlowProcessor.h:514) — pulls one table, evaluates each output expression via the interops GPU expression interpreter, pushes the reordered result. Here it just permutes columns back to the SELECT order.<br><br>Wiring: plain SIMPLE cache from below, CONCATENATING cache into the OutputKernel appended by execute_plan.'},
+{id:'0_2',lvl:'sim',n:'LogicalProject',ex:'n_regionkey=[$0], EXPR$0=[$1], EXPR$1=[CASE(=($3, 0), null:INTEGER, $2)]',d:'<b>ProjectKernel</b> again — but this one exists because of Calcite\'s <code>AggregateReduceFunctionsRule</code>: SUM was decomposed into $SUM0 + COUNT, and this projection reassembles real SUM semantics with <code>CASE(count=0 → null, else $SUM0)</code>. The CASE lowers to the interops ops BLZ_MAGIC_IF_NOT / BLZ_FIRST_NON_MAGIC in the expression interpreter.'},
+{id:'11_3',lvl:'part',n:'MergeAggregate',ex:'group=[{0}], EXPR$0=[COUNT($1)], EXPR$1=[$SUM0($2)], agg#2=[COUNT($2)]',d:'KT/0.15+ name; at v0.14.0 this is <code>Logical_AggregateMerge</code> → <b>AggregateMergeStreamKernel</b> (:970). Loops pulling one batch from each input_i cache and merges partial aggregations via <code>merge_group</code> — re-running the aggregation over concatenated partials with COUNT rewritten to SUM so counts combine.<br><br>The KT plan shows the <em>single-node</em> configuration: compute → merge, no partition kernel between.'},
+{id:'9_4',lvl:'part',n:'ComputeAggregate',ex:'group=[{0}], EXPR$0=[COUNT($1)], EXPR$1=[$SUM0($2)], agg#2=[COUNT($2)]',d:'KT/0.15+ name; v0.14.0: <code>Logical_AggregateAndSample</code> → <b>AggregateAndSampleKernel</b> (:827) calling <code>group_and_sample</code> — the local cudf groupby partial aggregation, plus (multinode only) a sample of the group keys pushed to output_b as the future partition plan.<br><br>In the distributed configuration an <b>AggregatePartitionKernel</b> would sit between this and the merge, range-partitioning partials by group key.'},
+{id:'0_5',lvl:'sim',n:'LogicalProject',ex:'n_regionkey=[$3], c_custkey=[$0], c_nationkey=[$1]',d:'<b>ProjectKernel</b> — post-join column pruning: keeps only the three columns the aggregate needs, in the order the aggregate expects ($0 = group key). Placed here by Calcite\'s ProjectJoinTransposeRule/ProjectMergeRule during Hep optimization.'},
+{id:'14_6',lvl:'part',n:'PartwiseJoin',ex:'condition=[=($1, $2)], joinType=[inner]',d:'KT/0.15+ name for the partition-wise streaming join. At v0.14.0: <b>JoinKernel</b> (:545) — pulls <em>both</em> inputs whole from input_a/input_b, normalizes IS NOT DISTINCT FROM, splits inequality conditions into equijoin + residual filter, runs <code>process_logical_join</code> (cudf hash join inside), then a filter chaser if needed.<br><br>Wiring: the two BindableTableScan kernels feed input_a and input_b — the one place visit() assigns ports by child index.'},
+{id:'13_7',lvl:'miss',n:'BindableTableScan',ex:'table=[[main, customer]], projects=[[0, 3]], aliases=[[c_custkey, c_nationkey]]',d:'<b>BindableTableScanKernel</b> (:1088) → <code>process_table_scan</code>. The <code>projects=[[0, 3]]</code> means Calcite\'s custom ProjectTableScanRule already pruned the read to c_custkey + c_nationkey — the parquet/csv reader materializes only those columns. On a cluster, each node\'s data_loader reads only its assigned files/row-groups.'},
+{id:'13_8',lvl:'miss',n:'BindableTableScan',ex:'table=[[main, nation]], projects=[[0, 2]], aliases=[[n_nationkey, n_regionkey]]',d:'<b>BindableTableScanKernel</b> for the nation side — projects=[[0, 2]] reads only n_nationkey + n_regionkey. Table resolution: <code>get_table_index(table_names, extract_table_name(expr))</code> picks this table\'s loader + schema; the loader is clone()d so each kernel owns its provider state (:1293-1299).'}
+];
+const exList=document.getElementById('exList'),exDetail=document.getElementById('exDetail');
+EXAMPLE.forEach((c,i)=>{
+  const b=document.createElement('button');b.className='cmp';
+  b.innerHTML='<span class="st">'+c.id+'</span><span class="nm">'+c.n+'<small>'+c.ex+'</small></span><span class="lvl '+c.lvl+'">'+(c.lvl==='sim'?'simple kernel':c.lvl==='part'?'complex kernel':'scan kernel')+'</span>';
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.cmp').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');
+    exDetail.innerHTML='<h4>'+c.id+' · '+c.n+'</h4><p style="font-family:\'JetBrains Mono\',monospace;font-size:11.5px;color:var(--muted);word-break:break-all">'+c.ex+'</p><div style="font-size:14.5px">'+c.d+'</div>';
+  });
+  exList.appendChild(b);
+});
+
+/* ============ quiz ============ */
+const QUIZ=[
+{tag:'plan creation',q:'How does Python talk to Calcite — service, subprocess, or something else?',a:'Neither: jpype starts an in-process JVM at import time (context.py:37-67) with the blazingsql-algebra jars on the classpath. explain() is a JNI method call — str(generator.getRelationalAlgebraString(sql)) — returning the plan as an indented text string.'},
+{tag:'plan creation',q:'What optimizer does BlazingSQL use, and what are its two custom rules?',a:'A Calcite HepPlanner (rule-based, deterministic — no cost model) with 13 rules. The custom pair is ProjectTableScanRule and FilterTableScanRule, which fold column pruning and predicates into BindableTableScan(projects=[[...]], filters=[[...]]) so scans read less.'},
+{tag:'plan format',q:'In what format does the plan cross into C++?',a:'As the raw indented text string — always. Only when use_execution_graph=True does Python first rewrite it into a JSON {expr, children} tree (get_plan/visit, context.py:391-470), because expr_tree_processor parses JSON via boost property_tree while evaluate_query consumes the text directly.'},
+{tag:'the fork',q:'What selects between evaluate_query and execute_plan?',a:'A plain Python kwarg: bc.sql(..., use_execution_graph=False). It threads unchanged through runQueryCaller into C++ runQuery\'s final bool (engine.cpp:118-124). There is no config-file option for it at this tag.'},
+{tag:'interpreter',q:'How does evaluate_split_query find the two children of a join?',a:'By indentation: it scans lines counting leading spaces in steps of two (depth = indent/2 − call_depth) and remembers the last line at relative depth 1 — that line starts the second child. It then recurses on the two sub-ranges of the line vector (CalciteInterpreter.cpp:196-221).'},
+{tag:'plan → graph',q:'How is a kernel chosen for a plan node?',a:'Substring matching: make_kernel runs the is_* predicate chain, and each is simply expr.find("LogicalSort") != npos against constants in expression_utils.hpp. The plan string is the whole contract — kernels re-parse their own expression inside run().'},
+{tag:'bigger than GPU',q:'What does transform_operator_bigger_than_gpu actually do, and does it run?',a:'It string-rewrites the plan: copies the LogicalSort line three times, findAndReplaceAll-ing the name into LogicalMerge / LogicalPartition / Logical_SortAndSample, then splices three nodes where one stood (same for LogicalAggregate → the Logical_Aggregate* trio). At v0.14.0 it never runs: the flag is hard-coded false at both the struct default (:1220) and the execute_plan call site (CalciteInterpreter.cpp:397). It becomes PhysicalPlanGenerator.h in 0.15+.'},
+{tag:'taskflow',q:'What is the execution model of graph.execute()?',a:'Thread-per-kernel: BFS over the edges from sentinel −1, one BlazingThread per kernel running run() to completion, then output_.finish(); all threads joined. No scheduler, no task granularity — blocking cache pulls are the only coordination.'},
+{tag:'cache',q:'Name the cache tiers at v0.14.0 and their budgets.',a:'Two real tiers per CacheMachine: tier 0 GPU with budget gpuMemorySize()*0.75 (75% of free device memory via cudaMemGetInfo), tier 1 LOCAL_FILE with budget INT_MAX — ORC files at /tmp/.blazing-temp-<64 rand chars>.orc written by a detached thread. The enum reserves CPU and IO_FILE, but no host tier exists yet — that\'s 0.15+ (BlazingHostTable, BlazingMemoryResource).'},
+{tag:'cache',q:'How does end-of-stream propagate through a CacheMachine?',a:'CacheMachine::finish() calls WaitingQueue::notify(), which sets the atomic finished latch and wakes all waiters. pop_or_wait\'s predicate is "finished or non-empty"; once the queue drains it returns nullptr, which every kernel treats as EOS. ConcatenatingCacheMachine instead blocks in get_all_or_wait until finished, then drains and concatenates everything.'},
+{tag:'sort',q:'Where do the pivots come from in the distributed sort?',a:'Each node random-samples 10% of its sort-key columns; the master concatenates all samples, sorts the union with cudf, and gathers rows at indices step, 2·step, …, (N−1)·step (step = rows/N) — N−1 order statistics at even quantiles (getPivotPointsTable, primitives.cpp:331-344). These broadcast to all nodes as the partition plan.'},
+{tag:'sort',q:'Why does the post-shuffle merge never need to re-sort?',a:'Range partitioning by global pivots means node k receives only rows in its key range, and every received slice was cut from an already-sorted table. sortedMerger left-folds cudf::merge — which requires sorted inputs — so the result is node k\'s contiguous slice of the global order. Node order concatenation = total order.'},
+{tag:'sort',q:'What overlap hides the sampling network round-trip?',a:'distributed_sort launches the local logicalSort on a std::thread (OrderBy.cpp:104-120) before entering the samples→pivots exchange, joining it only when the partition plan is needed — GPU sort and master round-trip run concurrently.'},
+{tag:'groupby',q:'What\'s the COUNT trick in distributed aggregation?',a:'Partials are aggregated twice: once locally, once after the shuffle. On the second pass COUNT_VALID/COUNT_ALL are rewritten to SUM (GroupBy.cpp:477-480) — because merging counts means summing them, not re-counting rows.'},
+{tag:'comms',q:'Physically, how does a partition travel between nodes?',a:'distributePartitions spawns a thread per foreign destination; the BlazingTableView is wrapped in a ColumnDataMessage whose buffers are cudaMemcpy\'d device→host and streamed over a fresh TCP connection to the peer\'s ip:port; the receiving Server reads host→device and rebuilds cudf columns. Mailbox keying: ctxToken selects the query, MessageID_kernelId_querySubstep selects the exchange — which is why querySubstep increments before every round-trip.'},
+{tag:'trivia',q:'What construction dust is still visible in the v0.14.0 taskflow path?',a:'Plenty — it\'s mid-metamorphosis: debug print_blazing_table_view calls live in MergeStreamKernel\'s hot loop (:804-805), the spill thread is detached with a "wait, don\'t kill the main process" comment, spilled ORC files are never deleted, addToCache\'s threshold check adds the incoming size to the budget side, and a dead getWaitingQueue(message_id) foreshadows the id-matched pulls of 0.15+.'}
+];
+const quizList=document.getElementById('quizList'),qCnt=document.getElementById('qCnt');
+function updCnt(){qCnt.textContent=document.querySelectorAll('.qcard.open').length+' / '+QUIZ.length+' revealed';}
+QUIZ.forEach(q=>{
+  const c=document.createElement('div');c.className='qcard';
+  c.innerHTML='<div class="qhead" role="button" aria-expanded="false"><span class="qtag">'+q.tag+'</span><span>'+q.q+'</span><span class="tick">✓</span></div><div class="qans">'+q.a+'</div>';
+  c.querySelector('.qhead').addEventListener('click',()=>{c.classList.toggle('open');c.querySelector('.qhead').setAttribute('aria-expanded',c.classList.contains('open'));updCnt();});
+  quizList.appendChild(c);
+});
+document.getElementById('qAll').onclick=()=>{document.querySelectorAll('.qcard').forEach(c=>c.classList.add('open'));updCnt();};
+document.getElementById('qNone').onclick=()=>{document.querySelectorAll('.qcard').forEach(c=>c.classList.remove('open'));updCnt();};
+updCnt();
+
+/* ============ copy buttons ============ */
+document.querySelectorAll('pre').forEach(p=>{
+  const b=document.createElement('button');b.className='copybtn';b.textContent='copy';
+  b.onclick=()=>{navigator.clipboard.writeText(p.querySelector('code').innerText).then(()=>{b.textContent='copied';setTimeout(()=>b.textContent='copy',1200);});};
+  p.appendChild(b);
+});
+
+/* ============ scroll-spy ============ */
+const links=[...document.querySelectorAll('nav.side a')];
+const obs=new IntersectionObserver(es=>{
+  es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id));}});
+},{rootMargin:'-20% 0px -70% 0px'});
+document.querySelectorAll('main section[id]').forEach(s=>obs.observe(s));
+</script>
+</body>
+</html>

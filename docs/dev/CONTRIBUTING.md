@@ -23,40 +23,60 @@ brew install cmake googletest snappy
 ## Development Loop
 
 ```bash
-# 1. Configure and build
-mkdir -p build && cd build
-cmake ..
-make
+# 1. Configure and build (defaults to Debug, uses Ninja if available)
+cmake -B build
+cmake --build build
 
 # 2. Run all unit tests
-ctest --output-on-failure
+ctest --test-dir build --output-on-failure
 
 # 3. Run a specific test
-./tests/test_graph
+./build/tests/test_graph
 ```
 
 > **Note:** The project requires C++23 features (`std::expected`, concepts, ranges, `std::format`).
 > Make sure your compiler supports them.
+
+### CMake Build Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `CMAKE_BUILD_TYPE` | `Debug` | Build type. Auto-set to Debug for single-config generators (Makefiles, Ninja) |
+| `QUEST_BUILD_TESTS` | `ON` | Build test binaries |
+| `QUEST_BUILD_EXAMPLES` | `ON` | Build example binaries |
+| `QUEST_SANITIZERS` | `""` | Enable sanitizers (semicolon-separated list) |
+
+### Sanitizers
+
+Use `QUEST_SANITIZERS` to catch memory bugs and data races at runtime:
+
+```bash
+# AddressSanitizer + UndefinedBehaviorSanitizer (catch memory errors)
+cmake -B build -DQUEST_SANITIZERS="address;undefined"
+cmake --build build && ctest --test-dir build
+
+# ThreadSanitizer (catch data races — cannot combine with ASan)
+cmake -B build-tsan -DQUEST_SANITIZERS=thread
+cmake --build build-tsan && ctest --test-dir build-tsan
+```
+
+### Homebrew (macOS)
+
+The root `CMakeLists.txt` adds `/opt/homebrew` to `CMAKE_PREFIX_PATH` on Apple platforms. You don't need to set it manually.
 
 ## Before Opening a PR
 
 Run the same checks locally:
 
 ```bash
-cd build
-cmake ..
-make
-ctest --output-on-failure
+cmake --build build && ctest --test-dir build --output-on-failure
 ```
 
 If you touched CMake configuration or added new source files, do a clean build:
 
 ```bash
-rm -rf build
-mkdir build && cd build
-cmake ..
-make
-ctest --output-on-failure
+rm -rf build && cmake -B build && cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
 ## Where to Put Tests
@@ -164,11 +184,11 @@ Memory Management (CPU RAM <-> Disk spilling)
 - Keep changes focused and small enough to review.
 - Add or update tests with behavior changes.
 - Run tests locally before opening a PR.
-- If you change planner, operator, or cache architecture, update [ARQUITECTURE.md](ARQUITECTURE.md).
+- If you change planner, operator, or cache architecture, update [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Architecture Reference
 
-See [ARQUITECTURE.md](ARQUITECTURE.md) for detailed documentation on:
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation on:
 
 - **TaskFlow System** -- Execution graph, operator scheduling, and the DSL
 - **Cache System** -- BatchHolder types (Simple vs Concatenating), BlockingQueue

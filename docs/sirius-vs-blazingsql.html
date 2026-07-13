@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sirius ⇄ BlazingSQL — two GPU engines, one bigger-than-GPU lineage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Source+Sans+3:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f6f7f4; --panel:#ffffff; --ink:#161b17; --muted:#59645c;
+  --line:#dce1da;
+  --accent:#76b900; --accent-ink:#3e7000; --accent-soft:#eef6dc;
+  --amber:#b26a00; --amber-soft:#fbf1df;
+  --red:#b3341f; --red-soft:#fbe9e4;
+  --blue:#2a5d8f; --blue-soft:#e7f0f8;
+  --blaze:#b26a00; --blaze-soft:#fbf1df;
+  --code-bg:#14190f; --code-ink:#d9e7c4;
+  --r:12px;
+  --shadow:0 1px 2px rgba(22,27,23,.05),0 6px 20px -8px rgba(22,27,23,.12);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+body{font-family:"Source Sans 3",system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);font-size:16.5px;line-height:1.62}
+::selection{background:var(--accent);color:#10150b}
+code{font-family:"JetBrains Mono",monospace;font-size:.84em;background:#ebeee7;border:1px solid var(--line);border-radius:5px;padding:.08em .35em;white-space:nowrap}
+pre{background:var(--code-bg);color:var(--code-ink);border-radius:10px;padding:14px 16px;overflow-x:auto;position:relative;font-family:"JetBrains Mono",monospace;font-size:.83rem;line-height:1.55}
+pre code{background:none;border:none;padding:0;color:inherit;white-space:pre;font-size:1em}
+a{color:var(--accent-ink)}
+h1,h2,h3,h4{font-family:"Bricolage Grotesque",sans-serif;line-height:1.15;letter-spacing:-.015em}
+h2{font-weight:700;font-size:1.7rem;margin:6px 0 8px}
+h3{font-weight:600;font-size:1.12rem;margin:26px 0 8px}
+p{margin:.55em 0 1em;max-width:72ch}
+ul{padding-left:22px}
+li{margin:.3em 0}
+.wrap{display:grid;grid-template-columns:230px minmax(0,1fr);max-width:1220px;margin:0 auto}
+nav.side{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:36px 18px 36px 24px}
+nav.side .brand{font-family:"JetBrains Mono",monospace;font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:20px}
+nav.side .brand span{color:var(--accent)}
+nav.side .grp{font-family:"JetBrains Mono",monospace;font-size:.64rem;letter-spacing:.12em;text-transform:uppercase;color:#9aa59d;margin:18px 0 6px 10px}
+nav.side a{display:block;font-size:.86rem;color:var(--muted);text-decoration:none;padding:5px 10px;border-left:2px solid transparent;border-radius:0 6px 6px 0}
+nav.side a:hover{color:var(--ink);background:var(--accent-soft)}
+nav.side a.active{color:var(--accent-ink);border-left-color:var(--accent);font-weight:600;background:var(--accent-soft)}
+main{border-left:1px solid var(--line);padding:0 44px 96px;min-width:0}
+section{padding-top:56px}
+.eyebrow{font-family:"JetBrains Mono",monospace;font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-ink);display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.eyebrow::before{content:"";width:26px;height:2px;background:var(--accent)}
+.lead{font-size:1.05rem;color:var(--muted);max-width:66ch;margin-bottom:22px}
+.hero{padding:64px 0 40px;border-bottom:1px solid var(--line)}
+.hero h1{font-weight:800;font-size:clamp(2.1rem,5vw,3.1rem);line-height:1.05;letter-spacing:-.02em;margin:16px 0 14px;max-width:18ch}
+.hero h1 em{font-style:normal;color:var(--accent-ink)}
+.hero .sub{font-size:1.12rem;color:var(--muted);max-width:62ch}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.chip{font-family:"JetBrains Mono",monospace;font-size:.72rem;padding:5px 11px;border-radius:999px;border:1px solid var(--line);background:var(--panel)}
+.chip.g{background:var(--accent-soft);border-color:#c9e39a;color:var(--accent-ink)}
+.chip.t{background:var(--blue-soft);border-color:#c9dcec;color:var(--blue)}
+.chip.r{background:var(--red-soft);border-color:#ecc4bb;color:var(--red)}
+.chip.a{background:var(--amber-soft);border-color:#eed9b4;color:var(--amber)}
+.chip.b{background:var(--blue-soft);border-color:#c9dcec;color:var(--blue)}
+.chip.z{background:var(--blaze-soft);border-color:#eed9b4;color:var(--blaze)}
+.callout{border-radius:var(--r);padding:14px 18px;margin:18px 0;border:1px solid;font-size:15.5px}
+.callout.warn{background:var(--amber-soft);border-color:#eed9b4}
+.callout.bad{background:var(--red-soft);border-color:#ecc4bb}
+.callout.info{background:var(--blue-soft);border-color:#c9dcec}
+.callout.good{background:var(--accent-soft);border-color:#c9e39a}
+.callout b:first-child{display:block;margin-bottom:2px;font-family:"Bricolage Grotesque",sans-serif}
+/* lineage strip — signature interactive */
+.lineage{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:10px;align-items:stretch;margin:22px 0 8px}
+.lin-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow);transition:border-color .2s,box-shadow .2s}
+.lin-card:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.lin-card .era{font-family:"JetBrains Mono",monospace;font-size:.64rem;text-transform:uppercase;letter-spacing:.12em;margin-bottom:4px}
+.lin-card.blaze .era{color:var(--blaze)}
+.lin-card.ideas .era{color:var(--amber)}
+.lin-card.sirius .era{color:var(--accent-ink)}
+.lin-card h4{margin:0 0 6px;font-size:16px}
+.lin-card p{margin:0;font-size:13.5px;color:var(--muted)}
+.lin-arrow{display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;font-size:18px;color:var(--accent);font-weight:600}
+/* architecture explorer */
+.arch-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:22px;align-items:start}
+.dual-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.eng-col{display:flex;flex-direction:column;gap:0}
+.eng-col .col-head{font-family:"Bricolage Grotesque",sans-serif;font-weight:700;font-size:14px;padding:8px 12px;border-radius:8px 8px 0 0;margin-bottom:0}
+.eng-col.sirius .col-head{background:var(--accent-soft);color:var(--accent-ink)}
+.eng-col.blaze .col-head{background:var(--blaze-soft);color:var(--blaze)}
+.layer{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:11px 13px;margin-top:8px}
+.layer h4{margin:0 0 2px;font-size:14.5px}
+.layer .owns{font-family:"JetBrains Mono",monospace;font-size:.64rem;color:var(--muted);margin-bottom:8px}
+.blks{display:flex;flex-wrap:wrap;gap:6px}
+.blk{font-family:"JetBrains Mono",monospace;font-size:.72rem;padding:5px 9px;border-radius:8px;border:1px solid var(--line);background:#fbfcfa;cursor:pointer;color:var(--ink);transition:border-color .15s,background .15s,box-shadow .15s}
+.blk:hover{border-color:var(--accent);background:var(--accent-soft)}
+.blk.sel{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink);font-weight:600;box-shadow:0 0 0 3px rgba(118,185,0,.22)}
+.blk:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+.blk.off{border-style:dashed;color:var(--muted)}
+.blk.blaze-sel.sel{border-color:var(--blaze);background:var(--blaze-soft);color:var(--blaze);box-shadow:0 0 0 3px rgba(178,106,0,.18)}
+.detail{position:sticky;top:24px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;min-height:180px}
+.detail h4{margin:0 0 8px;font-size:17px}
+.detail ul{margin:.3em 0;padding-left:18px;font-size:14.5px}
+.detail li{margin:.35em 0}
+.detail .hint{color:var(--muted);font-size:14px}
+.detail .eng-tag{font-family:"JetBrains Mono",monospace;font-size:.64rem;padding:2px 8px;border-radius:99px;display:inline-block;margin-bottom:8px}
+.detail .eng-tag.s{background:var(--accent-soft);color:var(--accent-ink)}
+.detail .eng-tag.b{background:var(--blaze-soft);color:var(--blaze)}
+/* stepper */
+.mode-toggle{display:flex;gap:0;margin:16px 0 0;border:1px solid var(--line);border-radius:10px;overflow:hidden;width:fit-content}
+.mode-toggle button{font-family:"JetBrains Mono",monospace;font-size:.78rem;padding:8px 16px;border:none;background:var(--panel);cursor:pointer;color:var(--muted)}
+.mode-toggle button.on{background:var(--accent);color:#10150b;font-weight:600}
+.mode-toggle button.on.blaze{background:var(--blaze);color:#fff}
+.stepper{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;margin:14px 0 20px}
+.pipe{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:14px}
+.pnode{font-family:"JetBrains Mono",monospace;font-size:.72rem;padding:7px 10px;border-radius:8px;border:1.5px solid var(--line);background:#fbfcfa;transition:all .2s}
+.pnode.ok{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.pnode.full{border-color:var(--accent);background:var(--accent);color:#10150b;font-weight:600;box-shadow:0 0 12px rgba(118,185,0,.35)}
+.pnode.stall{border-color:#d98070;background:var(--red-soft);color:var(--red);font-weight:600}
+.stepper.blaze-mode .pnode.ok{border-color:var(--blaze);background:var(--blaze-soft);color:var(--blaze)}
+.stepper.blaze-mode .pnode.full{border-color:var(--blaze);background:var(--blaze);color:#fff;box-shadow:0 0 12px rgba(178,106,0,.35)}
+.parrow{color:var(--muted);font-size:13px}
+.stepper h4{margin:4px 0 4px;font-size:16.5px}
+.stepper .sp{min-height:72px;font-size:15px;margin:0 0 12px;color:#2b332d}
+.sbtns{display:flex;gap:8px;align-items:center}
+.sbtns button{font-family:"JetBrains Mono",monospace;font-size:.78rem;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:#fbfcfa;cursor:pointer}
+.sbtns button:hover:not(:disabled){border-color:var(--accent);background:var(--accent-soft)}
+.sbtns button:disabled{opacity:.4;cursor:default}
+.bp-dots{display:flex;gap:5px;margin-left:auto}
+.bp-dots i{width:8px;height:8px;border-radius:99px;background:#dbe0d8}
+.bp-dots i.on{background:var(--accent)}
+.stepper.blaze-mode .bp-dots i.on{background:var(--blaze)}
+/* twins / gap */
+.twins{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:20px 0}
+.twin{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 18px}
+.twin.sirius{border-top:4px solid var(--accent)}
+.twin.blaze{border-top:4px solid var(--blaze)}
+.twin h4{margin:0 0 2px;font-size:17px}
+.twin .tag{font-family:"JetBrains Mono",monospace;font-size:.68rem;letter-spacing:.08em;text-transform:uppercase}
+.twin.sirius .tag{color:var(--accent-ink)}
+.twin.blaze .tag{color:var(--blaze)}
+.twin .fl{display:flex;flex-direction:column;gap:5px;margin-top:12px}
+.twin .fn{font-family:"JetBrains Mono",monospace;font-size:.72rem;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#fbfcfa;text-align:center}
+.twin .fd{text-align:center;color:var(--muted);font-size:13px}
+.gap-banner{background:var(--code-bg);color:var(--code-ink);border-radius:var(--r);padding:22px 24px;margin:18px 0;box-shadow:var(--shadow);border-left:4px solid var(--accent)}
+.gap-banner h3{margin:0 0 8px;font-size:1.25rem;color:#fff;font-family:"Bricolage Grotesque",sans-serif}
+.gap-banner p{margin:0;font-size:1rem;color:#c8d8ab;max-width:820px}
+/* comparison map */
+.cmp-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:22px;align-items:start}
+.cmp-list{display:flex;flex-direction:column;gap:8px}
+.cmp{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 13px;cursor:pointer;text-align:left;font-family:inherit;font-size:14.5px;width:100%;transition:border-color .15s,background .15s}
+.cmp:hover{border-color:var(--accent)}
+.cmp.sel{border-color:var(--accent);background:var(--accent-soft)}
+.cmp:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+.cmp .st{font-size:15px;width:22px;text-align:center}
+.cmp .nm{font-weight:600;font-family:"Bricolage Grotesque",sans-serif}
+.cmp .nm small{display:block;font-weight:400;color:var(--muted);font-family:"JetBrains Mono",monospace;font-size:.68rem;margin-top:1px}
+.cmp .lvl{font-family:"JetBrains Mono",monospace;font-size:.64rem;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.lvl.sim{background:var(--accent-soft);color:var(--accent-ink)}
+.lvl.part{background:var(--amber-soft);color:var(--amber)}
+.lvl.miss{background:var(--red-soft);color:var(--red)}
+/* roadmap */
+.phases{display:flex;flex-direction:column;gap:12px;margin-top:18px;counter-reset:ph}
+.phase{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.phase summary{display:flex;align-items:center;gap:13px;padding:14px 18px;cursor:pointer;list-style:none;font-family:"Bricolage Grotesque",sans-serif;font-weight:600;font-size:16.5px}
+.phase summary::-webkit-details-marker{display:none}
+.phase summary::after{content:"+";margin-left:auto;font-family:"JetBrains Mono",monospace;color:var(--muted);font-size:18px}
+.phase[open] summary::after{content:"−"}
+.phase .stepnum{counter-increment:ph;font-family:"JetBrains Mono",monospace;font-size:.72rem;background:var(--accent-soft);color:var(--accent-ink);border-radius:99px;min-width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-weight:600}
+.phase .stepnum::before{content:counter(ph)}
+.phase .body{padding:0 18px 16px 57px;font-size:15px}
+.phase .goal{font-family:"JetBrains Mono",monospace;font-size:.7rem;color:var(--accent-ink);text-transform:uppercase;letter-spacing:.1em}
+/* quiz */
+.qcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:9px;overflow:hidden}
+.qhead{display:flex;gap:11px;align-items:baseline;padding:12px 15px;cursor:pointer;font-size:15px}
+.qhead:hover{background:#fafbf8}
+.qhead .qtag{font-family:"JetBrains Mono",monospace;font-size:.64rem;color:var(--accent-ink);background:var(--accent-soft);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.qhead .tick{margin-left:auto;color:var(--accent-ink);opacity:0;font-weight:700}
+.qcard.open .tick{opacity:1}
+.qans{display:none;padding:0 15px 13px 15px;font-size:14.5px;color:#2b332d;border-top:1px dashed var(--line);padding-top:10px;margin:0 15px 13px;padding-left:0;padding-right:0}
+.qcard.open .qans{display:block}
+.qctrl{display:flex;gap:10px;align-items:center;margin-bottom:14px}
+.qctrl button{font-family:"JetBrains Mono",monospace;font-size:.72rem;padding:6px 13px;border-radius:8px;border:1px solid var(--line);background:var(--panel);cursor:pointer}
+.qctrl button:hover{border-color:var(--accent)}
+.qctrl .cnt{font-family:"JetBrains Mono",monospace;font-size:.72rem;color:var(--muted);margin-left:auto}
+table{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--panel);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow)}
+th{font-family:"JetBrains Mono",monospace;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;text-align:left;background:#eef0ec;padding:9px 13px;color:#3d463f}
+td{padding:9px 13px;border-top:1px solid var(--line);vertical-align:top}
+.copybtn{position:absolute;top:8px;right:8px;font-family:"JetBrains Mono",monospace;font-size:.66rem;background:#2a3320;color:#c8d8ab;border:1px solid #3d4a2e;border-radius:6px;padding:3px 9px;cursor:pointer}
+.copybtn:hover{background:#38452b}
+footer{border-top:1px solid var(--line);margin-top:70px;padding-top:24px;color:var(--muted);font-size:14px}
+@media(max-width:960px){
+  .wrap{display:block}
+  nav.side{position:sticky;top:0;height:auto;background:var(--paper);border-bottom:1px solid var(--line);display:flex;gap:6px;overflow-x:auto;padding:10px 16px;z-index:50}
+  nav.side .brand,nav.side .grp{display:none}
+  nav.side a{white-space:nowrap;border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:.8rem;border-left:1px solid var(--line)}
+  nav.side a.active{border-color:var(--accent);border-left-color:var(--accent)}
+  main{border-left:none;padding:0 20px 72px}
+  .hero h1{font-size:2.1rem;max-width:none}
+  .lineage{grid-template-columns:1fr;gap:6px}
+  .lin-arrow{transform:rotate(90deg);padding:4px 0}
+}
+@media(max-width:860px){.arch-grid,.cmp-grid,.twins,.dual-cols{grid-template-columns:1fr}.detail{position:static}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="side" id="sidenav">
+  <div class="brand">Sirius ⇄ BlazingSQL</div>
+  <div class="grp">Mental model</div>
+  <a href="#top">Hero</a>
+  <a href="#model">Architecture</a>
+  <a href="#lifecycle">Life of a query</a>
+  <a href="#gap">Structural gap</a>
+  <div class="grp">Compare &amp; learn</div>
+  <a href="#quest-study">QUEST study</a>
+  <a href="#compare">Component map</a>
+  <a href="#roadmap">Roadmap</a>
+  <div class="grp">Reference</div>
+  <a href="#quiz">Self-check</a>
+  <a href="#glossary">Glossary</a>
+</nav>
+<main>
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="top">
+  <div class="eyebrow">lineage · GPU SQL · bigger than GPU</div>
+  <h1><em>Sirius</em> ⇄ BlazingSQL — two GPU engines, one bigger-than-GPU lineage</h1>
+  <p class="sub">Line BlazingSQL (v0.14.0 RAL + the KT model) up against Sirius (DuckDB extension, modern NVIDIA GPU engine) component by component. See what evolved, what flipped, and how to study the gap with your hands.</p>
+  <div class="chips">
+    <span class="chip g">DuckDB gate · create_plan()</span>
+    <span class="chip z">Calcite / RAL · evaluate_query fork</span>
+    <span class="chip t">CacheMachine tiers · GPU→ORC</span>
+    <span class="chip a">transform gated off @ v0.14</span>
+    <span class="chip g">reserve-before-dispatch</span>
+    <span class="chip b">sample-sort both sides</span>
+    <span class="chip t">task_creator hint chain</span>
+    <span class="chip r">silent CPU fallback</span>
+  </div>
+  <div class="lineage" aria-label="Lineage from BlazingSQL ideas to Sirius">
+    <div class="lin-card blaze">
+      <div class="era">ancestor · v0.14 / KT</div>
+      <h4>BlazingSQL</h4>
+      <p>Calcite text plan → RAL. CacheMachine demotion + plan-time Sort→Sample→Partition→Merge (gated). Thread-per-kernel.</p>
+    </div>
+    <div class="lin-arrow" aria-hidden="true">→</div>
+    <div class="lin-card ideas">
+      <div class="era">ideas that traveled</div>
+      <h4>Bigger than GPU</h4>
+      <p>Decompose blocking ops. Tiered intermediates. Ports, not neighbor pointers. Sample sort for ORDER BY.</p>
+    </div>
+    <div class="lin-arrow" aria-hidden="true">→</div>
+    <div class="lin-card sirius">
+      <div class="era">modern · DuckDB ext</div>
+      <h4>Sirius</h4>
+      <p>create_plan() or silent CPU. Pipelines at blockers. Reservations + predicate downgrade. Data-driven tasks.</p>
+    </div>
+  </div>
+  <div class="callout info"><b>Lineage note</b> QUEST (this repo) inherits BlazingSQL TaskFlow DNA — <code>OperatorType</code>, <code>EdgeConfig</code>, CacheMachine→BatchHolder. This page is about the two <em>GPU</em> engines; QUEST is a <a href="#quest-study">study destination</a> for pipelines, scheduling, and the next replication phases — guided by Sirius internals, not a third GPU engine on this map.</div>
+</section>
+
+<!-- ============ ARCHITECTURE ============ -->
+<section id="model">
+  <div class="eyebrow">01 · Mental model</div>
+  <h2>Architecture explorer — dual stacks</h2>
+  <p class="lead">Same job, different scaffolding. Click any block; the detail panel cites real APIs from the companion docs. Green = Sirius, amber tags = BlazingSQL.</p>
+  <div class="arch-grid">
+    <div class="dual-cols">
+      <div class="eng-col sirius">
+        <div class="col-head">Sirius · DuckDB → GPU</div>
+        <div class="layer">
+          <h4>Frontend</h4>
+          <div class="owns">DuckDB parse / optimize · extension hooks</div>
+          <div class="blks">
+            <button class="blk" data-c="s_duck">DuckDB SQL</button>
+            <button class="blk" data-c="s_hooks">optimizer hooks</button>
+          </div>
+        </div>
+        <div class="layer">
+          <h4>Interception</h4>
+          <div class="owns">OnFinalizePrepare · the swap</div>
+          <div class="blks">
+            <button class="blk" data-c="s_fin">OnFinalizePrepare</button>
+            <button class="blk" data-c="s_gate">create_plan()</button>
+          </div>
+        </div>
+        <div class="layer">
+          <h4>Plan &amp; pipelines</h4>
+          <div class="owns">physical ops · meta-pipeline · converter</div>
+          <div class="blks">
+            <button class="blk" data-c="s_phys">sirius_physical_operator</button>
+            <button class="blk" data-c="s_meta">meta-pipeline</button>
+            <button class="blk" data-c="s_conv">pipeline converter</button>
+          </div>
+        </div>
+        <div class="layer">
+          <h4>Task runtime</h4>
+          <div class="owns">hint chain · reserve · dispatch</div>
+          <div class="blks">
+            <button class="blk" data-c="s_tc">task_creator</button>
+            <button class="blk" data-c="s_sched">task scheduler</button>
+            <button class="blk" data-c="s_exec">gpu_pipeline_executor</button>
+          </div>
+        </div>
+        <div class="layer">
+          <h4>cuCascade memory</h4>
+          <div class="owns">repositories · reservations · downgrade</div>
+          <div class="blks">
+            <button class="blk" data-c="s_repo">shared_data_repository</button>
+            <button class="blk" data-c="s_resv">reservation manager</button>
+            <button class="blk" data-c="s_down">downgrade_executor</button>
+          </div>
+        </div>
+      </div>
+      <div class="eng-col blaze">
+        <div class="col-head">BlazingSQL · Calcite → RAL</div>
+        <div class="layer">
+          <h4>Python / Calcite</h4>
+          <div class="owns">jpype JVM · HepPlanner · plan text</div>
+          <div class="blks">
+            <button class="blk blaze-sel" data-c="b_sql">bc.sql()</button>
+            <button class="blk blaze-sel" data-c="b_cal">Calcite / explain()</button>
+          </div>
+        </div>
+        <div class="layer">
+          <h4>Bridge</h4>
+          <div class="owns">cython · runQuery per node</div>
+          <div class="blks">
+            <button class="blk blaze-sel" data-c="b_run">runQuery()</button>
+            <button class="blk blaze-sel off" data-c="b_json">get_plan() JSON</button>
+          </div>
+        </div>
+        <div class="layer">
+          <h4>The fork</h4>
+          <div class="owns">evaluate_query | execute_plan</div>
+          <div class="blks">
+            <button class="blk blaze-sel" data-c="b_eval">evaluate_query</button>
+            <button class="blk blaze-sel" data-c="b_exec">execute_plan</button>
+            <button class="blk blaze-sel off" data-c="b_xform">transform_operator_bigger_than_gpu</button>
+          </div>
+        </div>
+        <div class="layer">
+          <h4>TaskFlow / CacheMachine</h4>
+          <div class="owns">thread-per-kernel · WaitingQueue</div>
+          <div class="blks">
+            <button class="blk blaze-sel" data-c="b_kern">kernel &amp; port</button>
+            <button class="blk blaze-sel" data-c="b_cm">CacheMachine</button>
+            <button class="blk blaze-sel" data-c="b_wq">WaitingQueue</button>
+          </div>
+        </div>
+        <div class="layer">
+          <h4>Operators / comms</h4>
+          <div class="owns">cudf · sample sort · TCP</div>
+          <div class="blks">
+            <button class="blk blaze-sel" data-c="b_sort">distributed_sort</button>
+            <button class="blk blaze-sel" data-c="b_ops">process_* ops</button>
+            <button class="blk blaze-sel" data-c="b_tcp">TCP transport</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="detail" id="archDetail" aria-live="polite">
+      <h4>Pick a component</h4>
+      <p class="hint">Click any block. Claims map to APIs documented in <code>sirius.html</code> and <code>blazingsql-internals.html</code>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LIFECYCLE ============ -->
+<section id="lifecycle">
+  <div class="eyebrow">02 · Mental model</div>
+  <h2>Life of a query — twin paths</h2>
+  <p class="lead">Toggle the engine. Same teaching stepper; different truth. BlazingSQL forks on a flag; Sirius falls back silently when <code>create_plan()</code> throws.</p>
+  <div class="mode-toggle" role="group" aria-label="Engine path">
+    <button type="button" id="modeSirius" class="on">Sirius path</button>
+    <button type="button" id="modeBlaze">BlazingSQL path</button>
+  </div>
+  <div class="stepper" id="lcStepper" data-stepper="lc">
+    <div class="pipe" data-nodes></div>
+    <h4 data-t></h4>
+    <p class="sp" data-p></p>
+    <div class="sbtns">
+      <button type="button" data-back>← Back</button>
+      <button type="button" data-next>Next →</button>
+      <button type="button" data-reset>Reset</button>
+      <div class="bp-dots" data-dots></div>
+    </div>
+  </div>
+  <div class="twins">
+    <div class="twin sirius">
+      <div class="tag">Sirius · silent fallback</div>
+      <h4>DuckDB stays unless the gate succeeds</h4>
+      <div class="fl">
+        <div class="fn">parse / opt → LogicalOperator::Copy()</div>
+        <div class="fd">↓ OnFinalizePrepare</div>
+        <div class="fn">create_plan() — translate or throw</div>
+        <div class="fd">↓ success → PhysicalSiriusExecution</div>
+        <div class="fn">pipelines · tasks · MaterializedQueryResult</div>
+      </div>
+    </div>
+    <div class="twin blaze">
+      <div class="tag">BlazingSQL · explicit fork</div>
+      <h4>use_execution_graph picks the interpreter</h4>
+      <div class="fl">
+        <div class="fn">bc.sql → Calcite text plan</div>
+        <div class="fd">↓ runQuery()</div>
+        <div class="fn">evaluate_query (default) | execute_plan</div>
+        <div class="fd">↓ operators / cudf</div>
+        <div class="fn">BlazingTable → DataFrame</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STRUCTURAL GAP ============ -->
+<section id="gap">
+  <div class="eyebrow">03 · The loud part</div>
+  <h2>Biggest structural gap</h2>
+  <div class="gap-banner">
+    <h3>Same slogan, opposite control planes</h3>
+    <p>BlazingSQL makes queries “bigger than GPU” by <b>demoting intermediates after they exist</b> (CacheMachine) and optionally <b>rewriting the plan into kernel pipelines</b>. Sirius does it by <b>refusing to run a task until memory is reserved</b>, then <b>predicate-spilling idle batches</b> until that reservation fits — with pipelines and a data-driven task creator as the execution fabric.</p>
+  </div>
+  <div class="twins">
+    <div class="twin blaze">
+      <div class="tag">BlazingSQL “bigger than GPU”</div>
+      <h4>Demote + decompose (plan-time)</h4>
+      <ul>
+        <li><b>CacheMachine demotion</b> — <code>addToCache</code> keeps GPU if counters fit; else ORC via <code>CacheDataLocalFile</code> (v0.14: no host tier yet).</li>
+        <li><b>Plan-time kernel decomposition</b> — <code>transform_operator_bigger_than_gpu</code> rewrites Sort → SortAndSample → Partition → Merge (and Aggregate trio).</li>
+        <li><b>Execution</b> — thread-per-kernel, blocking <code>pullFromCache</code>, no reservations, no task unit.</li>
+      </ul>
+      <div class="callout warn"><b>Mid-metamorphosis @ v0.14.0</b> <code>transform_operators_bigger_than_gpu</code> is hard-coded <code>false</code>. Host tier enum slots exist; only GPU + LOCAL_FILE are built. The KT mature model (3 tiers, always-on PhysicalPlanGenerator) is the destination, not the tag.</div>
+    </div>
+    <div class="twin sirius">
+      <div class="tag">Sirius “bigger than GPU”</div>
+      <h4>Reserve + spill-to-fit (runtime)</h4>
+      <ul>
+        <li><b>reserve-before-dispatch</b> — <code>make_reservation()</code> before a worker touches the task; history-corrected peak estimate.</li>
+        <li><b>predicate-driven <code>downgrade_executor</code></b> — demote idle repository batches until <code>make_reservation_or_null</code> succeeds; stop immediately.</li>
+        <li><b>data-driven <code>task_creator</code></b> — hint chain READY / WAITING_FOR_INPUT; deepest ready producer first.</li>
+        <li><b>pipelines at blocking ops</b> — streaming fuse; JOIN / ORDER_BY / agg break meta-pipelines.</li>
+        <li><b>Fallback</b> — <code>create_plan()</code> throw → DuckDB CPU plan stays; silent.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="callout bad"><b>What not to confuse</b> BlazingSQL’s dual path is an <em>opt-in graph flag</em>. Sirius’s dual path is a <em>capability gate with silent CPU fallback</em>. CacheMachine demotion ≠ downgrade_executor (push-time tier pick vs reservation-serving sweep). Plan-string Sort rewrite ≠ converter’s three-pipeline sample sort (same algorithm family, different when/how).</div>
+</section>
+
+<!-- ============ QUEST STUDY ============ -->
+<section id="quest-study">
+  <div class="eyebrow">04 · Study destination</div>
+  <h2>QUEST — pipelines shipped, scheduling next</h2>
+  <p class="lead">QUEST is this repo’s CPU/Disk engine. It is <em>not</em> a third GPU stack on this page — it is where you practice Sirius ideas at CPU scale, with BlazingSQL TaskFlow DNA already in the wiring. Full plan: <a href="dev/sirius-replication-plan.md"><code>docs/dev/sirius-replication-plan.md</code></a>. Guideline for “how it should feel”: <a href="sirius.html"><code>docs/sirius.html</code></a>.</p>
+
+  <div class="chips" style="margin-top:0;margin-bottom:8px">
+    <span class="chip g">phase 2 pipelines ✅</span>
+    <span class="chip a">phase 2.7 catalog ☐</span>
+    <span class="chip r">phase 3 tasks ☐</span>
+    <span class="chip b">phase 4 reservations ☐</span>
+  </div>
+
+  <h3>What QUEST already shipped for pipelines</h3>
+  <p>Phase 2 closed the BlazingSQL-shaped “one thread per operator forever” trap. Sirius’s idea — streaming ops fuse; blocking ops are the seam — is now the default QUEST path:</p>
+  <ul>
+    <li><b><code>MetaPipeline::Build(Graph)</code></b> — splits the operator DAG at blocking operators; streaming ops (scan / filter / project) append to the current pipeline.</li>
+    <li><b><code>Pipeline</code></b> — ordered fused list: one worker runs scan→filter→project <em>per batch</em> instead of queueing between every node (~5× less per-batch overhead in the flagship microbench).</li>
+    <li><b>Barriers on <code>EdgeConfig</code></b> — <code>Pipeline</code> (streaming) and <code>Full</code> (consumer waits for producer pipeline to finish). <code>Partial</code> waits for phase 6 joins.</li>
+    <li><b><code>PipelineExecutor</code></b> — default under <code>Graph::Execute()</code> / <code>PreparedQuery</code>; legacy thread-per-operator survives only as deprecated <code>ExecuteLegacy()</code>.</li>
+    <li><b>Bridge already closed (phase 1)</b> — <code>CreateGraph</code> + real <code>TableScan</code>/<code>Filter</code>/<code>Project</code>/<code>Collector</code>; unsupported nodes fall back to the callback engine (Sirius-style gate discipline at CPU scale). Out-of-core spill under a tiny budget is real for that path.</li>
+  </ul>
+  <div class="twins">
+    <div class="twin blaze">
+      <div class="tag">BlazingSQL v0.14 · flat graph</div>
+      <h4>Thread-per-kernel</h4>
+      <div class="fl">
+        <div class="fn">graph.execute() BFS</div><div class="fd">↓</div>
+        <div class="fn">1 BlazingThread per kernel</div><div class="fd">↓ blocking pullFromCache</div>
+        <div class="fn">no pipeline fusion · no task unit</div>
+      </div>
+    </div>
+    <div class="twin sirius">
+      <div class="tag">Sirius · QUEST phase 2 target</div>
+      <h4>Pipelines at blockers</h4>
+      <div class="fl">
+        <div class="fn">meta-pipeline build</div><div class="fd">↓ fuse streaming</div>
+        <div class="fn">blocking op = sink then source</div><div class="fd">↓ Full / Pipeline barriers</div>
+        <div class="fn">QUEST: MetaPipeline + PipelineExecutor ✅</div>
+      </div>
+    </div>
+  </div>
+  <div class="callout good"><b>Lineage in one line</b> BlazingSQL’s flat kernel graph → Sirius meta-pipelines → QUEST <code>MetaPipeline</code>. The heritage map (CacheMachine → BatchHolder, <code>cache_settings</code> → <code>EdgeConfig</code>) is in <code>docs/dev/graph-builder-dsl.md</code> §11; phases 2.5–2.6 already landed the DSL, NonWaiting, ConcatenatingUpTo, and FOR_EACH lane infra.</div>
+
+  <h3>What remains — task scheduling (phase 3)</h3>
+  <p>Pipelines alone are not Sirius’s execution fabric. Sirius mints work only when data exists: operators answer hints; a <code>task_creator</code> recurses to the deepest READY producer; a scheduler matches tasks to workers; reservations gate dispatch. <b>BlazingSQL has none of that</b> — only thread-per-kernel + blocking pulls — so phase 3 is <em>Sirius-guided</em>, not a BlazingSQL port.</p>
+  <ul>
+    <li><b>Today in QUEST:</b> <code>PipelineExecutor</code> still uses a <em>one-worker-drains-one-pipeline</em> loop. A Pipeline-barrier consumer can park in <code>Pull()</code> and occupy a worker — the documented ordering hazard.</li>
+    <li><b>Build next:</b> <code>GetNextTaskHint()</code> / <code>GetNextTaskInputData()</code> on <code>Operator</code>; <code>Task = {Pipeline*, DataBlockPtr}</code>; <code>TaskCreator</code> recursion; <code>TaskScheduler</code> over a fixed <code>jthread</code> pool inside <code>PreparedQuery</code> (rewrite-in-place of the executor).</li>
+    <li><b>Invariants to steal from Sirius:</b> mark task created <em>before</em> popping input; a consumer without input is a <em>non-created task</em>, never a blocked thread; live <code>SetFlowControl</code> must re-arm the creator (wake contract from the DSL design).</li>
+    <li><b>Done when:</b> correct results on a 4-worker pool; Full-barrier ordering holds; throughput scales with workers on multi-pipeline plans. Read first: Sirius <code>task_creator.cpp</code> + <code>task_scheduler.cpp</code> (paths in the replication plan).</li>
+  </ul>
+  <div class="callout warn"><b>Why not copy BlazingSQL here?</b> v0.14 <code>graph.execute()</code> never invented a task unit. Closing the scheduling gap means studying Sirius’s hint chain (<a href="sirius.html#tasks"><code>docs/sirius.html</code> · tasks</a>), then building the CPU-scale equivalent — same learning rule as the rest of the replication plan.</div>
+
+  <h3>Next QUEST study path</h3>
+  <p class="lead" style="margin-bottom:12px">Ordered for learning value with the BlazingSQL context you just absorbed. Detail and “done when” criteria live in the replication plan.</p>
+  <div class="phases">
+    <details class="phase" open>
+      <summary><span class="stepnum"></span>Phase 2.7 — Single-node operator catalog</summary>
+      <div class="body">
+        <div class="goal">Before tasks · fill the simple kernels</div>
+        <p>Ship Limit, Union, BindableTableScan, Print, Generate end-to-end (logical + taskflow roles + port contracts + tests). Retires the hardcoded-1000 <code>OptimizeScanWithLimit</code> hack; first real multi-input streaming op (Union); first gate rewrite (projection into scan).</p>
+        <p><b>Why before phase 3:</b> the scheduler needs a wider operator surface to stress barriers and multi-input ports; Limit also exercises early pipeline termination hooks already on <code>Pipeline</code>.</p>
+        <p><b>Study:</b> BlazingSQL simple-kernel catalog in <a href="kt-bigger-than-gpu.html">KT</a> / <a href="blazingsql-internals.html">internals</a>; Sirius streaming LIMIT claim pattern in <code>docs/sirius.html</code>.</p>
+      </div>
+    </details>
+    <details class="phase">
+      <summary><span class="stepnum"></span>Phase 3 — Data-driven tasks + scheduler</summary>
+      <div class="body">
+        <div class="goal">Sirius idea · hint chain</div>
+        <p>Replace drain-one-pipeline with task-granular scheduling inside <code>PreparedQuery</code>. No BlazingSQL analogue — see the phase-3 notation in the replication plan.</p>
+        <p><b>Study:</b> <a href="sirius.html#tasks">Sirius tasks section</a>; then implement <code>TaskCreator</code> / <code>TaskScheduler</code> per the plan’s build list.</p>
+      </div>
+    </details>
+    <details class="phase">
+      <summary><span class="stepnum"></span>Phase 4 — Memory reservations</summary>
+      <div class="body">
+        <div class="goal">Sirius idea · reserve before dispatch</div>
+        <p>Tasks must <code>MakeReservation(estimated_peak)</code> before run. Fix accounting first (real batch bytes; macOS <code>sysctl(HW_MEMSIZE)</code>). History ring corrects estimates. Failed reservation requeues (and later triggers phase-5 downgrade).</p>
+        <p><b>Why after 3:</b> reservations gate <em>tasks</em>, not threads. BlazingSQL’s counter demotion at <code>addToCache</code> is a different control plane — useful contrast, wrong template.</p>
+        <p><b>Study:</b> Sirius reservation manager (47-line header) + executor reserve→dispatch path in <code>docs/sirius.html</code> memory section.</p>
+      </div>
+    </details>
+  </div>
+  <div class="callout info"><b>Still only 3 of 19 operators wired</b> for end-to-end queries (Scan, Filter, Projection). Heavy ops (agg / sort / join) remain phase 6 — after scheduling and reservations exist so each task stays bounded. Do not deepen the callback engine; deepen the graph path.</div>
+</section>
+
+<!-- ============ COMPONENT MAP ============ -->
+<section id="compare">
+  <div class="eyebrow">05 · Side by side</div>
+  <h2>Component map — Sirius ⇄ BlazingSQL</h2>
+  <p class="lead">Click a row. Badges: <span class="lvl sim">similar</span> shared idea, <span class="lvl part">partial</span> related but different control plane, <span class="lvl miss">missing</span> one side lacks the other’s mechanism.</p>
+  <div class="cmp-grid">
+    <div class="cmp-list" id="cmpList"></div>
+    <div class="detail" id="cmpDetail" aria-live="polite">
+      <h4>Pick a row</h4>
+      <p class="hint">Each entry names both APIs and where they diverge.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ROADMAP ============ -->
+<section id="roadmap">
+  <div class="eyebrow">06 · Learn by doing</div>
+  <h2>Roadmap — close the design gaps with your hands</h2>
+  <p class="lead">Eight phases ordered by learning value for someone who knows BlazingSQL and is reading Sirius. QUEST-specific pipeline / scheduling study lives in <a href="#quest-study">QUEST study</a>; file paths below are from the companion docs / replication plan.</p>
+  <div class="phases">
+    <details class="phase" open>
+      <summary><span class="stepnum"></span>Read the two gates side by side</summary>
+      <div class="body">
+        <p class="goal">Exercise · no code</p>
+        <p>BlazingSQL: <code>runQuery</code> fork (<code>evaluate_query</code> vs <code>execute_plan</code>, <code>use_execution_graph</code>). Sirius: <code>OnFinalizePrepare</code> → <code>sirius_physical_plan_generator::create_plan()</code> — translate or throw, CPU plan stays.</p>
+        <p><b>Do:</b> Write one page: “What does each engine do when the GPU path cannot represent the plan?” Then skim <code>sirius_optimizer_extension.cpp</code> and BlazingSQL <code>engine.cpp:118-124</code>.</p>
+      </div>
+    </details>
+    <details class="phase">
+      <summary><span class="stepnum"></span>Trace one ORDER BY end-to-end</summary>
+      <div class="body">
+        <p class="goal">Exercise · both engines</p>
+        <p>BlazingSQL: <code>distributed_sort</code> (OrderBy.cpp) and the gated SortAndSample → Partition → Merge trio. Sirius: converter’s three-pipeline sample sort after <code>sirius_meta_pipeline::build()</code>.</p>
+        <p><b>Do:</b> Draw the stages (sample → pivots → partition → merge). Mark which are plan-time rewrites vs runtime converter injections. Note v0.14 transform is off.</p>
+      </div>
+    </details>
+    <details class="phase">
+      <summary><span class="stepnum"></span>Ports &amp; buffers: CacheMachine vs shared_data_repository</summary>
+      <div class="body">
+        <p class="goal">Exercise · data plane</p>
+        <p>BlazingSQL: <code>port</code> → <code>CacheMachine</code> + <code>WaitingQueue</code>; <code>addToCache</code> / <code>pullFromCache</code>. Sirius: repositories keyed <code>(operator_id, port_id)</code> only at pipeline boundaries; mid-pipeline is fused.</p>
+        <p><b>Do:</b> Read <code>CacheMachine.h</code> demotion loop vs Sirius repository insert sites. Answer: where can idle data sit to be spilled?</p>
+      </div>
+    </details>
+    <details class="phase">
+      <summary><span class="stepnum"></span>Pipelines vs thread-per-kernel</summary>
+      <div class="body">
+        <p class="goal">Exercise · execution fabric</p>
+        <p>BlazingSQL graph: one <code>BlazingThread</code> per kernel, forever. Sirius: streaming ops append; blocking ops sink a pipeline and source the next (<code>sirius_meta_pipeline.cpp</code>).</p>
+        <p><b>Do:</b> For scan→filter→project→sort, count threads/tasks each engine would create. Then read the converter’s seven phases at a skim level (don’t memorize — learn <em>why</em> each exists).</p>
+      </div>
+    </details>
+    <details class="phase">
+      <summary><span class="stepnum"></span>The hint chain (Sirius-only leap)</summary>
+      <div class="body">
+        <p class="goal">Exercise · scheduling</p>
+        <p>BlazingSQL has no task creator — kernels block on queues. Sirius <code>task_creator</code>: <code>get_next_task_hint()</code> → READY or WAITING_FOR_INPUT; recurse to deepest ready producer (<code>task_creator.cpp</code>).</p>
+        <p><b>Do:</b> Walk <code>get_operator_for_next_task()</code> on paper for a two-pipeline join. QUEST readers: this is replication-plan phase 3.</p>
+      </div>
+    </details>
+    <details class="phase">
+      <summary><span class="stepnum"></span>Reservations vs counter demotion</summary>
+      <div class="body">
+        <p class="goal">Exercise · memory control plane</p>
+        <p>BlazingSQL: post-produce tier pick with <code>usedMemory</code> counters (75% free GPU). Sirius: <code>sirius_memory_reservation_manager</code> + <code>make_reservation()</code> before dispatch; adaptor charges cuDF allocs.</p>
+        <p><b>Do:</b> Contrast “spill because the cache is full” with “spill until this reservation fits.” Read the 47-line reservation header first.</p>
+      </div>
+    </details>
+    <details class="phase">
+      <summary><span class="stepnum"></span>Predicate downgrade vs addToCache ORC</summary>
+      <div class="body">
+        <p class="goal">Exercise · spilling semantics</p>
+        <p>Sirius <code>downgrade_executor</code>: <code>request_downgrade(predicate)</code>, idle batches, stop when reservation succeeds. BlazingSQL: detached ORC write on pressure; host tier missing at v0.14.</p>
+        <p><b>Do:</b> List correctness properties (atomicity, over-freeing, who is on the hot path). Note Sirius batch lock states idle / read_only / mutable_locked.</p>
+      </div>
+    </details>
+    <details class="phase">
+      <summary><span class="stepnum"></span>Aggregate / join decompositions &amp; expressions</summary>
+      <div class="body">
+        <p class="goal">Exercise · operators + AST</p>
+        <p>Both engines partition/merge heavy ops (Blazing Aggregate* trio; Sirius MERGE_* / PARTITION around joins). Expressions: BlazingSQL interops interpreter vs Sirius AST + pluggable strategies.</p>
+        <p><b>Do:</b> Pick GROUP BY or JOIN; map stages across engines. Optional QUEST: heritage map in <code>docs/dev/graph-builder-dsl.md</code> §11 (CacheMachine → BatchHolder).</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ============ QUIZ ============ -->
+<section id="quiz">
+  <div class="eyebrow">07 · Reference</div>
+  <h2>Self-check quiz</h2>
+  <div class="qctrl">
+    <button type="button" id="qAll">Reveal all</button>
+    <button type="button" id="qNone">Hide all</button>
+    <span class="cnt" id="qCnt"></span>
+  </div>
+  <div id="quizList"></div>
+</section>
+
+<!-- ============ GLOSSARY ============ -->
+<section id="glossary">
+  <div class="eyebrow">08 · Reference</div>
+  <h2>Glossary</h2>
+  <table>
+    <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>create_plan()</code></td><td>Sirius single plan gate — translate DuckDB logical ops to <code>sirius_physical_operator</code>s or throw; on throw, DuckDB CPU plan remains (<a href="#gap">structural gap</a>).</td></tr>
+      <tr><td><code>OnFinalizePrepare</code></td><td>Sirius swap point after DuckDB builds its CPU physical plan; calls <code>create_plan()</code> on the stored logical copy.</td></tr>
+      <tr><td><code>evaluate_query</code> / <code>execute_plan</code></td><td>BlazingSQL fork in <code>runQuery()</code> — recursive text interpreter vs TaskFlow graph (<code>use_execution_graph</code>).</td></tr>
+      <tr><td><code>transform_operator_bigger_than_gpu</code></td><td>BlazingSQL plan-string rewrite Sort/Aggregate → multi-kernel pipelines; gated <code>false</code> at v0.14.0.</td></tr>
+      <tr><td><code>CacheMachine</code></td><td>BlazingSQL edge buffer: <code>WaitingQueue</code> of <code>CacheData</code> with GPU / ORC tiers; demotes in <code>addToCache</code>.</td></tr>
+      <tr><td><code>shared_data_repository</code></td><td>Sirius inter-pipeline buffer keyed by <code>(operator_id, port_id)</code>; idle batches are downgrade candidates.</td></tr>
+      <tr><td><code>task_creator</code> / hint chain</td><td>Sirius recursive READY / WAITING_FOR_INPUT walk; no BlazingSQL equivalent (thread-per-kernel instead).</td></tr>
+      <tr><td>reservation</td><td>Sirius per-task GPU grant via <code>make_reservation()</code> before dispatch; enforced by RMM adaptor.</td></tr>
+      <tr><td><code>downgrade_executor</code></td><td>Sirius predicate-driven tier demotion (GPU→host→disk) until a reservation fits — not CPU fallback.</td></tr>
+      <tr><td>meta-pipeline</td><td>Sirius plan-time grouping; blocking ops break pipelines. Contrast BlazingSQL’s flat kernel graph.</td></tr>
+      <tr><td>sample sort</td><td>Shared algorithm family: sample → global pivots → range partition → merge. BlazingSQL: <code>distributed_sort</code> / SortAndSample trio; Sirius: converter three-pipeline form.</td></tr>
+      <tr><td>CPU fallback</td><td>Sirius: silent DuckDB path when the gate throws. BlazingSQL: not the same — default path is still GPU RAL via <code>evaluate_query</code>.</td></tr>
+      <tr><td><code>kernel</code> / <code>port</code></td><td>BlazingSQL TaskFlow node + named CacheMachine map — ancestor of QUEST Operator / Port.</td></tr>
+      <tr><td><code>MetaPipeline</code> / <code>PipelineExecutor</code></td><td>QUEST phase-2 pipeline fabric (✅): fuse streaming ops, split at blockers, default execute path. Study destination — see <a href="#quest-study">QUEST study</a>.</td></tr>
+      <tr><td>QUEST phase 3</td><td>Still open: Sirius-style hint chain + worker-pool scheduler inside <code>PreparedQuery</code>. No BlazingSQL analogue.</td></tr>
+      <tr><td><code>data_batch</code></td><td>Sirius/cuCascade morsel with lock state and tier conversions.</td></tr>
+      <tr><td><code>exchange_channel</code></td><td>Sirius bounded MPMC for streaming sources; BlazingSQL uses unbounded WaitingQueue + TCP mailboxes for distribution.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<footer>
+  <p>Generated 2026-07-09 from <a href="sirius.html">docs/sirius.html</a> + <a href="blazingsql-internals.html">docs/blazingsql-internals.html</a> + <a href="kt-bigger-than-gpu.html">docs/kt-bigger-than-gpu.html</a>.</p>
+  <p>Companions: <a href="quest-internals.html">quest-internals.html</a> · <a href="blazingsql-internals.html">blazingsql-internals.html</a> · <a href="kt-bigger-than-gpu.html">kt-bigger-than-gpu.html</a> · <a href="sirius.html">sirius.html</a> · <a href="dev/sirius-replication-plan.md">sirius-replication-plan.md</a></p>
+  <p>Lineage note: QUEST TaskFlow DNA comes from BlazingSQL; pipelines are shipped, scheduling is next — see <a href="#quest-study">QUEST study</a> and <code>docs/dev/sirius-replication-plan.md</code>.</p>
+</footer>
+
+</main>
+</div>
+
+<script>
+/* ============ ARCH ============ */
+const ARCH = {
+s_duck:{eng:'s',t:'DuckDB SQL — frontend Sirius does not own',b:[
+"Sirius is a DuckDB extension: parse, bind, and optimize stay in DuckDB.",
+"Pre-optimizer hook disables IN_CLAUSE, COMPRESSED_MATERIALIZATION, STATISTICS_PROPAGATION so rebind stays executable.",
+"Post-hook restores those optimizers and stores <code>LogicalOperator::Copy()</code> for the gate.",
+"<b>Contrast:</b> BlazingSQL owns Calcite via jpype — plan text is born outside the GPU engine too, but in Java."]},
+s_hooks:{eng:'s',t:'Optimizer hooks — watch, don’t replace',b:[
+"<code>sirius_optimizer_extension.cpp</code> — pre/post hooks around DuckDB’s optimizer.",
+"DuckDB still builds a full CPU physical plan as if nothing happened.",
+"Sirius only acts later at <code>OnFinalizePrepare</code> — both plans exist before any swap."]},
+s_fin:{eng:'s',t:'OnFinalizePrepare — the swap point',b:[
+"Fires once DuckDB’s CPU physical plan exists; nothing has executed yet.",
+"Calls <code>sirius_physical_plan_generator::create_plan()</code> on the stored logical copy.",
+"Success replaces <code>prepared.physical_plan</code> with <code>PhysicalSiriusExecution</code>; failure leaves DuckDB’s plan."]},
+s_gate:{eng:'s',t:'create_plan() — the single GPU-support gate',b:[
+"~15 overloads + join planners; unsupported ops/types throw <code>NotImplementedException</code>.",
+"Support <em>is</em> whatever the gate can translate — no separate capability table.",
+"Silent CPU fallback: the caller never flips a flag; DuckDB simply runs.",
+"<b>File:</b> <code>sirius_physical_plan_generator.cpp</code>"]},
+s_phys:{eng:'s',t:'sirius_physical_operator — four roles',b:[
+"<code>execute()</code> batch-in/batch-out; memory estimate (default 2× input); source hints; sink.",
+"Nested <code>port</code> with <code>MemoryBarrierType {PIPELINE, PARTIAL, FULL}</code>.",
+"<b>Contrast:</b> BlazingSQL <code>kernel::run()</code> is pull→compute→push with no reservation estimate."]},
+s_meta:{eng:'s',t:'sirius_meta_pipeline::build()',b:[
+"Walks the operator tree: streaming (FILTER, PROJECTION, LIMIT) append; blocking (JOIN, ORDER_BY, agg) sink + child meta-pipelines.",
+"Build side before probe side for joins.",
+"A blocking op is the sink of one pipeline and the source of the next."]},
+s_conv:{eng:'s',t:'Pipeline converter — seven phases',b:[
+"Rewrites TABLE_SCAN → GPU_SCAN; injects PARTITION/CONCAT around joins; MERGE_* after aggregates; three-pipeline sample sort for ORDER_BY.",
+"Wires <code>shared_data_repository</code> at every pipeline boundary — never mid-pipeline.",
+"Largest file in the engine; understand <em>why</em> phases exist, don’t clone them."]},
+s_tc:{eng:'s',t:'task_creator — the hint chain',b:[
+"<code>get_next_task_hint()</code> → READY or WAITING_FOR_INPUT_DATA; on WAITING recurse into the producer.",
+"Deepest ready work runs first; nothing polls.",
+"Heart of Sirius scheduling — BlazingSQL has no analogue."]},
+s_sched:{eng:'s',t:'Task scheduler — match tasks to GPUs',b:[
+"Build-subtree preference, then preferred device, then SCHED-RR round-robin.",
+"Inputs colocated on the reservation device.",
+"Tasks are (pipeline, input batch) units — not whole kernels for the query lifetime."]},
+s_exec:{eng:'s',t:'gpu_pipeline_executor — reserve then run',b:[
+"Manager loop: reserve slot → task_request → pop → clamp ask → <code>make_reservation()</code> → attach → stream → dispatch.",
+"<code>compute_task()</code> runs <code>execute()</code> source→sink; <code>publish_output()</code> to the next repository.",
+"OOM can reschedule with history ratchet (up to 10 retries)."]},
+s_repo:{eng:'s',t:'shared_data_repository — inter-pipeline buffer',b:[
+"cuCascade repository keyed <code>(operator_id, port_id)</code>.",
+"Only place batches rest between pipelines; idle contents are spill candidates.",
+"<b>Contrast:</b> CacheMachine sits on every kernel edge, including streaming pairs."]},
+s_resv:{eng:'s',t:'sirius_memory_reservation_manager',b:[
+"Tiny surface: reservation limit ~0.9; downgrade triggers GPU 1.0 / host 0.8; stop 0.7.",
+"<code>reservation_aware_resource_adaptor</code> turns over-grant into graceful failure.",
+"History ring corrects peak estimates (default 2× input)."]},
+s_down:{eng:'s',t:'downgrade_executor — spill to fit',b:[
+"<code>request_downgrade(predicate)</code> → future; predicate retries <code>make_reservation_or_null</code>.",
+"Walks idle batches (partitions back-to-front); stops the moment the reservation fits.",
+"GPU → pinned host → spill files; promote lazily on next lock. Not CPU fallback."]},
+b_sql:{eng:'b',t:'BlazingContext.sql() — orchestrator',b:[
+"<code>sql(..., use_execution_graph=False)</code> — explain → table slices → ctxToken → runQueryCaller.",
+"Cluster: one dask submit per node; Calcite only where explain() runs.",
+"<b>File:</b> pyblazing/apiv2/context.py"]},
+b_cal:{eng:'b',t:'Calcite via jpype — plan text',b:[
+"In-process JVM; HepPlanner 13 rules; RelOptUtil.toString → indented LogicalXxx tree.",
+"Custom ProjectTableScanRule / FilterTableScanRule fold pruning into BindableTableScan.",
+"Default path keeps this text; graph path JSON-ifies it in Python first."]},
+b_run:{eng:'b',t:'runQuery() — the fork',b:[
+"<code>use_execution_graph ? execute_plan(...) : evaluate_query(...)</code> (engine.cpp:118-124).",
+"Both paths bottom out in the same <code>ral::operators</code> / processor functions.",
+"Flag is a plain Python kwarg — no silent capability gate."]},
+b_json:{eng:'b',t:'get_plan() / visit() — text → JSON',b:[
+"Only when <code>use_execution_graph=True</code>.",
+"Builds <code>{\"expr\", \"children\"}</code> for C++ <code>expr_tree_processor</code> (boost property_tree).",
+"Dashed in the explorer: off the default path at v0.14."]},
+b_eval:{eng:'b',t:'evaluate_query — default interpreter',b:[
+"Split plan on newlines; recurse by 2-space indentation; substring dispatch per LogicalXxx.",
+"One materialized BlazingTable per node up the call stack — no caches, no kernels.",
+"Still fully distributed via the same operators."]},
+b_exec:{eng:'b',t:'execute_plan — TaskFlow entry',b:[
+"Builds <code>expr_tree_processor</code> with <code>transform_operators_bigger_than_gpu = false</code>.",
+"<code>build_graph</code> → kernels + CacheMachines → <code>graph.execute()</code> → OutputKernel.",
+"Architecture the KT doc describes; opt-in at this tag."]},
+b_xform:{eng:'b',t:'transform_operator_bigger_than_gpu — gated off',b:[
+"String surgery: LogicalSort → LogicalMerge / LogicalPartition / Logical_SortAndSample.",
+"Same for Aggregate → AggregateMerge / Partition / AndSample.",
+"Hard-coded false at struct default and call site — present but waiting for 0.15+ PhysicalPlanGenerator."]},
+b_kern:{eng:'b',t:'kernel & port — TaskFlow node',b:[
+"<code>virtual kstatus run()</code>; ports map names → CacheMachines.",
+"DSL: <code>a &gt;&gt; b</code>, <code>link(a,b,cache_settings)</code>.",
+"<code>graph.execute()</code>: BFS, one BlazingThread per kernel, join all — no scheduler."]},
+b_cm:{eng:'b',t:'CacheMachine — edge with memory policy',b:[
+"<code>addToCache</code>: tier 0 GPU at 75% free device mem; else LOCAL_FILE ORC on a detached thread.",
+"<code>pullFromCache</code> → <code>decache()</code> always returns a GPU BlazingTable.",
+"Variants: Concatenating, NonWaiting. Host tier reserved, not built at v0.14."]},
+b_wq:{eng:'b',t:'WaitingQueue — blocking mailbox',b:[
+"put / pop_or_wait / get_all_or_wait; finished latch = EOS (nullptr).",
+"Unbounded — put never blocks; spill tier keeps buffering survivable.",
+"Comms Server mailboxes share the same blocking shape for distribution."]},
+b_sort:{eng:'b',t:'distributed_sort — sample sort',b:[
+"10% sample → master pivots → upper_bound split → all-to-all → cudf::merge.",
+"Kernelized form (when transform on): SortAndSample → Partition → MergeStream.",
+"At v0.14 default: monolithic SortKernel → process_sort."]},
+b_ops:{eng:'b',t:'process_* — shared compute',b:[
+"process_project / filter / sort / aggregate / logical_join — used by both interpreters.",
+"Expressions via interops GPU interpreter.",
+"TaskFlow kernels are thin wrappers, not a rewrite of compute."]},
+b_tcp:{eng:'b',t:'TCP transport — GPU↔host↔socket',b:[
+"ColumnDataMessage: cudaMemcpy device→host, stream, peer rebuilds cudf columns.",
+"Mailbox key: ctxToken + MessageID_kernelId_querySubstep.",
+"Every exchange increments querySubstep first."]}
+};
+
+const detail = document.getElementById('archDetail');
+document.querySelectorAll('.blk').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.blk').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel');
+    const d = ARCH[b.dataset.c];
+    const tag = d.eng==='s' ? '<span class="eng-tag s">Sirius</span>' : '<span class="eng-tag b">BlazingSQL</span>';
+    detail.innerHTML = tag+'<h4>'+d.t+'</h4><ul>'+d.b.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
+  });
+});
+
+/* ============ STEPPERS (mode toggle) ============ */
+const STEPPERS = {
+sirius:{nodes:[['sql','SQL'],['opt','DuckDB opt'],['fin','OnFinalize'],['gate','create_plan'],['pipe','pipelines'],['task','tasks'],['res','Result']],
+steps:[
+{t:"1 · A query walks in",p:"A SELECT arrives on a connection that LOADed the Sirius extension. SiriusContext already holds config, memory manager, scheduler, scan manager, downgrade executors. Nothing Sirius-specific has touched the SQL yet.",s:{sql:'full'}},
+{t:"2 · DuckDB optimizes — hooks watching",p:"Pre-hook disables three optimizers; post-hook restores them and stores LogicalOperator::Copy(). DuckDB builds its CPU physical plan as if nothing happened.",s:{sql:'ok',opt:'full'}},
+{t:"3 · OnFinalizePrepare — the swap point",p:"Both plans are on the table: DuckDB’s physical plan and Sirius’s stored logical copy. Nothing has executed — this is the only moment the two worlds touch.",s:{sql:'ok',opt:'ok',fin:'full'}},
+{t:"4 · create_plan() — the gate",p:"Overloads translate the logical tree into sirius_physical_operators. Any NotImplementedException and the CPU plan simply stays: silent fallback. Success: PhysicalSiriusExecution replaces the prepared plan.",s:{sql:'ok',opt:'ok',fin:'ok',gate:'full'}},
+{t:"5 · Build & convert pipelines",p:"sirius_meta_pipeline::build() walks the tree (streaming append, blocking break). Converter rewrites scans, injects partition/merge stages, sample-sort pipelines, and shared_data_repository edges at boundaries.",s:{gate:'ok',pipe:'full'}},
+{t:"6 · Task loop — hint chain + reserve",p:"task_creator finds the deepest READY operator. Scheduler matches GPUs. Executor make_reservation() then compute_task() source→sink; publish_output to the next repository. Downgrade_executor serves shortfalls.",s:{pipe:'ok',task:'full'}},
+{t:"7 · MaterializedQueryResult",p:"RESULT_COLLECTOR finishes; completion_handler resolves; ColumnDataCollection wraps into MaterializedQueryResult through DuckDB. Per-query state resets (including SCHED-RR counter).",s:{task:'ok',res:'ok'}}]},
+blaze:{nodes:[['sql','bc.sql'],['cal','Calcite'],['prep','plan prep'],['rq','runQuery'],['fork','fork'],['ops','operators'],['df','DataFrame']],
+steps:[
+{t:"1 · Python receives the SQL",p:"bc.sql(query). Unless algebra is pre-built, explain(sql) crosses into the in-process JVM via jpype — Calcite is a library call, not a service.",s:{sql:'full'}},
+{t:"2 · Calcite parses, validates, optimizes",p:"RelationalAlgebraGenerator: parse → validate → HepPlanner (13 rules including Project/FilterTableScanRule). Returns RelOptUtil.toString: indented text tree.",s:{sql:'ok',cal:'full'}},
+{t:"3 · Python preps plan & cluster",p:"Table-scan info, per-node slices, ctxToken. If use_execution_graph=True, get_plan()/visit() converts text to JSON {expr, children} here.",s:{sql:'ok',cal:'ok',prep:'full'}},
+{t:"4 · One runQuery per node",p:"cio.runQueryCaller marshals plan + schemas + TCP metadata into C++ runQuery. Each node builds loaders and Context, registers the token with the comms Server.",s:{prep:'ok',rq:'full'}},
+{t:"5 · The fork: interpret the plan",p:"use_execution_graph=False (default): evaluate_query splits text and recurses by indentation. True: execute_plan → expr_tree_processor → graph.execute() one thread per kernel. Transform bigger-than-GPU stays false.",s:{rq:'ok',fork:'full'}},
+{t:"6 · Operators do the physical work",p:"Both paths call ral::operators / processor: cudf compute, distribution primitives for samples/pivots/partitions over TCP. ORDER BY may run full distributed_sort inside one kernel.",s:{fork:'ok',ops:'full'}},
+{t:"7 · Results come home",p:"BlazingTable → releaseCudfTable → ResultSet → cython → cudf.DataFrame (or dask.from_delayed on a cluster).",s:{ops:'ok',df:'ok'}}]}
+};
+
+let mode = 'sirius';
+const stepperEl = document.getElementById('lcStepper');
+let stepIdx = 0;
+
+function mountStepper(){
+  const cfg = STEPPERS[mode];
+  stepIdx = 0;
+  stepperEl.classList.toggle('blaze-mode', mode==='blaze');
+  const nodesEl = stepperEl.querySelector('[data-nodes]');
+  const dots = stepperEl.querySelector('[data-dots]');
+  nodesEl.innerHTML = cfg.nodes.map((n,k)=>(k?'<span class="parrow">→</span>':'')+'<span class="pnode" data-n="'+n[0]+'">'+n[1]+'</span>').join('');
+  dots.innerHTML = cfg.steps.map(()=>'<i></i>').join('');
+  renderStep();
+}
+function renderStep(){
+  const cfg = STEPPERS[mode];
+  const st = cfg.steps[stepIdx];
+  stepperEl.querySelectorAll('.pnode').forEach(n=>{n.className='pnode '+(st.s[n.dataset.n]||'');});
+  stepperEl.querySelector('[data-t]').textContent = st.t;
+  stepperEl.querySelector('[data-p]').innerHTML = st.p;
+  stepperEl.querySelector('[data-back]').disabled = stepIdx===0;
+  stepperEl.querySelector('[data-next]').disabled = stepIdx===cfg.steps.length-1;
+  stepperEl.querySelectorAll('[data-dots] i').forEach((d,k)=>d.classList.toggle('on',k<=stepIdx));
+}
+stepperEl.querySelector('[data-back]').onclick=()=>{if(stepIdx>0){stepIdx--;renderStep();}};
+stepperEl.querySelector('[data-next]').onclick=()=>{const cfg=STEPPERS[mode];if(stepIdx<cfg.steps.length-1){stepIdx++;renderStep();}};
+stepperEl.querySelector('[data-reset]').onclick=()=>{stepIdx=0;renderStep();};
+
+document.getElementById('modeSirius').onclick=function(){
+  mode='sirius'; this.classList.add('on'); this.classList.remove('blaze');
+  document.getElementById('modeBlaze').classList.remove('on','blaze');
+  mountStepper();
+};
+document.getElementById('modeBlaze').onclick=function(){
+  mode='blaze'; this.classList.add('on','blaze');
+  document.getElementById('modeSirius').classList.remove('on');
+  mountStepper();
+};
+mountStepper();
+
+/* ============ COMPARE ============ */
+const COMPARE = [
+{st:'🟡',lvl:'part',n:'Plan gate',q:'create_plan vs evaluate_query / execute_plan',d:'<b>Sirius:</b> one function translates or throws; DuckDB CPU plan is the silent executor of last resort.<br><br><b>BlazingSQL:</b> explicit fork on <code>use_execution_graph</code> — default recursive interpreter vs opt-in TaskFlow. Both paths are still GPU RAL. Capability is not “throw → CPU”; it’s “which interpreter.”'},
+{st:'🟡',lvl:'part',n:'Frontend',q:'DuckDB vs Calcite',d:'Both engines borrow an external SQL frontend. Sirius hooks DuckDB’s optimizer and swaps at finalize. BlazingSQL embeds Calcite via jpype and ships indented plan text (JSON only for the graph path). Neither invents SQL parsing in the GPU runtime.'},
+{st:'🟡',lvl:'part',n:'Data transport',q:'shared_data_repository vs CacheMachine',d:'<b>Sirius:</b> repositories only at pipeline boundaries; fused ops share no queue.<br><br><b>BlazingSQL:</b> every kernel edge is a CacheMachine + WaitingQueue (SIMPLE / CONCATENATING / NON_WAITING / FOR_EACH). Closest conceptual cousins; different placement density.'},
+{st:'🟡',lvl:'part',n:'Operator model',q:'sirius_physical_operator roles vs kernel::run',d:'Sirius operators expose execute / estimate / source hints / sink + barrier ports. BlazingSQL kernels expose <code>run()</code> with blocking pulls. Same “computation unit” idea; Sirius adds reservation-aware estimates and task hints BlazingSQL never had.'},
+{st:'🔴',lvl:'miss',n:'Pipelines',q:'meta-pipeline vs thread-per-kernel',d:'Sirius splits at blocking operators into fused pipelines. BlazingSQL launches one thread per kernel for the whole query — no pipeline fusion concept at v0.14. This is the largest execution-fabric gap.'},
+{st:'🔴',lvl:'miss',n:'Task scheduling',q:'hint chain vs none',d:'Sirius <code>task_creator</code> recurses READY/WAITING hints; scheduler matches GPUs. BlazingSQL: no task unit — kernels block on queues. Closest BlazingSQL “scheduling” is BFS thread spawn order.'},
+{st:'🟡',lvl:'part',n:'Memory',q:'reservations + 3 tiers vs CacheMachine counters',d:'Sirius: reserve-before-dispatch + GPU/host/disk via cuCascade. BlazingSQL v0.14: GPU + ORC counters (75% free GPU); host tier reserved in the enum but not built (KT model has 3 tiers in 0.15+).'},
+{st:'🟡',lvl:'part',n:'Spilling / downgrade',q:'predicate idle batches vs addToCache demotion',d:'Sirius downgrade_executor sweeps idle repository batches until a reservation predicate passes. BlazingSQL demotes at produce time in addToCache (detached ORC). Same “data leaves GPU” outcome; opposite trigger (admission vs enqueue).'},
+{st:'🟢',lvl:'sim',n:'Sort',q:'sample sort both sides',d:'Shared algorithm: sample → pivots → range partition → merge. BlazingSQL: <code>distributed_sort</code> and (gated) SortAndSample→Partition→Merge. Sirius: converter three-pipeline sample sort. Learn one; the other rhymes.'},
+{st:'🟢',lvl:'sim',n:'Aggregate / Join decompositions',q:'partition → local → merge',d:'Both decompose heavy ops into partition/merge shapes. BlazingSQL Aggregate* trio + whole-table JoinKernel at v0.14 (PartwiseJoin later). Sirius injects PARTITION/CONCAT/MERGE_* in the converter. Timing differs (plan string vs converter).'},
+{st:'🟡',lvl:'part',n:'Expressions',q:'AST strategies vs interops interpreter',d:'Sirius: translate frontend exprs once to an AST; pluggable evaluation strategies. BlazingSQL: interops GPU expression interpreter over Calcite expression strings. Same need (columnar eval); different IR lifetime.'},
+{st:'🟡',lvl:'part',n:'Streaming / channels',q:'exchange_channel vs WaitingQueue / TCP',d:'Sirius <code>exchange_channel</code>: bounded items+bytes, handles-not-owners, close-then-drain. BlazingSQL WaitingQueue is unbounded; cross-node uses TCP ComponentMessages. Streaming honesty is farther along in Sirius.'},
+{st:'🔴',lvl:'miss',n:'Fallback semantics',q:'silent CPU vs dual-path flag',d:'Sirius unsupported → DuckDB CPU, silent. BlazingSQL unsupported in the graph path fails that path; the default evaluate_query path is still the GPU engine. Do not call BlazingSQL’s fork a “CPU fallback.”'}
+];
+
+const cmpList = document.getElementById('cmpList'), cmpDetail = document.getElementById('cmpDetail');
+const lvlLabel = {sim:'similar',part:'partial',miss:'missing'};
+COMPARE.forEach(c=>{
+  const b = document.createElement('button');
+  b.className = 'cmp';
+  b.type = 'button';
+  b.innerHTML = '<span class="st">'+c.st+'</span><span class="nm">'+c.n+'<small>'+c.q+'</small></span><span class="lvl '+c.lvl+'">'+lvlLabel[c.lvl]+'</span>';
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.cmp').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel');
+    cmpDetail.innerHTML = '<h4>'+c.n+'</h4><p style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:var(--muted)">'+c.q+'</p><div style="font-size:14.5px">'+c.d+'</div>';
+  });
+  cmpList.appendChild(b);
+});
+
+/* ============ QUIZ ============ */
+const QUIZ = [
+{tag:'sirius',q:'What happens when create_plan() throws?',a:'DuckDB’s already-built CPU physical plan stays in place — silent fallback. There is no user-facing “use GPU” flag at that moment; support is whatever the gate can translate.'},
+{tag:'blazing',q:'What selects evaluate_query vs execute_plan?',a:'The Python kwarg use_execution_graph (default False), threaded into runQuery() (engine.cpp:118-124). Both paths are GPU RAL; the flag picks interpreter vs TaskFlow graph.'},
+{tag:'gap',q:'State the structural-gap thesis in one sentence.',a:'BlazingSQL’s bigger-than-GPU is CacheMachine demotion plus (gated) plan-time kernel decomposition under thread-per-kernel; Sirius’s is reserve-before-dispatch plus predicate downgrade under pipelines and a data-driven task_creator, with silent DuckDB fallback via create_plan().'},
+{tag:'blazing',q:'Does transform_operator_bigger_than_gpu run at v0.14.0?',a:'No — hard-coded false at the struct default and the execute_plan call site. The SortAndSample→Partition→Merge code exists but the released path uses monolithic SortKernel / process_sort.'},
+{tag:'blazing',q:'Which cache tiers exist at v0.14.0?',a:'GPU (GPUCacheData) and LOCAL_FILE ORC (CacheDataLocalFile). The CacheDataType enum reserves CPU and IO_FILE, but the host tier (CPUCacheData / BlazingHostTable) is not built until 0.15+ — KT’s 3-tier model is aspirational at this tag.'},
+{tag:'sirius',q:'What is the hint chain?',a:'task_creator asks get_next_task_hint(): READY mints a task; WAITING_FOR_INPUT_DATA recurses into the producer until the deepest ready operator is found. Nothing polls.'},
+{tag:'sirius',q:'When does Sirius demote data relative to a task?',a:'When make_reservation() fails, downgrade_executor runs a predicate that retries make_reservation_or_null after each idle-batch demotion — and stops the moment the reservation fits. Not at arbitrary produce time.'},
+{tag:'compare',q:'Where do batches rest between fused Sirius operators?',a:'They don’t — fusion means no mid-pipeline repository. Batches rest in shared_data_repository only at pipeline boundaries (blocking-op seams).'},
+{tag:'compare',q:'Where do batches rest between BlazingSQL kernels?',a:'In a CacheMachine WaitingQueue on every edge — including streaming pairs like Project→Filter — until pullFromCache / finish propagates EOS.'},
+{tag:'sort',q:'Name one shared ORDER BY idea across both engines.',a:'Sample sort: sample keys, compute global pivots/quantiles, range-partition, merge sorted slices. BlazingSQL implements it in distributed_sort / the SortAndSample trio; Sirius injects a three-pipeline form in the converter.'},
+{tag:'sirius',q:'What are Sirius’s three memory tiers for data_batch?',a:'GPU → pinned host (per NUMA, block allocator) → spill files (~1 TB budget). Promotion is lazy on lock_or_prepare_batch for the task’s reservation device.'},
+{tag:'blazing',q:'What is graph.execute()’s concurrency model?',a:'Thread-per-kernel: BFS from sentinel −1, one BlazingThread per kernel running run() to completion, then output_.finish(); all joined. No task scheduler, no reservations.'},
+{tag:'fallback',q:'Why is BlazingSQL’s fork not a “CPU fallback”?',a:'evaluate_query still runs GPU operators via cudf. The fork chooses recursive interpreter vs TaskFlow plumbing. Sirius’s create_plan throw truly leaves execution on DuckDB CPU.'},
+{tag:'lineage',q:'What BlazingSQL idea does QUEST inherit most directly?',a:'TaskFlow DNA: kernel/port/CacheMachine/cache_settings → Operator/Port/BatchHolder/EdgeConfig (see graph-builder-dsl.md §11). Sirius ideas (pipelines, reservations, hint chain) are the learn-by-doing targets in the replication plan.'},
+{tag:'quest',q:'What did QUEST phase 2 ship for pipelines, and what is still missing for Sirius-like scheduling?',a:'Shipped: MetaPipeline::Build, fused Pipeline (scan→filter→project per batch), Pipeline/Full barriers, PipelineExecutor as default. Missing (phase 3): task unit, GetNextTaskHint hint chain, TaskCreator recursion, worker-pool TaskScheduler inside PreparedQuery — BlazingSQL has no analogue (thread-per-kernel only).'},
+{tag:'quest',q:'What is the next QUEST study order after pipelines?',a:'Phase 2.7 (Limit, Union, BindableTableScan, Print, Generate) → phase 3 (tasks + scheduler) → phase 4 (reservations). Heavy ops stay in phase 6 after tasks and reservations exist.'}
+];
+
+const quizList = document.getElementById('quizList'), qCnt = document.getElementById('qCnt');
+function updCnt(){qCnt.textContent=document.querySelectorAll('.qcard.open').length+' / '+QUIZ.length+' revealed';}
+QUIZ.forEach(q=>{
+  const c=document.createElement('div');c.className='qcard';
+  c.innerHTML='<div class="qhead" role="button" tabindex="0" aria-expanded="false"><span class="qtag">'+q.tag+'</span><span>'+q.q+'</span><span class="tick">✓</span></div><div class="qans">'+q.a+'</div>';
+  const head=c.querySelector('.qhead');
+  const toggle=()=>{c.classList.toggle('open');head.setAttribute('aria-expanded',c.classList.contains('open'));updCnt();};
+  head.addEventListener('click',toggle);
+  head.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle();}});
+  quizList.appendChild(c);
+});
+document.getElementById('qAll').onclick=()=>{document.querySelectorAll('.qcard').forEach(c=>c.classList.add('open'));document.querySelectorAll('.qhead').forEach(h=>h.setAttribute('aria-expanded','true'));updCnt();};
+document.getElementById('qNone').onclick=()=>{document.querySelectorAll('.qcard').forEach(c=>c.classList.remove('open'));document.querySelectorAll('.qhead').forEach(h=>h.setAttribute('aria-expanded','false'));updCnt();};
+updCnt();
+
+/* ============ copy buttons ============ */
+document.querySelectorAll('pre').forEach(p=>{
+  const b=document.createElement('button');b.className='copybtn';b.type='button';b.textContent='copy';
+  b.onclick=()=>{const code=p.querySelector('code');navigator.clipboard.writeText(code?code.innerText:p.innerText).then(()=>{b.textContent='copied';setTimeout(()=>b.textContent='copy',1200);});};
+  p.appendChild(b);
+});
+
+/* ============ scroll-spy ============ */
+const links=[...document.querySelectorAll('nav.side a')];
+const obs=new IntersectionObserver(es=>{
+  es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id));}});
+},{rootMargin:'-20% 0px -70% 0px'});
+document.querySelectorAll('main section[id]').forEach(s=>obs.observe(s));
+</script>
+</body>
+</html>

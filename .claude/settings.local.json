@@ -41,9 +41,21 @@
       "Bash(./tests/test_graph:*)",
       "Bash(./examples/join_example:*)",
       "Bash(./build/tests/test_query_builder)",
-      "Bash(./build/tests/test_query_builder:*)"
+      "Bash(./build/tests/test_query_builder:*)",
+      "Bash(eza --tree .claude/commands/)",
+      "Bash(eza --tree .claude/skills/)",
+      "Bash(eza tasks/)",
+      "Bash(git status:*)",
+      "Bash(eza:*)",
+      "Bash(git add *)",
+      "Bash(sed -i '' -e 's/## Stage 5 — Parity + benchmark ✅ \\(implemented, awaiting commit approval\\)/## Stage 5 — Parity + benchmark ✅ \\(commit 9d9a107\\)/' -e 's/## Stage 6 — Flip default ✅ \\(implemented, awaiting commit approval\\)/## Stage 6 — Flip default ✅ \\(commit 9d9a107\\)/' -e 's/### 2026-07-09 — Stage 5+6 \\(review session; uncommitted, pending REVIEW GATE\\)/### 2026-07-09 — Stage 5+6 \\(review session; committed 9d9a107\\)/' tasks/todo.md)",
+      "Bash(python3 -)"
     ],
     "deny": [],
     "ask": []
+  },
+  "sandbox": {
+    "enabled": false,
+    "autoAllowBashIfSandboxed": false
   }
 }

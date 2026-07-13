@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QUEST Internals — How the CPU Engine Fits Together (and how far it is from Sirius)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f6f7f4; --panel:#ffffff; --ink:#161b17; --muted:#59645c;
+  --accent:#76b900; --accent-ink:#3e7000; --accent-soft:#eef6dc;
+  --amber:#b26a00; --amber-soft:#fdf3e3;
+  --red:#b3341f; --red-soft:#fbeae6;
+  --blue:#2a5d8f; --blue-soft:#e8f0f8;
+  --code-bg:#14190f; --code-ink:#d9e7c4;
+  --line:#dde3da; --r:12px;
+  --shadow:0 1px 2px rgba(22,27,23,.05),0 4px 16px rgba(22,27,23,.06);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:'Source Sans 3',sans-serif;font-size:16.5px;line-height:1.62}
+::selection{background:var(--accent);color:#fff}
+code{font-family:'JetBrains Mono',monospace;font-size:.85em;background:#eef0ec;border:1px solid var(--line);border-radius:5px;padding:.08em .35em;white-space:nowrap}
+pre{background:var(--code-bg);color:var(--code-ink);border-radius:var(--r);padding:16px 18px;overflow:auto;position:relative;font-size:13.5px;line-height:1.55}
+pre code{background:none;border:none;padding:0;color:inherit;white-space:pre;font-size:1em}
+a{color:var(--accent-ink)}
+h1,h2,h3{font-family:'Bricolage Grotesque',sans-serif;line-height:1.15;letter-spacing:-.01em}
+h2{font-size:30px;margin:.2em 0 .45em}
+h3{font-size:20px;margin:1.6em 0 .5em}
+p{margin:.55em 0 1em}
+ul{padding-left:22px}
+li{margin:.3em 0}
+.wrap{display:grid;grid-template-columns:230px minmax(0,1fr);max-width:1220px;margin:0 auto}
+nav.side{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:28px 14px 40px 20px}
+nav.side .brand{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:19px;margin-bottom:18px}
+nav.side .brand span{color:var(--accent-ink)}
+nav.side .grp{font-family:'JetBrains Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);margin:16px 0 6px}
+nav.side a{display:block;padding:5px 10px;border-radius:8px;color:var(--ink);text-decoration:none;font-size:14.5px}
+nav.side a:hover{background:#eceee9}
+nav.side a.active{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+main{border-left:1px solid var(--line);padding:0 44px 90px;background:transparent;min-width:0}
+section{padding-top:64px}
+.eyebrow{font-family:'JetBrains Mono',monospace;font-size:12px;text-transform:uppercase;letter-spacing:.16em;color:var(--accent-ink);display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.eyebrow::before{content:"";width:18px;height:3px;background:var(--accent);border-radius:2px}
+.lead{font-size:19px;color:#2b332d;max-width:760px}
+.hero{padding-top:70px}
+.hero h1{font-size:46px;margin:.25em 0 .3em;max-width:820px}
+.hero .sub{font-size:20px;color:var(--muted);max-width:740px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.chip{font-family:'JetBrains Mono',monospace;font-size:12px;padding:5px 11px;border-radius:99px;border:1px solid var(--line);background:var(--panel)}
+.chip.g{background:var(--accent-soft);border-color:#c9e39a;color:var(--accent-ink)}
+.chip.r{background:var(--red-soft);border-color:#ecc4bb;color:var(--red)}
+.chip.a{background:var(--amber-soft);border-color:#eed9b4;color:var(--amber)}
+.callout{border-radius:var(--r);padding:14px 18px;margin:18px 0;border:1px solid;font-size:15.5px}
+.callout.warn{background:var(--amber-soft);border-color:#eed9b4}
+.callout.bad{background:var(--red-soft);border-color:#ecc4bb}
+.callout.info{background:var(--blue-soft);border-color:#c4d7ea}
+.callout.good{background:var(--accent-soft);border-color:#c9e39a}
+.callout b:first-child{display:block;margin-bottom:2px}
+/* architecture explorer */
+.arch-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:22px;align-items:start}
+.arch-stack{display:flex;flex-direction:column}
+.layer{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:13px 15px}
+.layer.dead{background:repeating-linear-gradient(-45deg,#fff, #fff 12px, #faf7f2 12px, #faf7f2 24px)}
+.layer h4{margin:0 0 2px;font-family:'Bricolage Grotesque',sans-serif;font-size:16px}
+.layer .owns{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:9px}
+.layer .owns .flag{color:var(--red);font-weight:600}
+.blks{display:flex;flex-wrap:wrap;gap:7px}
+.blk{font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#fbfcfa;cursor:pointer;color:var(--ink)}
+.blk:hover{border-color:var(--accent);background:var(--accent-soft)}
+.blk.sel{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.blk:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+.blk.stub{border-style:dashed;color:var(--muted)}
+.conn{display:flex;justify-content:center;padding:3px 0;color:var(--muted);font-size:15px}
+.conn::before{content:"↓"}
+.conn.broken::before{content:"⤫ no bridge";font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--red);background:var(--red-soft);border:1px dashed #ecc4bb;padding:3px 10px;border-radius:99px}
+.detail{position:sticky;top:24px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;min-height:180px}
+.detail h4{margin:0 0 8px;font-family:'Bricolage Grotesque',sans-serif;font-size:17px}
+.detail ul{margin:.3em 0;padding-left:18px;font-size:14.5px}
+.detail li{margin:.35em 0}
+.detail .hint{color:var(--muted);font-size:14px}
+/* stepper */
+.stepper{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px;margin:20px 0}
+.pipe{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:14px}
+.pnode{font-family:'JetBrains Mono',monospace;font-size:12px;padding:7px 11px;border-radius:8px;border:1.5px solid var(--line);background:#fbfcfa;transition:all .2s}
+.pnode.ok{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.pnode.full{border-color:#e0b25a;background:var(--amber-soft);color:var(--amber);font-weight:600}
+.pnode.stall{border-color:#d98070;background:var(--red-soft);color:var(--red);font-weight:600}
+.parrow{color:var(--muted);font-size:13px}
+.stepper h4{margin:4px 0 4px;font-family:'Bricolage Grotesque',sans-serif;font-size:16.5px}
+.stepper .sp{min-height:66px;font-size:15px;margin:0 0 12px;color:#2b332d}
+.sbtns{display:flex;gap:8px;align-items:center}
+.sbtns button{font-family:'JetBrains Mono',monospace;font-size:12.5px;padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:#fbfcfa;cursor:pointer}
+.sbtns button:hover:not(:disabled){border-color:var(--accent);background:var(--accent-soft)}
+.sbtns button:disabled{opacity:.4;cursor:default}
+.bp-dots{display:flex;gap:5px;margin-left:auto}
+.bp-dots i{width:8px;height:8px;border-radius:99px;background:#dbe0d8}
+.bp-dots i.on{background:var(--accent)}
+/* two engines */
+.twins{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:20px 0}
+.twin{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:16px 18px}
+.twin.live{border-top:4px solid var(--accent)}
+.twin.dead{border-top:4px solid var(--red);background:repeating-linear-gradient(-45deg,#fff,#fff 14px,#fbf8f4 14px,#fbf8f4 28px)}
+.twin h4{margin:0 0 2px;font-family:'Bricolage Grotesque',sans-serif}
+.twin .tag{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.twin.live .tag{color:var(--accent-ink)}
+.twin.dead .tag{color:var(--red)}
+.twin .fl{display:flex;flex-direction:column;gap:5px;margin-top:12px}
+.twin .fn{font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#fbfcfa;text-align:center}
+.twin .fd{text-align:center;color:var(--muted);font-size:13px}
+/* comparison */
+.cmp-grid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:22px;align-items:start}
+.cmp-list{display:flex;flex-direction:column;gap:8px}
+.cmp{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 13px;cursor:pointer;text-align:left;font-family:inherit;font-size:14.5px;width:100%}
+.cmp:hover{border-color:var(--accent)}
+.cmp.sel{border-color:var(--accent);background:var(--accent-soft)}
+.cmp:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+.cmp .st{font-size:15px;width:22px;text-align:center}
+.cmp .nm{font-weight:600}
+.cmp .nm small{display:block;font-weight:400;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:11px;margin-top:1px}
+.cmp .lvl{font-family:'JetBrains Mono',monospace;font-size:10.5px;padding:3px 9px;border-radius:99px;white-space:nowrap}
+.lvl.sim{background:var(--accent-soft);color:var(--accent-ink)}
+.lvl.part{background:var(--amber-soft);color:var(--amber)}
+.lvl.miss{background:var(--red-soft);color:var(--red)}
+/* roadmap */
+.phases{display:flex;flex-direction:column;gap:12px;margin-top:18px;counter-reset:ph}
+.phase{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.phase summary{display:flex;align-items:center;gap:13px;padding:14px 18px;cursor:pointer;list-style:none;font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:16.5px}
+.phase summary::-webkit-details-marker{display:none}
+.phase summary::after{content:"+";margin-left:auto;font-family:'JetBrains Mono',monospace;color:var(--muted);font-size:18px}
+.phase[open] summary::after{content:"−"}
+.phase .stepnum{counter-increment:ph;font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--accent-soft);color:var(--accent-ink);border-radius:99px;min-width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-weight:600}
+.phase .stepnum::before{content:counter(ph)}
+.phase .body{padding:0 18px 16px 57px;font-size:15px}
+.phase .goal{font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--accent-ink);text-transform:uppercase;letter-spacing:.1em}
+/* quiz */
+.qcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:9px;overflow:hidden}
+.qhead{display:flex;gap:11px;align-items:baseline;padding:12px 15px;cursor:pointer;font-size:15px}
+.qhead:hover{background:#fafbf8}
+.qhead .qtag{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--accent-ink);background:var(--accent-soft);padding:2px 8px;border-radius:99px;white-space:nowrap}
+.qhead .tick{margin-left:auto;color:var(--accent-ink);opacity:0;font-weight:700}
+.qcard.open .tick{opacity:1}
+.qans{display:none;padding:0 15px 13px 15px;font-size:14.5px;color:#2b332d;border-top:1px dashed var(--line);padding-top:10px;margin:0 15px 13px;padding-left:0;padding-right:0}
+.qcard.open .qans{display:block}
+.qctrl{display:flex;gap:10px;align-items:center;margin-bottom:14px}
+.qctrl button{font-family:'JetBrains Mono',monospace;font-size:12px;padding:6px 13px;border-radius:8px;border:1px solid var(--line);background:var(--panel);cursor:pointer}
+.qctrl button:hover{border-color:var(--accent)}
+.qctrl .cnt{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted);margin-left:auto}
+table{border-collapse:collapse;width:100%;font-size:14.5px;background:var(--panel);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow)}
+th{font-family:'JetBrains Mono',monospace;font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;text-align:left;background:#eef0ec;padding:9px 13px;color:#3d463f}
+td{padding:9px 13px;border-top:1px solid var(--line);vertical-align:top}
+.copybtn{position:absolute;top:8px;right:8px;font-family:'JetBrains Mono',monospace;font-size:11px;background:#2a3320;color:#c8d8ab;border:1px solid #3d4a2e;border-radius:6px;padding:3px 9px;cursor:pointer}
+.copybtn:hover{background:#38452b}
+footer{border-top:1px solid var(--line);margin-top:70px;padding-top:24px;color:var(--muted);font-size:14px}
+@media(max-width:960px){
+  .wrap{display:block}
+  nav.side{position:sticky;top:0;height:auto;background:var(--paper);border-bottom:1px solid var(--line);display:flex;gap:6px;overflow-x:auto;padding:10px 14px;z-index:5}
+  nav.side .brand,nav.side .grp{display:none}
+  nav.side a{white-space:nowrap;border:1px solid var(--line);border-radius:99px;padding:5px 13px;font-size:13px}
+  main{border-left:none;padding:0 20px 70px}
+  .hero h1{font-size:34px}
+}
+@media(max-width:860px){.arch-grid,.cmp-grid,.twins{grid-template-columns:1fr}.detail{position:static}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav class="side" id="sidenav">
+  <div class="brand">QUEST <span>internals</span></div>
+  <div class="grp">Mental model</div>
+  <a href="#model">Architecture</a>
+  <a href="#lifecycle">Life of a query</a>
+  <a href="#disconnect">The two engines</a>
+  <div class="grp">Deep dives</div>
+  <a href="#taskflow">TaskFlow &amp; cache</a>
+  <a href="#memory">Memory &amp; spilling</a>
+  <a href="#datasource">Parquet &amp; data</a>
+  <div class="grp">vs Sirius</div>
+  <a href="#compare">Component map</a>
+  <a href="#gaps">What to build</a>
+  <div class="grp">Reference</div>
+  <a href="#quiz">Self-check</a>
+  <a href="#glossary">Glossary</a>
+</nav>
+<main>
+
+<section class="hero" id="top">
+  <div class="eyebrow">bigger-than-gpu · C++23 · CPU/Disk</div>
+  <h1>QUEST Internals — how the CPU engine fits together, and how far it is from Sirius</h1>
+  <p class="sub">QUEST is a two-tier (CPU/Disk) batch-processing engine inspired by BlazingSQL's "bigger than GPU" design. This page maps its real architecture as implemented today, walks the life of a query, exposes its central structural flaw, and lines every component up against its Sirius counterpart to derive a learn-by-doing roadmap.</p>
+  <div class="chips">
+    <span class="chip g">473/473 tests green</span>
+    <span class="chip g">zero raw new/delete</span>
+    <span class="chip g">std::expected everywhere</span>
+    <span class="chip a">3 of 19 operators wired</span>
+    <span class="chip r">spilling engine unreachable from queries</span>
+  </div>
+</section>
+
+<!-- ============ ARCHITECTURE ============ -->
+<section id="model">
+  <div class="eyebrow">01 · Mental model</div>
+  <h2>Architecture explorer</h2>
+  <p class="lead">Six layers. Click any block for what it does, who owns it, and where it lives. Dashed blocks are stubs; the hatched layer is real, tested code that <em>no production query ever reaches</em>.</p>
+  <div class="arch-grid">
+    <div class="arch-stack">
+      <div class="layer">
+        <h4>Layer 1 — Builder API</h4>
+        <div class="owns">src/quest/builder/ · owns the user-facing query</div>
+        <div class="blks">
+          <button class="blk" data-c="qb">QueryBuilder</button>
+          <button class="blk" data-c="sqb">StreamingQueryBuilder</button>
+          <button class="blk" data-c="eb">ExprBuilder</button>
+          <button class="blk" data-c="qp">QueryPlan</button>
+        </div>
+      </div>
+      <div class="conn"></div>
+      <div class="layer">
+        <h4>Layer 2 — Logical plan</h4>
+        <div class="owns">src/quest/logical_plan/ · owns <em>what</em> to compute</div>
+        <div class="blks">
+          <button class="blk" data-c="scan">Scan</button>
+          <button class="blk" data-c="sel">Selection</button>
+          <button class="blk" data-c="proj">Projection</button>
+          <button class="blk" data-c="lexpr">LogicalExpr</button>
+        </div>
+      </div>
+      <div class="conn"></div>
+      <div class="layer">
+        <h4>Layer 3 — Physical plan <span style="font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--accent-ink);background:var(--accent-soft);padding:2px 8px;border-radius:99px;vertical-align:2px">the path that runs</span></h4>
+        <div class="owns">src/quest/physical_plan/ · owns <em>how</em> — synchronous callbacks</div>
+        <div class="blks">
+          <button class="blk" data-c="cpp">CreatePhysicalPlan</button>
+          <button class="blk" data-c="se">ScanExec</button>
+          <button class="blk" data-c="fe">SelectionExec</button>
+          <button class="blk" data-c="pe">ProjectionExec</button>
+          <button class="blk" data-c="pexpr">Expression eval</button>
+        </div>
+      </div>
+      <div class="conn broken"></div>
+      <div class="layer dead">
+        <h4>Layer 4 — TaskFlow engine</h4>
+        <div class="owns">src/quest/taskflow/ · owns the DAG · <span class="flag">disconnected — only test mocks use it</span></div>
+        <div class="blks">
+          <button class="blk" data-c="graph">Graph</button>
+          <button class="blk" data-c="op">Operator</button>
+          <button class="blk" data-c="port">Port</button>
+          <button class="blk" data-c="kpair">KPair DSL</button>
+        </div>
+      </div>
+      <div class="conn"></div>
+      <div class="layer dead">
+        <h4>Layer 5 — Cache layer</h4>
+        <div class="owns">src/quest/cache/ · owns batch transport + spill · <span class="flag">reachable only via Layer 4</span></div>
+        <div class="blks">
+          <button class="blk" data-c="bh">BatchHolder</button>
+          <button class="blk stub" data-c="cbh">ConcatenatingBatchHolder</button>
+          <button class="blk" data-c="bq">BlockingQueue</button>
+          <button class="blk" data-c="db">DataBlock</button>
+        </div>
+      </div>
+      <div class="conn"></div>
+      <div class="layer">
+        <h4>Layer 6 — Memory &amp; data substrate</h4>
+        <div class="owns">src/quest/memory/ + src/quest/datasource/ · owns bytes</div>
+        <div class="blks">
+          <button class="blk" data-c="mrm">MemoryResourceManager</button>
+          <button class="blk" data-c="cpu">CPUMemoryResource</button>
+          <button class="blk" data-c="disk">DiskMemoryResource</button>
+          <button class="blk" data-c="pq">Parquet reader</button>
+          <button class="blk" data-c="rb">RecordBatch</button>
+          <button class="blk" data-c="ser">Serializer (QRBT)</button>
+        </div>
+      </div>
+    </div>
+    <div class="detail" id="archDetail" aria-live="polite">
+      <h4>Pick a component</h4>
+      <p class="hint">Click any block on the left. Green = works today, dashed = stubbed, hatched layers = code no query reaches.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LIFECYCLE ============ -->
+<section id="lifecycle">
+  <div class="eyebrow">02 · Mental model</div>
+  <h2>Life of a query (the path that actually runs)</h2>
+  <p class="lead">What really happens for <code>FromParquet(f).Where(Col("age") &gt; Lit(21)).Select({"name"}).ExecuteCollect()</code>. Note what's absent: no threads, no batch holders, no memory tiers, no spilling.</p>
+  <div class="stepper" data-stepper="lc">
+    <div class="pipe" data-nodes></div>
+    <h4 data-t></h4>
+    <p class="sp" data-p></p>
+    <div class="sbtns">
+      <button data-back>← Back</button>
+      <button data-next>Next →</button>
+      <button data-reset>Reset</button>
+      <div class="bp-dots" data-dots></div>
+    </div>
+  </div>
+  <div class="callout info"><b>The contrast with Sirius</b> Sirius converts the plan into <em>pipelines</em>, mints <em>tasks</em> when data is ready, reserves memory before dispatch, and executes on a scheduler. QUEST's physical plan is a recursion of <code>std::function</code> callbacks on the caller's thread — simple and correct, but there is no unit of scheduling, so nothing can be throttled, spilled, reordered, or parallelized.</div>
+</section>
+
+<!-- ============ DISCONNECT ============ -->
+<section id="disconnect">
+  <div class="eyebrow">03 · Mental model</div>
+  <h2>The two engines problem</h2>
+  <p class="lead">QUEST contains two parallel execution stacks that never talk to each other. This is the single most important fact about the codebase — and closing the gap is the whole game.</p>
+  <div class="twins">
+    <div class="twin live">
+      <div class="tag">Engine A — runs every query</div>
+      <h4>Callback pipeline</h4>
+      <div class="fl">
+        <div class="fn">QueryBuilder</div><div class="fd">↓ builds</div>
+        <div class="fn">LogicalPlan (Scan · Selection · Projection)</div><div class="fd">↓ CreatePhysicalPlan()</div>
+        <div class="fn">PhysicalPlan::Execute(callback)</div><div class="fd">↓ recursion, single thread</div>
+        <div class="fn">RecordBatch → callback → collect</div>
+      </div>
+      <p style="font-size:14px;margin-top:12px">Synchronous, in-RAM, one batch per Parquet row group. Never touches BatchHolder, DataBlock, memory tiers, or spill.</p>
+    </div>
+    <div class="twin dead">
+      <div class="tag">Engine B — reached only by test mocks</div>
+      <h4>TaskFlow DAG</h4>
+      <div class="fl">
+        <div class="fn">graph += scan &gt;&gt; filter &gt;&gt; project</div><div class="fd">↓ KPair / EdgeConfig</div>
+        <div class="fn">Graph::Execute — one jthread per edge</div><div class="fd">↓ push / pull</div>
+        <div class="fn">Port → BatchHolder → BlockingQueue</div><div class="fd">↓ Add → MaybeSpill</div>
+        <div class="fn">DataBlock: HostMemoryBlock ⇄ DiskBlock</div>
+      </div>
+      <p style="font-size:14px;margin-top:12px">Backpressure, saturation thresholds, CPU→Disk spilling — the project's namesake feature. No production <code>Operator</code> subclass exists; only mocks in <code>tests/test_graph.cpp</code>.</p>
+    </div>
+  </div>
+  <div class="callout bad"><b>Consequence</b> "Bigger than GPU" — running datasets larger than RAM by spilling to disk — is currently impossible for a real query. The spill machinery is unit-tested but dead code with respect to <code>QueryBuilder</code>. Sirius does not have this problem: its <code>create_plan()</code> gate feeds the plan directly into the pipeline/task runtime that owns memory. <b>Phase 1 of the roadmap is the bridge.</b></div>
+</section>
+
+<!-- ============ TASKFLOW ============ -->
+<section id="taskflow">
+  <div class="eyebrow">04 · Deep dive</div>
+  <h2>TaskFlow &amp; cache — what Engine B gives you</h2>
+  <p>Engine B is genuinely good architecture, closely mirroring Sirius/BlazingSQL concepts. It just needs real operators and a bridge from the planner.</p>
+  <h3>The DSL and the graph</h3>
+  <pre><code>*graph += table_a &gt;&gt; join["input_a"];
+*graph += table_b &gt;&gt; join["input_b"];
+*graph += link(sort, merge, EdgeConfig::Concatenating());
+graph-&gt;Execute();   // BFS; one std::jthread per outgoing edge</code></pre>
+  <ul>
+    <li><b>Graph</b> stores edges/reverse-edges keyed by operator id; sources hang off sentinel node <code>-1</code>. <code>Execute()</code> BFS-walks, launching a thread per operator run.</li>
+    <li><b>Operator</b> is the node base: <code>run()</code> + <code>can_you_throttle_my_input()</code>; <code>SimpleOperator</code> adds the pull → <code>ProcessBatch()</code> → push template loop.</li>
+    <li><b>Port</b> maps named slots (<code>"input_a"</code>, <code>"input_b"</code>) to <code>IBatchHolder</code>s — the same shape as Sirius's <code>"default"</code>/<code>"build"</code> repository ports.</li>
+  </ul>
+  <h3>Backpressure</h3>
+  <p>Producers call <code>WaitIfSaturated()</code>: a condition variable blocks until <code>batch_count</code>/<code>current_bytes</code> fall under the edge's <code>flow_control_*_threshold</code>. Consumers block on <code>BlockingQueue::Pop()</code>. Defaults are <code>SIZE_MAX</code> (off) unless <code>EdgeConfig::with_flow_control()</code> is used. This is a coarser cousin of Sirius's barrier types (<code>FULL</code>/<code>PARTIAL</code>/<code>PIPELINE</code>) — but QUEST blocks <em>threads</em>, where Sirius gates <em>task creation</em>.</p>
+  <div class="callout warn"><b>Stub alert</b> <code>ConcatenatingBatchHolder::ConcatenateAll</code> errors on more than one block (<code>batch_holder.cpp:213</code>) — concatenating edges, which aggregations and final sinks need, are effectively broken for multi-batch inputs.</div>
+</section>
+
+<!-- ============ MEMORY ============ -->
+<section id="memory">
+  <div class="eyebrow">05 · Deep dive</div>
+  <h2>Memory &amp; spilling — two tiers under pressure</h2>
+  <p class="lead">Step through what happens when Engine B's CPU tier saturates. (Remember: today only tests drive this.)</p>
+  <div class="stepper" data-stepper="mm">
+    <div class="pipe" data-nodes></div>
+    <h4 data-t></h4>
+    <p class="sp" data-p></p>
+    <div class="sbtns">
+      <button data-back>← Back</button>
+      <button data-next>Next →</button>
+      <button data-reset>Reset</button>
+      <div class="bp-dots" data-dots></div>
+    </div>
+  </div>
+  <h3>How it differs from Sirius</h3>
+  <table>
+    <tr><th></th><th>QUEST today</th><th>Sirius</th></tr>
+    <tr><td><b>Accounting</b></td><td>Advisory — counts only what <code>record_allocation</code> is told, fed a crude <code>cols × size × 8</code> estimate</td><td>Every cuDF allocation flows through the reservation manager; budget-visible by construction</td></tr>
+    <tr><td><b>Admission</b></td><td>None — work starts, then maybe spills</td><td><b>Reserve before dispatch</b>: task asks for estimated peak, clamped to <code>get_max_memory()</code>; no reservation → no execution</td></tr>
+    <tr><td><b>Estimation</b></td><td>None</td><td><code>pipeline_memory_history</code> 64-entry ring; log-ratio-weighted peak/estimate averages; OOM ratchets estimates up</td></tr>
+    <tr><td><b>Spill trigger</b></td><td>Inline in <code>BatchHolder::Add</code> when CPU tier ≥ 85%</td><td>Dedicated <code>downgrade_executor</code> per memory space; spills <em>idle</em> batches against a predicate ("does the reservation fit now?"), stops the moment it does</td></tr>
+    <tr><td><b>Safety</b></td><td>No lock states — a block could in principle be spilled while referenced</td><td><code>data_batch</code> three-state lock (idle ⇄ read_only ⇄ mutable); idle = spillable is an invariant</td></tr>
+    <tr><td><b>Return trip</b></td><td><code>ToCpu()</code> on demand at Pull</td><td>Lazy upgrade in <code>lock_or_prepare_batch()</code> at next task; also enforces device colocation</td></tr>
+  </table>
+</section>
+
+<!-- ============ DATASOURCE ============ -->
+<section id="datasource">
+  <div class="eyebrow">06 · Deep dive</div>
+  <h2>Parquet &amp; the data plane</h2>
+  <p>QUEST ships a <b>from-scratch Parquet reader</b> — Thrift compact-protocol decoder included — which is a genuinely instructive artifact. Supported today:</p>
+  <ul>
+    <li><b>Types</b>: Boolean, Int32/64, Float, Double, ByteArray, FixedLenByteArray, Int96 (raw bytes, no timestamp semantics). No Date/Timestamp/Decimal logical types — annotations aren't even parsed.</li>
+    <li><b>Encodings</b>: PLAIN + dictionary (PLAIN_DICTIONARY / RLE_DICTIONARY). DELTA_* and BYTE_STREAM_SPLIT <span style="color:var(--red)">silently misdecode</span> (fall through as plain).</li>
+    <li><b>Compression</b>: Snappy + uncompressed only. ZSTD/GZIP/LZ4/Brotli → <code>UnsupportedEncoding</code>.</li>
+    <li><b>Shape</b>: flat schemas only — <code>max_rep_level</code> hardcoded 0, group elements dropped in <code>BuildSchema</code>.</li>
+    <li><b>Batching</b>: one <code>RecordBatch</code> per row group; batch size is whatever the file says, not configurable — versus Sirius's split provider coalescing to a byte target (512&nbsp;MB) with prefetch and stats-based row-group pruning.</li>
+  </ul>
+  <p>Data currency: <code>RecordBatch</code> = <code>Schema</code> + typed <code>ColumnVector</code>s (bit-per-value null bitmaps, 1 = valid). Spill format: <code>RecordBatchSerializer</code>, magic <code>"QRBT"</code> — beware it encodes types as <code>std::variant::index()</code> (append-only ABI, same footgun class as Sirius's AST variant) and it <em>throws</em>, diverging from the project's <code>Result</code> convention.</p>
+</section>
+
+<!-- ============ COMPARISON ============ -->
+<section id="compare">
+  <div class="eyebrow">07 · vs Sirius</div>
+  <h2>Component map: QUEST ⇄ Sirius</h2>
+  <p class="lead">Every QUEST component lined up against its Sirius counterpart. Click a row for the full story. <span class="lvl sim" style="padding:3px 9px">similar</span> = same concept, comparable mechanics · <span class="lvl part" style="padding:3px 9px">partial</span> = same intent, weaker mechanics · <span class="lvl miss" style="padding:3px 9px">missing</span> = no QUEST equivalent.</p>
+  <div class="cmp-grid">
+    <div class="cmp-list" id="cmpList"></div>
+    <div class="detail" id="cmpDetail" aria-live="polite">
+      <h4>Pick a mapping</h4>
+      <p class="hint">Click a row on the left to see how the two engines compare on that axis, and what closing the gap would take.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GAPS / ROADMAP ============ -->
+<section id="gaps">
+  <div class="eyebrow">08 · vs Sirius</div>
+  <h2>What to build — the learn-by-doing roadmap</h2>
+  <p class="lead">Eight phases, ordered so each one teaches a core Sirius idea at CPU scale and leaves the engine strictly better. Full details, exercises, and Sirius file references live in <a href="dev/sirius-replication-plan.md"><code>docs/dev/sirius-replication-plan.md</code></a>.</p>
+  <div class="phases">
+    <details class="phase" open><summary><span class="stepnum"></span>Bridge the two engines</summary><div class="body">
+      <div class="goal">Sirius idea: create_plan() gate → runtime</div>
+      <p>Write <code>CreateGraph(PhysicalPlan) → Graph</code>: real <code>TableScan</code>/<code>Filter</code>/<code>Project</code> operators that wrap the existing Exec nodes and move <code>RecordBatch</code>es through <code>BatchHolder</code>s. Unsupported node → fall back to the callback engine (QUEST's own "CPU fallback"). After this phase a real query can spill for the first time.</p>
+    </div></details>
+    <details class="phase"><summary><span class="stepnum"></span>Pipelines, not threads-per-operator</summary><div class="body">
+      <div class="goal">Sirius idea: meta-pipeline build · blocking ops are sink of one pipeline, source of the next</div>
+      <p>Split the operator DAG into pipelines at blocking operators. Streaming ops (filter/project/limit) fuse into one pipeline; a blocking op ends it. Introduce barrier semantics on edges: <code>FULL</code> (consumer waits for producer pipeline to finish), <code>PIPELINE</code> (pure streaming).</p>
+    </div></details>
+    <details class="phase"><summary><span class="stepnum"></span>Data-driven tasks + scheduler</summary><div class="body">
+      <div class="goal">Sirius idea: task_creator hint chain · nothing polls, work exists only when data does</div>
+      <p>Replace jthread-per-operator with a worker pool. Each operator answers <code>GetNextTaskHint() → Ready | WaitingForInput</code>; a task creator recurses into producers to find the deepest ready work; a task = (pipeline, one input batch).</p>
+    </div></details>
+    <details class="phase"><summary><span class="stepnum"></span>Memory reservations</summary><div class="body">
+      <div class="goal">Sirius idea: reserve before dispatch · estimate peak from history · clamp to max</div>
+      <p>Tasks must <code>MakeReservation(estimated_peak)</code> before running. Default estimate 2× input bytes; keep a per-pipeline ring of (estimated, actual peak) and correct with the observed ratio. Fix accounting: measure real batch bytes, not <code>cols × 8</code>.</p>
+    </div></details>
+    <details class="phase"><summary><span class="stepnum"></span>Predicate-driven spilling + batch locks</summary><div class="body">
+      <div class="goal">Sirius idea: downgrade_executor · idle ⇄ locked batch states · spill until the reservation fits</div>
+      <p>Give <code>DataBlock</code> a three-state lock (idle/read_only/mutable); only idle blocks are spill candidates. A background downgrade worker serves <code>RequestDowngrade(predicate)</code> requests, spilling idle blocks until <code>make_reservation_or_null</code> succeeds. Upgrade lazily at next use.</p>
+    </div></details>
+    <details class="phase"><summary><span class="stepnum"></span>The blocking operators: Limit → Aggregate → Sort → Join</summary><div class="body">
+      <div class="goal">Sirius idea: partition/merge decomposition — GROUP BY = PARTITION → per-partition agg → MERGE; ORDER BY = sample sort; JOIN = partition both sides → build/probe</div>
+      <p>One operator at a time, each with logical node, physical node, taskflow operator, and spill support. Hash aggregate first (it forces cross-batch state), then 3-phase sample sort, then partitioned hash join with the left=probe/right=build convention.</p>
+    </div></details>
+    <details class="phase"><summary><span class="stepnum"></span>Vectorized expressions</summary><div class="body">
+      <div class="goal">Sirius idea: one evaluator, pluggable strategies (MATERIALIZE vs AST) · plan-time expression translation</div>
+      <p>Kill row-at-a-time <code>GetValue(i)</code>: evaluate column-at-a-time over contiguous typed arrays, null bitmaps as words. Keep the row path as a fallback strategy — mirroring MATERIALIZE vs AST_INTERPRET. Also fixes: arithmetic exprs currently aren't even plannable (<code>CreatePhysicalExpr</code> misses them), int64 precision loss via double upcast, no type promotion.</p>
+    </div></details>
+    <details class="phase"><summary><span class="stepnum"></span>Real streaming + scan improvements</summary><div class="body">
+      <div class="goal">Sirius idea: exchange_channel (bounded, byte-capped, close-then-drain EOS) · split coalescing · predicate pushdown</div>
+      <p>Make <code>StreamingQueryBuilder</code> honest: pull batches through the graph with backpressure instead of buffering everything. Evolve <code>BlockingQueue</code> toward the exchange-channel contract (item + byte caps, oversized-batch rule, on-close callbacks). Scan: configurable batch bytes, row-group pruning from stats, predicate pushdown.</p>
+    </div></details>
+  </div>
+</section>
+
+<!-- ============ QUIZ ============ -->
+<section id="quiz">
+  <div class="eyebrow">09 · Reference</div>
+  <h2>Self-check</h2>
+  <div class="qctrl">
+    <button id="qAll">Reveal all</button>
+    <button id="qNone">Hide all</button>
+    <span class="cnt" id="qCnt"></span>
+  </div>
+  <div id="quizList"></div>
+</section>
+
+<!-- ============ GLOSSARY ============ -->
+<section id="glossary">
+  <div class="eyebrow">10 · Reference</div>
+  <h2>Glossary</h2>
+  <table>
+    <tr><th>Term</th><th>Meaning</th></tr>
+    <tr><td><code>RecordBatch</code></td><td>QUEST's data currency: a Schema plus one ColumnVector per field. Sirius equivalent: <code>cudf::table</code> inside a <code>data_batch</code>.</td></tr>
+    <tr><td><code>BatchHolder</code></td><td>Thread-safe conduit between operators (BlockingQueue of DataBlocks + saturation control). Sirius equivalent: <code>shared_data_repository</code> port.</td></tr>
+    <tr><td><code>DataBlock</code></td><td>Tier-tagged data unit: <code>HostMemoryBlock</code> (RAM) or <code>DiskBlock</code> (file). Sirius: <code>cucascade::data_batch</code> with GPU/pinned-host/disk representation.</td></tr>
+    <tr><td>Engine A / Engine B</td><td>This page's names for QUEST's two disconnected stacks: the callback physical plan (A, runs) and the taskflow DAG + cache + memory (B, dormant).</td></tr>
+    <tr><td>Barrier</td><td>Sirius edge semantics — FULL (wait for whole producer pipeline), PARTIAL (coordinated incremental), PIPELINE (pure streaming). QUEST today: thresholds on a blocking queue.</td></tr>
+    <tr><td>Reservation</td><td>Sirius admission control: a task must secure its estimated peak memory before dispatch. QUEST today: none.</td></tr>
+    <tr><td>Downgrade</td><td>Sirius term for moving <em>data</em> down a tier (GPU→host→disk). Never routes <em>execution</em> to CPU — that decision happens at plan time. QUEST analog: <code>ToDisk()</code> spill.</td></tr>
+    <tr><td>Hint chain</td><td>Sirius task creation: operators answer READY/WAITING; the creator recurses into producers so the deepest ready work runs first.</td></tr>
+    <tr><td>QRBT</td><td>QUEST's binary RecordBatch spill format (magic bytes), written/read by RecordBatchSerializer.</td></tr>
+  </table>
+  <footer>
+    Generated 2026-07-08 from a full review of <code>src/quest/</code>, <code>tests/</code>, and <code>docs/dev/</code>, compared against the Sirius internals reference. Companion plan: <code>docs/dev/sirius-replication-plan.md</code>.
+  </footer>
+</section>
+
+</main>
+</div>
+
+<script>
+/* ============ architecture explorer ============ */
+const ARCH = {
+qb:{t:"QueryBuilder — synchronous push execution",b:[
+"Owns a <code>QueryPlan</code>; entry point for real queries. <code>Execute(cb)</code>, <code>ExecuteWithControl</code> (early terminate), <code>ExecuteCollect</code>.",
+"Rvalue-qualified fluent API — chain with <code>std::move</code> per house rules.",
+"Sirius counterpart: DuckDB itself (parse/bind) + <code>PhysicalSiriusExecution::GetData()</code> as the pull point.",
+"<b>File:</b> src/quest/builder/query_builder.hpp"]},
+sqb:{t:"StreamingQueryBuilder — coroutine pull API (fake)",b:[
+"<code>ExecuteStream()</code> returns a C++20 coroutine <code>BatchGenerator</code>… but it first collects <em>all</em> batches synchronously into a vector, then <code>co_yield</code>s them (comment at line 138).",
+"No backpressure, no incremental compute — the coroutine is cosmetic today.",
+"Sirius counterpart: <code>exchange_channel</code> + <code>STREAMING_SOURCE</code> — bounded, byte-capped, close-then-drain EOS.",
+"<b>File:</b> src/quest/builder/streaming_query_builder.hpp · Roadmap phase 8"]},
+eb:{t:"ExprBuilder — expression trees from operators",b:[
+"Operator overloads (<code>==</code>, <code>&lt;</code>, <code>&amp;&amp;</code>, …) build <code>LogicalExpr</code> trees; free fns <code>Col()</code>, <code>Lit&lt;T&gt;()</code>.",
+"Deep-clones on copy so builders are value-like.",
+"Sirius counterpart: <code>sirius::ast::from_duckdb()</code> — translate once at plan time, operators never see frontend expressions again. QUEST already follows this discipline.",
+"<b>File:</b> src/quest/builder/expr_builder.hpp"]},
+qp:{t:"QueryPlan — the shared fluent core",b:[
+"Move-only holder of the growing <code>LogicalPlanPtr</code>; both builders compose it. <code>FromParquet → Where → Select → BuildPhysicalPlan</code>.",
+"Owns plan nodes via <code>unique_ptr</code> (expression trees and plan nodes are unique-owned per the ownership model).",
+"<b>File:</b> src/quest/builder/query_plan.hpp"]},
+scan:{t:"Scan — logical leaf",b:[
+"Holds a <code>shared_ptr&lt;DataSource&gt;</code> + optional projection (by name); derives output schema at construction.",
+"Sirius counterpart: <code>LOGICAL_GET</code> → <code>sirius_physical_table_scan</code>, where filter pushdown and projection_ids also land.",
+"<b>File:</b> src/quest/logical_plan/logical_plan.hpp"]},
+sel:{t:"Selection — logical filter",b:[
+"Owns child plan + <code>LogicalExprPtr</code> condition.",
+"Sirius counterpart: <code>LOGICAL_FILTER</code>; in Sirius, filters are pushed into the scan when possible with a residual FILTER for the rest — QUEST has no pushdown.",
+"<b>File:</b> src/quest/logical_plan/logical_plan.hpp"]},
+proj:{t:"Projection — logical column compute",b:[
+"Owns child + <code>vector&lt;LogicalExprPtr&gt;</code>; computes schema by <code>ToField</code> per expression.",
+"Sirius counterpart: <code>LOGICAL_PROJECTION</code>, with passthrough elision and adjacent-projection folding — neither exists in QUEST.",
+"<b>File:</b> src/quest/logical_plan/logical_plan.hpp"]},
+lexpr:{t:"LogicalExpr — the expression vocabulary",b:[
+"Column/ColumnIndex/Literal; comparisons Eq…LtEq; And/Or; arithmetic Add…Modulo; aggregates Sum/Avg/Count/CountStar/Min/Max. All <code>Clone()</code>-able.",
+"Missing: NOT, IN, LIKE, CASE, CAST, COALESCE, string functions — compare Sirius's 12-alternative <code>ast::node</code> variant.",
+"<b>File:</b> src/quest/logical_plan/logical_expr.hpp"]},
+cpp:{t:"CreatePhysicalPlan — QUEST's create_plan() gate",b:[
+"Free factory translating logical → physical via a <code>dynamic_cast</code> chain. Handles exactly 3 node types (Scan/Selection/Projection); anything else errors.",
+"Sirius counterpart: <code>sirius_physical_plan_generator</code> with <b>15</b> <code>create_plan()</code> overloads and throw-→-CPU-fallback semantics. QUEST has no fallback engine — an unsupported node is a hard error.",
+"<b>Bug:</b> <code>CreatePhysicalExpr</code>'s binary branch handles comparisons + And/Or only — arithmetic (<code>Add/Sub/Mul/Div/Mod</code>) falls through to \"Cannot create physical expression\", so <code>Select(Col(\"a\")+Col(\"b\"))</code> fails at plan time.",
+"<b>File:</b> src/quest/physical_plan/physical_plan.hpp:439"]},
+se:{t:"ScanExec — the driver",b:[
+"Pulls <code>DataSource::Scan(projection)</code>, one RecordBatch per Parquet row group, invoking the callback per batch. Batch size = row-group size, not configurable.",
+"Sirius counterpart: unified <code>GPU_SCAN</code> fed by a split provider coalescing to 512 MB with prefetch + stats pruning.",
+"<b>File:</b> src/quest/physical_plan/physical_plan.hpp"]},
+fe:{t:"SelectionExec — filter",b:[
+"Evaluates predicate → boolean mask → <b>row-by-row gather</b> into new materialized columns via <code>std::visit</code> per value.",
+"Sirius counterpart: <code>expression_evaluator::select()</code> → cuDF row compaction, one kernel.",
+"<b>File:</b> src/quest/physical_plan/physical_plan.hpp"]},
+pe:{t:"ProjectionExec — compute columns",b:[
+"Evaluates each physical expression per batch, assembles a fresh RecordBatch.",
+"Sirius has three paths: all-evaluated (owned), all-passthrough (zero-copy view held by the input's read lock), mixed. QUEST always materializes.",
+"<b>File:</b> src/quest/physical_plan/physical_plan.hpp"]},
+pexpr:{t:"Physical expressions — row-at-a-time",b:[
+"Every expression evaluates via <code>GetValue(i)</code> through <code>std::variant</code> dispatch, per row. Orders of magnitude slower than columnar for large batches.",
+"All arithmetic upcasts to <code>double</code> (int64 precision loss beyond 2⁵³); no type promotion (<code>int32 + float → int32</code>); null comparisons return false (no 3-valued logic); materialized columns drop null tracking.",
+"Sirius: one evaluator, three strategies — MATERIALIZE (kernel per node), AST_INTERPRET (one fused kernel, default), AST_JIT.",
+"<b>File:</b> src/quest/physical_plan/expressions/physical_expr.hpp · Roadmap phase 7"]},
+graph:{t:"Graph — the DAG owner",b:[
+"<code>enable_shared_from_this</code>; adjacency + reverse maps of <code>Edge</code>; holds the <code>MemoryResourceManager</code>. <code>operator+=</code> ingests KPairs; <code>Execute()</code> BFS-launches one <code>std::jthread</code> per operator.",
+"<code>OptimizeScanWithLimit</code> exists but pushes a hardcoded 1000 rows (<code>graph.cpp:12</code>).",
+"Sirius counterpart: <code>sirius_pipeline</code> + converter + <code>task_scheduler</code> — pipelines and data-driven tasks instead of thread-per-operator.",
+"<b>File:</b> src/quest/taskflow/graph.{hpp,cpp}"]},
+op:{t:"Operator / SimpleOperator — node base",b:[
+"<code>run()</code> + <code>can_you_throttle_my_input()</code> required of every operator. <code>SimpleOperator::run()</code>: pull → <code>ProcessBatch()</code> → push → backpressure loop.",
+"<b>No production subclass exists.</b> TableScan/Filter/Project/Join appear only as mocks in <code>tests/test_graph.cpp</code>.",
+"Sirius counterpart: <code>sirius_physical_operator</code> with four roles — execute (batch-in/batch-out on a stream), memory estimate, source (task hints), sink.",
+"Fragile detail: end-of-stream is signaled by <code>Status::Invalid</code> from the queue — control flow via error code.",
+"<b>File:</b> src/quest/taskflow/operator.hpp"]},
+port:{t:"Port — named input/output slots",b:[
+"<code>map&lt;string, shared_ptr&lt;IBatchHolder&gt;&gt;</code>; joins get <code>\"input_a\"</code>/<code>\"input_b\"</code>. Construction-time wiring, not thread-safe (by design).",
+"Direct analog of Sirius ports (<code>\"default\"</code>, <code>\"build\"</code>) on shared_data_repositories — one of the closest QUEST↔Sirius matches.",
+"<b>File:</b> src/quest/taskflow/port.hpp"]},
+kpair:{t:"KPair / EdgeConfig — the wiring DSL",b:[
+"<code>a &gt;&gt; b</code>, <code>a &gt;&gt; join[\"input_a\"]</code>, <code>link(a, b, EdgeConfig::Concatenating())</code>. EdgeConfig carries holder type, partitions, flow-control thresholds.",
+"Sirius equivalent: <code>insert_repository()</code> per sink→source edge during pipeline conversion — never mid-pipeline.",
+"<b>File:</b> src/quest/taskflow/kpair.hpp"]},
+bh:{t:"BatchHolder — FIFO transport with spill",b:[
+"<code>Add()</code> → <code>MaybeSpill</code> (CPU-tier block + <code>should_spill()</code> → serialize to disk, swap in a DiskBlock) → queue. <code>WaitIfSaturated()</code> blocks producers on thresholds.",
+"Tracks bytes/rows atomically. The heart of Engine B.",
+"Sirius counterpart: repository + downgrade executor — but Sirius spills <em>idle</em> batches on demand with a predicate; QUEST spills eagerly at Add time.",
+"<b>File:</b> src/quest/cache/batch_holder.{hpp,cpp} (MaybeSpill at .cpp:118)"]},
+cbh:{t:"ConcatenatingBatchHolder — STUB",b:[
+"<code>Pull()</code> waits for finish then <code>ConcatenateAll()</code> — which errors on &gt;1 block: \"not yet implemented\" (<code>batch_holder.cpp:213</code>).",
+"Blocks the aggregation/final-sink pattern. Fixing it requires RecordBatch concatenation (column-wise append).",
+"Sirius counterpart: CONCAT operator — <code>_concat_all</code> for LEFT/ANTI/OUTER joins, byte-threshold streaming for INNER."]},
+bq:{t:"BlockingQueue — the concurrency primitive",b:[
+"Thread-safe deque with <code>Pop</code> (blocking), <code>TryPop</code>, <code>PopWithTimeout</code>, <code>PopById</code> (O(n)), <code>Finish()</code> EOS signal. <code>HasId</code> concept on elements.",
+"Sirius counterpart: <code>exec::exchange_channel</code> — adds byte caps, the oversized-batch admission rule, and on-close callbacks. Evolving BlockingQueue toward that contract is roadmap phase 8.",
+"<b>File:</b> src/quest/cache/blocking_queue.hpp"]},
+db:{t:"DataBlock — tier-tagged data unit",b:[
+"Abstract: <code>tier()</code>, <code>size_in_bytes()</code>, <code>ToCpu()</code>, <code>ToDisk()</code>, <code>Release()</code>. <code>HostMemoryBlock</code> owns a RecordBatch; <code>DiskBlock</code> owns a file (RAII-deleted).",
+"<code>size_in_bytes</code> is a rough estimate (<code>cols × size × 8</code>) — feeds inaccurate memory accounting.",
+"Sirius counterpart: <code>cucascade::data_batch</code> — adds the three-state lock (idle ⇄ read_only ⇄ mutable) that makes \"idle = spillable\" safe, and view-backed zero-copy batches.",
+"<b>File:</b> src/quest/cache/data_block.{hpp,cpp} · Roadmap phase 5"]},
+mrm:{t:"MemoryResourceManager — tier coordinator",b:[
+"Owns CPU + Disk resources. <code>recommend_tier(bytes)</code>, <code>should_spill()</code> = CPU is saturated.",
+"Sirius counterpart: <code>sirius_memory_reservation_manager</code> — reservations, per-space budgets, downgrade triggers at distinct thresholds (reserve 0.9 / trigger 1.0 GPU, 0.8 host / stop 0.7).",
+"<b>File:</b> src/quest/memory/memory_resource.{hpp,cpp} (should_spill at .cpp:226)"]},
+cpu:{t:"CPUMemoryResource — L1",b:[
+"Saturation threshold 0.85; atomic used/peak counters. Counts only what <code>record_allocation</code> is told — advisory, not real RSS.",
+"On non-Linux falls back to hardcoded 8 GB RAM (<code>memory_resource.cpp:28</code>) — use <code>sysctl(HW_MEMSIZE)</code> on macOS.",
+"<b>File:</b> src/quest/memory/memory_resource.{hpp,cpp}"]},
+disk:{t:"DiskMemoryResource — L2",b:[
+"Threshold 0.90; base dir <code>/tmp/quest_cache</code>; generates cache paths; cleans up on destruction.",
+"Sirius disk tier default ~1 TB, fed by the downgrade executor in 64 MB pinned-host hops.",
+"<b>File:</b> src/quest/memory/memory_resource.{hpp,cpp}"]},
+pq:{t:"Parquet reader — from scratch",b:[
+"Custom Thrift compact-protocol decoder, footer/metadata parser, page/column readers. PLAIN + dictionary encodings; Snappy + uncompressed only; flat schemas only (<code>max_rep_level = 0</code> hardcoded, groups dropped).",
+"Logical type annotations (DATE/TIMESTAMP/DECIMAL/UTF8) never parsed. Dictionary re-decoded per data page. Whole column chunk buffered.",
+"Sirius: <code>cudf::io::read_parquet</code> + footer caching, stats-based row-group pruning, reader-side predicate pushdown, io_uring/S3 reactors, pinned prefetch cache.",
+"<b>Files:</b> src/quest/datasource/parquet/*, column_reader.hpp, page_reader.hpp"]},
+rb:{t:"RecordBatch / ColumnVector — data currency",b:[
+"Schema + <code>vector&lt;shared_ptr&lt;ColumnVector&gt;&gt;</code>. Typed vectors for 7 scalar types + strings; bit-per-value null bitmap (1 = valid).",
+"<code>num_rows()</code> trusts column 0. <code>GetFieldIndex</code> O(n) linear scan.",
+"Sirius: <code>cudf::table</code> / <code>table_view</code>, Arrow-compatible layout.",
+"<b>Files:</b> src/quest/datasource/record_batch.hpp, column_vector.hpp, schema.hpp"]},
+ser:{t:"RecordBatchSerializer — QRBT spill format",b:[
+"Magic \"QRBT\" v1; serializes Bool/Int8-64/Float/Double/String. Type tag = <code>std::variant::index()</code> — variant order is ABI, append-only.",
+"Int96 + FixedLenByteArray throw; little-endian memcpy assumed; throws <code>std::runtime_error</code> instead of returning <code>Result</code> — a convention violation worth fixing.",
+"<b>File:</b> src/quest/datasource/record_batch_serializer.hpp"]}
+};
+const detail=document.getElementById('archDetail');
+document.querySelectorAll('.blk').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.blk').forEach(x=>x.classList.remove('sel'));
+    b.classList.add('sel');
+    const d=ARCH[b.dataset.c];
+    detail.innerHTML='<h4>'+d.t+'</h4><ul>'+d.b.map(x=>'<li>'+x+'</li>').join('')+'</ul>';
+  });
+});
+
+/* ============ steppers ============ */
+const STEPPERS={
+lc:{nodes:[['b','Builder'],['l','LogicalPlan'],['ph','CreatePhysicalPlan'],['s','ScanExec'],['f','SelectionExec'],['p','ProjectionExec'],['c','collect']],
+steps:[
+{t:"1 · Fluent chain builds the logical tree",p:"FromParquet() opens ParquetDataSource and wraps it in a Scan node; .Where() wraps a Selection (ExprBuilder::Build clones the expression tree); .Select() wraps a Projection. Each call moves the QueryPlan — rvalue-qualified chaining.",s:{b:'ok'}},
+{t:"2 · Schema flows up at construction",p:"Every node derives its output schema when built: Scan from the Parquet footer (respecting projection), Projection by calling ToField() per expression. Type errors surface here, not at execution.",s:{b:'ok',l:'ok'}},
+{t:"3 · CreatePhysicalPlan — the gate",p:"A dynamic_cast chain maps 3 logical node types to ScanExec/SelectionExec/ProjectionExec and builds physical expressions (column names → indexes). Anything else errors — unlike Sirius, there is no second engine to fall back to. (And arithmetic expressions hit a gap here: not translated at all.)",s:{b:'ok',l:'ok',ph:'ok'}},
+{t:"4 · Execute(callback) — recursion, one thread",p:"The top node's Execute wraps the caller's callback in a lambda and recurses into its child. Control bottoms out at ScanExec, which drives the Parquet iterator. No thread is spawned anywhere; the entire query runs on the caller's stack.",s:{b:'ok',l:'ok',ph:'ok',s:'full'}},
+{t:"5 · ScanExec: one batch per row group",p:"RecordBatchIterator lazily calls ReadRowGroup(i, cols) at dereference. Batch size = row-group size — whatever the file dictates. Each batch bubbles up through the callback chain immediately.",s:{s:'ok',f:'full'}},
+{t:"6 · SelectionExec: mask, then gather rows",p:"The predicate evaluates row-by-row into a boolean mask, then surviving rows are gathered one value at a time (std::visit per cell) into fresh materialized columns — which silently drop null tracking.",s:{s:'ok',f:'ok',p:'full'}},
+{t:"7 · ProjectionExec → collect. Done — and note what never happened",p:"Projected batches reach the user's callback; ExecuteCollect appends to a vector. No BatchHolder was used, no memory tier consulted, no spill possible, no parallelism. Engines B's machinery sat idle the whole time.",s:{s:'ok',f:'ok',p:'ok',c:'ok'}}]},
+mm:{nodes:[['add','Add(block)'],['chk','should_spill?'],['ser','serialize QRBT'],['dsk','DiskBlock'],['pull','Pull()'],['cpu','ToCpu()']],
+steps:[
+{t:"1 · Producer adds a block",p:"An operator calls AddToOutput → BatchHolder::Add with a HostMemoryBlock wrapping a RecordBatch. Its size_in_bytes is an estimate (cols × size × 8) — this number is all the memory system ever sees.",s:{add:'ok'}},
+{t:"2 · MaybeSpill consults the manager",p:"If the block is CPU-tier and MemoryResourceManager::should_spill() — i.e. the CPU resource crossed its 0.85 saturation threshold — the holder spills before enqueueing. Note: the trigger is global saturation, not whether this block fits.",s:{add:'ok',chk:'full'}},
+{t:"3 · Spill = serialize to QRBT",p:"DataBlock::ToDisk() runs RecordBatchSerializer against /tmp/quest_cache/*.cache. Types that the serializer doesn't cover (Int96, FLBA) throw — a crash path, not a Result.",s:{add:'ok',chk:'ok',ser:'full'}},
+{t:"4 · The queue now holds a DiskBlock",p:"The in-queue entry is swapped for a DiskBlock (file-backed, RAII-deletes on destruction). CPU accounting drops; disk accounting rises. Backpressure thresholds (batches/bytes) still apply to producers via WaitIfSaturated.",s:{add:'ok',chk:'ok',ser:'ok',dsk:'ok'}},
+{t:"5 · Consumer pulls",p:"BlockingQueue::Pop blocks until data or Finish(). The consumer receives whatever tier the block happens to be in.",s:{dsk:'ok',pull:'full'}},
+{t:"6 · Lazy return trip",p:"The consumer calls ToCpu() on demand — deserialize QRBT, rebuild the RecordBatch. Same lazy-upgrade philosophy as Sirius's lock_or_prepare_batch, minus the lock states and device colocation. Remember: today only tests drive this whole path.",s:{dsk:'ok',pull:'ok',cpu:'ok'}}]}
+};
+document.querySelectorAll('[data-stepper]').forEach(el=>{
+  const cfg=STEPPERS[el.dataset.stepper];let i=0;
+  const nodesEl=el.querySelector('[data-nodes]'),tEl=el.querySelector('[data-t]'),pEl=el.querySelector('[data-p]');
+  const back=el.querySelector('[data-back]'),next=el.querySelector('[data-next]'),reset=el.querySelector('[data-reset]'),dots=el.querySelector('[data-dots]');
+  nodesEl.innerHTML=cfg.nodes.map((n,k)=>(k?'<span class="parrow">→</span>':'')+'<span class="pnode" data-n="'+n[0]+'">'+n[1]+'</span>').join('');
+  dots.innerHTML=cfg.steps.map(()=>'<i></i>').join('');
+  function render(){
+    const st=cfg.steps[i];
+    nodesEl.querySelectorAll('.pnode').forEach(n=>{n.className='pnode '+(st.s[n.dataset.n]||'');});
+    tEl.textContent=st.t;pEl.innerHTML=st.p;
+    back.disabled=i===0;next.disabled=i===cfg.steps.length-1;
+    dots.querySelectorAll('i').forEach((d,k)=>d.classList.toggle('on',k<=i));
+  }
+  back.onclick=()=>{if(i>0){i--;render();}};
+  next.onclick=()=>{if(i<cfg.steps.length-1){i++;render();}};
+  reset.onclick=()=>{i=0;render();};
+  render();
+});
+
+/* ============ comparison ============ */
+const COMPARE=[
+{st:'🟢',lvl:'sim',n:'Data transport',q:'Port + BatchHolder',s:'ports + shared_data_repository',d:'<b>The closest match in the codebase.</b> QUEST\'s Port maps named slots ("input_a"/"input_b") to BatchHolders; Sirius wires a shared_data_repository per sink→source edge with named ports ("default"/"build"). Both decouple producers from consumers with a thread-safe buffer.<br><br><b>Gap:</b> Sirius repositories participate in memory management — queued batches are idle and spillable by the downgrade executor. QUEST holders spill eagerly at Add time instead.'},
+{st:'🟢',lvl:'sim',n:'Two-tier memory shape',q:'CPU → Disk',s:'GPU → pinned host → disk',d:'Same architecture, one tier shorter. QUEST: CPUMemoryResource (0.85) → DiskMemoryResource (0.90), coordinated by MemoryResourceManager. Sirius: GPU → per-NUMA pinned host (64 MB blocks) → disk (~1 TB), coordinated by the reservation manager.<br><br><b>Gap:</b> Sirius separates <em>trigger</em> thresholds (start downgrading) from <em>stop</em> thresholds (0.7) so spilling has hysteresis; QUEST has a single saturation bit.'},
+{st:'🟢',lvl:'sim',n:'EOS signaling',q:'BlockingQueue::Finish()',s:'close-then-drain',d:'Both use close-then-drain: QUEST\'s Finish() lets consumers drain the deque before Pop reports exhaustion; Sirius\'s exchange_channel defines EOS as closed() && empty(). Same discipline.<br><br><b>Gap:</b> QUEST signals exhaustion via Status::Invalid — an error code doing control flow. Sirius returns nullopt from the task hint. Worth cleaning up in phase 3.'},
+{st:'🟡',lvl:'part',n:'Plan gate',q:'CreatePhysicalPlan (3 nodes)',s:'create_plan() (15 overloads)',d:'Both are single-point logical→physical gates. Sirius: 15 overloads, throw = silent CPU fallback, plan-time rewrites (AVG→SUM+COUNT, filter pushdown, projection folding). QUEST: 3 dynamic_cast branches, error = query fails.<br><br><b>Gap:</b> no fallback path (nothing to fall back to), no plan-time rewrites, and a real bug: arithmetic expressions aren\'t translated at all — Select(Col("a")+Col("b")) errors.'},
+{st:'🟡',lvl:'part',n:'Operator model',q:'Operator::run() loop',s:'execute/sink/source roles',d:'Same spirit — a uniform operator base with a template-method streaming loop (SimpleOperator::ProcessBatch ≈ execute()). But QUEST\'s run() loops until input exhausted inside one thread; Sirius operators are re-entrant, called once per task per batch, with separate source (task hints) and sink roles.<br><br><b>Gap:</b> no per-batch task granularity, no memory estimate hook, no source/sink separation. Only mock subclasses exist.'},
+{st:'🟡',lvl:'part',n:'Backpressure',q:'WaitIfSaturated thresholds',s:'barriers + hint gating',d:'QUEST blocks producer <em>threads</em> on batch/byte thresholds per edge. Sirius never blocks a worker: a full channel or unfinished upstream simply means the operator\'s hint says WAITING and no task is minted.<br><br><b>Gap:</b> barrier semantics (FULL/PARTIAL/PIPELINE) don\'t exist — QUEST can\'t express "hash-join build must complete before probe starts" except by operator-internal logic.'},
+{st:'🟡',lvl:'part',n:'Spilling',q:'MaybeSpill at Add',s:'downgrade_executor + predicates',d:'QUEST: inline, eager — if CPU is saturated when a block arrives, serialize it to disk right there. Sirius: a dedicated executor per memory space serves downgrade <em>predicates</em> ("spill until this reservation fits"), picking idle repository batches back-to-front, stopping the moment the predicate passes, with rollback on failure.<br><br><b>Gap:</b> no lock states on DataBlock (nothing marks a block in-use), no candidate selection, no demand-driven trigger, no hysteresis.'},
+{st:'🟡',lvl:'part',n:'Streaming',q:'BlockingQueue',s:'exchange_channel',d:'QUEST\'s BlockingQueue is a solid MPMC primitive with Finish semantics. Sirius\'s exchange_channel adds: independent item + byte caps, the oversized-batch admission rule (an oversized batch must be admittable into an empty channel or the stream wedges), overflow-safe byte math, on-push/on-pop/on-close callbacks, and handles-not-owners (queued items stay repository-accounted and spillable).<br><br><b>Gap:</b> StreamingQueryBuilder fakes streaming — it buffers everything, then co_yields.'},
+{st:'🔴',lvl:'miss',n:'Pipelines',q:'—',s:'meta-pipeline build + converter',d:'Sirius decomposes the operator tree into pipelines at blocking operators (build side before probe side), then a seven-phase converter rewrites them (scan fusion, join partition insertion, merge stages, repository wiring). Blocking operators are the sink of one pipeline and the source of the next.<br><br><b>QUEST:</b> no pipeline concept at all. Engine A is one recursion; Engine B is one thread per operator forever. This is roadmap phase 2 and the prerequisite for everything scheduler-related.'},
+{st:'🔴',lvl:'miss',n:'Task creation & scheduling',q:'—',s:'task_creator hint chain + scheduler',d:'Sirius mints work only when data exists: operators answer READY/WAITING_FOR_INPUT, the creator recurses into producers (deepest ready first), the scheduler matches tasks to ready executors, workers run reserve→execute→publish. Nothing polls.<br><br><b>QUEST:</b> jthread-per-operator that spins on a blocking queue. No task unit means no admission control, no locality, no prioritization. Roadmap phase 3.'},
+{st:'🔴',lvl:'miss',n:'Memory reservations',q:'—',s:'reserve before dispatch',d:'The heart of Sirius\'s robustness: a task must secure its estimated peak memory (history-corrected, clamped to max) before it runs; OOM ratchets estimates; a failed reservation triggers predicate-driven spilling, not a crash.<br><br><b>QUEST:</b work starts unconditionally; memory accounting is advisory estimates only. Roadmap phase 4 — and honestly the most instructive single feature to replicate.'},
+{st:'🔴',lvl:'miss',n:'Blocking operators',q:'3 streaming ops only',s:'~30 ops incl. join/agg/sort',d:'QUEST wires scan/filter/project end-to-end. Sirius adds hash join (3 modes + partition siblings), hash group-by with PARTITION→MERGE stages, ungrouped aggregate, 3-pipeline sample sort, top-N, CTEs, delim joins for correlated subqueries.<br><br><b>QUEST:</b> aggregate <em>expressions</em> exist but no GroupBy pipeline, no cross-batch merge, no sort, no join (enum values and test mocks only). Roadmap phase 6.'},
+{st:'🔴',lvl:'miss',n:'Vectorized expressions',q:'row-at-a-time GetValue(i)',s:'3 strategies, fused kernels',d:'Sirius evaluates whole columns per node (MATERIALIZE) or fuses the whole tree into one kernel (AST_INTERPRET default, AST_JIT). QUEST dispatches std::variant per row per value.<br><br><b>Also broken on the way:</b> all arithmetic upcasts to double (int64 precision loss), left-operand type promotion, nulls compare false instead of propagating. Roadmap phase 7.'},
+{st:'🔴',lvl:'miss',n:'Query optimizer',q:'—',s:'DuckDB optimizer + plan rewrites',d:'Sirius inherits DuckDB\'s full optimizer (minus 3 disabled rules) and adds its own plan-time rewrites: filter pushdown into scans, projection folding, AVG/COUNT-DISTINCT decomposition, dynamic filter channels from joins to scans.<br><br><b>QUEST:</b> no optimizer of any kind — no predicate pushdown, no projection pushdown (caller must pass projections manually), no rewrite pass. A minimal rewrite pass over LogicalPlan is a great learning project.'},
+{st:'🔴',lvl:'miss',n:'Scan management',q:'1 batch = 1 row group',s:'splits, coalescing, prefetch, pruning',d:'Sirius: a per-query coalescer batches splits to a 512 MB byte target, stamps device preferences, fires prefetch hints; footer caching; stats-based row-group pruning; reader-side predicate pushdown; io_uring/S3 reactors behind a pinned prefetching cache.<br><br><b>QUEST:</b> batch size is dictated by the file\'s row groups; every row group is read; whole column chunks are buffered; dictionary pages re-decoded per page. Roadmap phase 8 picks the high-value parts.'}
+];
+const cmpList=document.getElementById('cmpList'),cmpDetail=document.getElementById('cmpDetail');
+COMPARE.forEach((c,i)=>{
+  const b=document.createElement('button');b.className='cmp';
+  b.innerHTML='<span class="st">'+c.st+'</span><span class="nm">'+c.n+'<small>'+c.q+' ⇄ '+c.s+'</small></span><span class="lvl '+c.lvl+'">'+(c.lvl==='sim'?'similar':c.lvl==='part'?'partial':'missing')+'</span>';
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('.cmp').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');
+    cmpDetail.innerHTML='<h4>'+c.st+' '+c.n+'</h4><p style="font-family:\'JetBrains Mono\',monospace;font-size:12px;color:var(--muted)">QUEST: '+c.q+' &nbsp;·&nbsp; Sirius: '+c.s+'</p><div style="font-size:14.5px">'+c.d+'</div>';
+  });
+  cmpList.appendChild(b);
+});
+
+/* ============ quiz ============ */
+const QUIZ=[
+{tag:'architecture',q:'Why can no real QUEST query spill to disk today?',a:'Queries run through Engine A — QueryBuilder → PhysicalPlan::Execute(callback) — which never touches BatchHolder, DataBlock, or the memory tiers. All the spill machinery lives in Engine B (taskflow/cache), which only test mocks drive. There is no bridge from a PhysicalPlan to a Graph of operators.'},
+{tag:'lifecycle',q:'How many threads does ExecuteCollect() use for a filter+project query?',a:'One — the caller\'s. The physical plan is a recursion of nested std::function callbacks; ScanExec drives the Parquet iterator at the bottom and each batch bubbles up the stack. No jthreads, no queues.'},
+{tag:'plan gate',q:'What happens in QUEST vs Sirius when the planner meets an unsupported node?',a:'Sirius: create_plan() throws, the untouched DuckDB CPU plan runs, the user never notices. QUEST: CreatePhysicalPlan returns an error and the query fails — there is no second engine to fall back to.'},
+{tag:'bug',q:'What does Select(Col("a") + Col("b")) do today?',a:'Fails at plan time. CreatePhysicalExpr\'s binary branch only handles comparisons and And/Or; arithmetic expressions (Add/Sub/Mul/Div/Mod) fall through to "Cannot create physical expression" — even though both logical and physical arithmetic classes exist.'},
+{tag:'memory',q:'What triggers a spill in QUEST, and what\'s the Sirius difference?',a:'BatchHolder::Add checks should_spill() — CPU tier ≥ 85% of its (estimated) budget — and if so serializes that incoming block to disk immediately. Sirius spills on demand instead: a failed reservation issues a downgrade predicate, a dedicated executor spills idle batches until the reservation fits, then stops.'},
+{tag:'memory',q:'Why are QUEST\'s saturation decisions unreliable?',a:'Accounting is advisory: CPUMemoryResource counts only what record_allocation is told, and it\'s fed HostMemoryBlock\'s estimate of cols × size × 8 — not real allocation sizes, not RSS. Sirius routes every cuDF allocation through the reservation manager, so its budget is exact by construction.'},
+{tag:'cache',q:'What\'s broken about ConcatenatingBatchHolder?',a:'ConcatenateAll errors on more than one block ("not yet implemented", batch_holder.cpp:213). Any concatenating edge — the pattern aggregations and final sinks need — fails on multi-batch input.'},
+{tag:'streaming',q:'Is StreamingQueryBuilder actually streaming?',a:'No. ExecuteStream() collects every batch synchronously into a vector first, then co_yields them. The coroutine is cosmetic — no backpressure, no incremental compute. Sirius\'s equivalent (exchange_channel + STREAMING_SOURCE) is genuinely incremental with byte-bounded admission.'},
+{tag:'sirius',q:'What is the "hint chain" and what\'s QUEST\'s equivalent?',a:'Sirius\'s task creator asks an operator for a hint: READY (mint a task) or WAITING_FOR_INPUT (recurse into the producer, so the deepest ready work runs first). Nothing polls. QUEST\'s equivalent is... a thread per operator blocked on a queue Pop — there is no task unit and no creator. Building one is roadmap phase 3.'},
+{tag:'sirius',q:'In Sirius, which side of a hash join is build vs probe, and how does the pipeline layout enforce it?',a:'Right = build (materialized), left = probe (streamed). The converter inserts PARTITION→CONCAT pairs on both inputs; the build-side CONCAT feeds the join\'s "build" port behind a FULL barrier, so probe tasks can\'t be minted until the build pipeline finishes.'},
+{tag:'data',q:'Both QUEST and Sirius have a variant-order ABI footgun. Where?',a:'QUEST: RecordBatchSerializer encodes DataType as std::variant::index() — reordering the variant breaks every spill file. Sirius: ast::node\'s alternative order is ABI, append-only. Same lesson: never let variant order leak into a persistence or wire format without a stable mapping.'},
+{tag:'roadmap',q:'Why is "bridge the two engines" phase 1 rather than, say, adding joins?',a:'Every other phase depends on real operators flowing real batches through the taskflow runtime: pipelines split the operator DAG, tasks schedule pipeline work, reservations gate tasks, spilling serves reservations. A join added to Engine A would deepen the dead end; a join added after the bridge exercises the whole stack.'}
+];
+const quizList=document.getElementById('quizList'),qCnt=document.getElementById('qCnt');
+function updCnt(){qCnt.textContent=document.querySelectorAll('.qcard.open').length+' / '+QUIZ.length+' revealed';}
+QUIZ.forEach(q=>{
+  const c=document.createElement('div');c.className='qcard';
+  c.innerHTML='<div class="qhead" role="button" aria-expanded="false"><span class="qtag">'+q.tag+'</span><span>'+q.q+'</span><span class="tick">✓</span></div><div class="qans">'+q.a+'</div>';
+  c.querySelector('.qhead').addEventListener('click',()=>{c.classList.toggle('open');c.querySelector('.qhead').setAttribute('aria-expanded',c.classList.contains('open'));updCnt();});
+  quizList.appendChild(c);
+});
+document.getElementById('qAll').onclick=()=>{document.querySelectorAll('.qcard').forEach(c=>c.classList.add('open'));updCnt();};
+document.getElementById('qNone').onclick=()=>{document.querySelectorAll('.qcard').forEach(c=>c.classList.remove('open'));updCnt();};
+updCnt();
+
+/* ============ copy buttons ============ */
+document.querySelectorAll('pre').forEach(p=>{
+  const b=document.createElement('button');b.className='copybtn';b.textContent='copy';
+  b.onclick=()=>{navigator.clipboard.writeText(p.querySelector('code').innerText).then(()=>{b.textContent='copied';setTimeout(()=>b.textContent='copy',1200);});};
+  p.appendChild(b);
+});
+
+/* ============ scroll-spy ============ */
+const links=[...document.querySelectorAll('nav.side a')];
+const obs=new IntersectionObserver(es=>{
+  es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id));}});
+},{rootMargin:'-20% 0px -70% 0px'});
+document.querySelectorAll('main section[id]').forEach(s=>obs.observe(s));
+</script>
+</body>
+</html>

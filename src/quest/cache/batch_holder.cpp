@@ -1,18 +1,22 @@
 #include "quest/cache/batch_holder.hpp"
 
+#include "quest/execution/batch_kernels.hpp"
+
 namespace quest::cache {
 
 // =============================================================================
 // BatchHolderBase Implementation
 // =============================================================================
 
-BatchHolderBase::BatchHolderBase(
-    std::uint64_t id, BatchHolderConfig config,
-    std::shared_ptr<memory::MemoryResourceManager> memory_manager)
+BatchHolderBase::BatchHolderBase(std::uint64_t id, BatchHolderConfig config,
+                                 std::shared_ptr<memory::MemoryResourceManager> memory_manager)
     : id_(id),
       config_(config),
       queue_(QueueConfig{.timeout = config_.timeout}),
-      memory_manager_(std::move(memory_manager)) {}
+      memory_manager_(std::move(memory_manager)),
+      flow_control_batches_threshold_(config.flow_control_batches_threshold),
+      flow_control_bytes_threshold_(config.flow_control_bytes_threshold),
+      auto_spill_(config.auto_spill) {}
 
 void BatchHolderBase::Finish() {
   queue_.Finish();
@@ -23,25 +27,41 @@ bool BatchHolderBase::IsFinished() const {
   return queue_.IsFinished() && queue_.Empty();
 }
 
-std::size_t BatchHolderBase::batch_count() const { return queue_.Size(); }
+std::size_t BatchHolderBase::batch_count() const {
+  return queue_.Size();
+}
 
 void BatchHolderBase::NotifySaturationWaiters() {
-  { std::lock_guard lock(saturation_mutex_); }
+  {
+    std::lock_guard lock(saturation_mutex_);
+  }
   saturation_cv_.notify_all();
+  // Phase 3: after Notify, also post a task-re-evaluation event to the
+  // task creator/scheduler so WAITING producers are re-armed without relying
+  // on an unrelated completion (today nobody blocks once phase 3 lands).
+}
+
+void BatchHolderBase::SetFlowControl(std::size_t max_batches, std::size_t max_bytes) {
+  flow_control_batches_threshold_.store(max_batches, std::memory_order_release);
+  flow_control_bytes_threshold_.store(max_bytes, std::memory_order_release);
+  NotifySaturationWaiters();
+}
+
+void BatchHolderBase::SetSpillPolicy(bool enable_auto_spill) {
+  auto_spill_.store(enable_auto_spill, std::memory_order_release);
 }
 
 void BatchHolderBase::TrackAdded(std::size_t bytes, std::size_t rows) {
-  bytes_added_.fetch_add(bytes);
-  rows_added_.fetch_add(rows);
+  bytes_added_.fetch_add(bytes, std::memory_order_relaxed);
+  rows_added_.fetch_add(rows, std::memory_order_relaxed);
 }
 
 // =============================================================================
 // BatchHolder Implementation
 // =============================================================================
 
-BatchHolder::BatchHolder(
-    std::uint64_t id, BatchHolderConfig config,
-    std::shared_ptr<memory::MemoryResourceManager> memory_manager)
+BatchHolder::BatchHolder(std::uint64_t id, BatchHolderConfig config,
+                         std::shared_ptr<memory::MemoryResourceManager> memory_manager)
     : BatchHolderBase(id, config, std::move(memory_manager)) {}
 
 Status BatchHolder::Add(DataBlockPtr data) {
@@ -53,7 +73,7 @@ Status BatchHolder::Add(DataBlockPtr data) {
   auto rows = data->num_rows();
 
   // Check for spilling if auto_spill is enabled
-  if (config_.auto_spill && memory_manager_) {
+  if (ShouldAutoSpill() && memory_manager_) {
     auto status = MaybeSpill(data);
     if (!status.ok()) {
       return status;
@@ -87,7 +107,9 @@ Result<DataBlockPtr> BatchHolder::TryPull() {
   return result;
 }
 
-bool BatchHolder::HasNext() const { return queue_.HasNext(); }
+bool BatchHolder::HasNext() const {
+  return queue_.HasNext();
+}
 
 void BatchHolder::WaitIfSaturated() {
   std::unique_lock lock(saturation_mutex_);
@@ -97,13 +119,13 @@ void BatchHolder::WaitIfSaturated() {
       return true;  // Don't block if finished
     }
 
-    // Check batch count threshold
-    if (queue_.BatchesCount() >= config_.flow_control_batches_threshold) {
+    // Check batch count threshold (live atomic)
+    if (queue_.BatchesCount() >= FlowControlBatches()) {
       return false;
     }
 
-    // Check bytes threshold
-    if (current_bytes_.load() >= config_.flow_control_bytes_threshold) {
+    // Check bytes threshold (live atomic)
+    if (current_bytes_.load(std::memory_order_acquire) >= FlowControlBytes()) {
       return false;
     }
 
@@ -165,6 +187,11 @@ Result<DataBlockPtr> ConcatenatingBatchHolder::Pull() {
     return std::unexpected(status.error());
   }
 
+  // Chunked mode: serve merged chunks of up to concat_bytes_threshold bytes.
+  if (config_.concat_bytes_threshold > 0) {
+    return NextChunk();
+  }
+
   return ConcatenateAll();
 }
 
@@ -173,11 +200,71 @@ Result<DataBlockPtr> ConcatenatingBatchHolder::TryPull() {
     return Status::Invalid("Queue not finished yet");
   }
 
+  if (config_.concat_bytes_threshold > 0) {
+    return NextChunk();
+  }
+
   return ConcatenateAll();
 }
 
 bool ConcatenatingBatchHolder::HasNext() const {
+  {
+    std::lock_guard lock(pending_mutex_);
+    if (!pending_.empty()) {
+      return true;
+    }
+  }
   return queue_.HasNext() || (queue_.IsFinished() && queue_.Size() > 0);
+}
+
+bool ConcatenatingBatchHolder::IsFinished() const {
+  {
+    std::lock_guard lock(pending_mutex_);
+    if (!pending_.empty()) {
+      return false;
+    }
+  }
+  return queue_.IsFinished() && queue_.Empty();
+}
+
+Result<DataBlockPtr> ConcatenatingBatchHolder::NextChunk() {
+  std::lock_guard lock(pending_mutex_);
+
+  // Drain the (finished) queue into pending_ exactly once.
+  if (!drained_) {
+    auto all_blocks = queue_.PopAll();
+    if (all_blocks) {
+      for (auto& block : *all_blocks) {
+        pending_.push_back(std::move(block));
+      }
+    }
+    drained_ = true;
+  }
+
+  if (pending_.empty()) {
+    // Same EOS protocol as the simple holder: Invalid + IsFinished + !HasNext.
+    return Status::Invalid("ConcatenatingBatchHolder: finished and empty");
+  }
+
+  // Greedy: take blocks while under the cap — but always at least one, so a
+  // single oversized block still flows (the oversized-batch rule).
+  const std::size_t cap = config_.concat_bytes_threshold;
+  std::vector<DataBlockPtr> chunk;
+  std::size_t chunk_bytes = 0;
+  while (!pending_.empty()) {
+    const std::size_t next_bytes = pending_.front()->size_in_bytes();
+    if (!chunk.empty() && chunk_bytes + next_bytes > cap) {
+      break;
+    }
+    chunk_bytes += next_bytes;
+    chunk.push_back(std::move(pending_.front()));
+    pending_.pop_front();
+  }
+
+  if (chunk.size() == 1) {
+    return std::move(chunk.front());
+  }
+  return execution::ConcatenateHostBlocks(std::move(chunk));
 }
 
 void ConcatenatingBatchHolder::WaitIfSaturated() {
@@ -187,7 +274,7 @@ void ConcatenatingBatchHolder::WaitIfSaturated() {
     if (queue_.IsFinished()) {
       return true;
     }
-    return queue_.BatchesCount() < config_.flow_control_batches_threshold;
+    return queue_.BatchesCount() < FlowControlBatches();
   });
 }
 
@@ -198,20 +285,49 @@ Result<DataBlockPtr> ConcatenatingBatchHolder::ConcatenateAll() {
   }
 
   auto& blocks = *all_blocks;
-  if (blocks.empty()) {
-    return Status::Invalid("No data blocks to concatenate");
+  return execution::ConcatenateHostBlocks(std::move(blocks));
+}
+
+// =============================================================================
+// NonWaitingBatchHolder Implementation
+// =============================================================================
+
+NonWaitingBatchHolder::NonWaitingBatchHolder(
+    std::uint64_t id, BatchHolderConfig config,
+    std::shared_ptr<memory::MemoryResourceManager> memory_manager)
+    : BatchHolderBase(id, config, std::move(memory_manager)) {}
+
+Status NonWaitingBatchHolder::Add(DataBlockPtr data) {
+  if (!data) {
+    return Status::Invalid("Cannot add null data block");
   }
 
-  if (blocks.size() == 1) {
-    return std::move(blocks[0]);
-  }
+  auto bytes = data->size_in_bytes();
+  auto rows = data->num_rows();
 
-  // For multiple blocks, we need to concatenate RecordBatches
-  // This requires combining column data from all batches
-  // For now, return an error - proper implementation would require
-  // creating new column vectors with combined data
-  return Status::Invalid(
-      "Concatenation of multiple RecordBatch blocks not yet implemented");
+  auto status = queue_.Put(std::move(data));
+  if (status.ok()) {
+    TrackAdded(bytes, rows);
+  }
+  return status;
+}
+
+Result<DataBlockPtr> NonWaitingBatchHolder::Pull() {
+  // Non-blocking by contract: the data is pre-filled or it isn't coming.
+  auto result = queue_.TryPop();
+  if (!result.has_value()) {
+    return Status::Invalid("NonWaitingBatchHolder: empty (drained)");
+  }
+  return std::move(result.value());
+}
+
+Result<DataBlockPtr> NonWaitingBatchHolder::TryPull() { return Pull(); }
+
+bool NonWaitingBatchHolder::HasNext() const { return queue_.HasNext(); }
+
+bool NonWaitingBatchHolder::IsFinished() const {
+  // Empty == drained: no finished-latch needed for single-shot handoffs.
+  return queue_.Empty();
 }
 
 // =============================================================================
@@ -223,12 +339,13 @@ std::shared_ptr<IBatchHolder> MakeBatchHolder(
     std::shared_ptr<memory::MemoryResourceManager> memory_manager) {
   switch (type) {
     case BatchHolderType::kSimple:
-      return std::make_shared<BatchHolder>(id, config,
-                                           std::move(memory_manager));
+      return std::make_shared<BatchHolder>(id, config, std::move(memory_manager));
 
     case BatchHolderType::kConcatenating:
-      return std::make_shared<ConcatenatingBatchHolder>(
-          id, config, std::move(memory_manager));
+      return std::make_shared<ConcatenatingBatchHolder>(id, config, std::move(memory_manager));
+
+    case BatchHolderType::kNonWaiting:
+      return std::make_shared<NonWaitingBatchHolder>(id, config, std::move(memory_manager));
   }
 
   // Default to simple

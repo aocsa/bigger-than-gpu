@@ -344,64 +344,98 @@ Status BatchHolder::add(CacheMessagePtr message) {
 
 ## Execution Model
 
-### Parallel Execution
+Since the pipeline-execution refactor (docs/dev/pipeline-execution-plan.md,
+mirroring Sirius), `Graph::Execute()` runs the **pipelined engine**. The old
+thread-per-operator scheduler survives only as `Graph::ExecuteLegacy()` for
+not-yet-migrated `run()`-based operators and is scheduled for deletion.
 
-The graph executes operators in parallel while respecting dependencies:
+### Pipelines, not threads-per-operator
+
+`MetaPipeline::Build(graph)` splits the operator DAG into **Pipelines** at
+blocking operators (aggregate, sort, join, partition — `IsBlocking()`):
+
+```
+Query: scan -> filter -> project -> aggregate -> sort -> collect
+
+P0: [scan, filter, project, aggregate·sink]
+        | FULL barrier
+P1: [aggregate·source, sort·sink]
+        | FULL barrier
+P2: [sort·source, collect]
+```
+
+- Streaming operators (Filter, Project, Limit) **fuse** into one pipeline —
+  no BatchHolder, no thread handoff between them.
+- A **blocking operator appears in two pipelines**: sink of the one that
+  feeds it (`Sink()` accumulates state) and source of the one that consumes
+  it (`FinalizeSink()` flips it; `GetNextBatch()` re-emits).
+- Cross-pipeline edges carry **barrier semantics** (`EdgeConfig::barrier`):
+  `Full` (consumer waits for the whole producer pipeline; implied by
+  `Concatenating()`) or `Pipeline` (streaming through a shared BatchHolder,
+  producer and consumer run concurrently).
+
+### Operator roles
+
+Every operator can play three roles (mirrors `sirius_physical_operator`):
 
 ```cpp
-void Graph::execute() {
-    // 1. Find all source nodes (connected to sentinel)
-    // 2. BFS traversal with dependency checking
-    // 3. Launch each operator in its own thread
-    // 4. Wait for all threads to complete
-}
+// execute: batch-in -> batch-out, called by the pipeline driver in plan order
+Result<DataBlockPtr> ProcessBatch(DataBlockPtr input);   // default: passthrough
+// source: supplies batches; EOS is a VALUE (engaged nullopt), not an error
+bool IsSource();  Result<std::optional<DataBlockPtr>> GetNextBatch();
+// sink: receives the pipeline's final batch (blocking ops accumulate here)
+bool IsSink();  Status Sink(DataBlockPtr);  Status FinalizeSink();
 ```
 
-### Execution Flow
+### The push loop and the executor
+
+`Pipeline::RunTask(batch, start_index)` drives one batch forward through the
+operator list (push — no consumer ever calls upstream), then
+`PublishOutput` hands it to the sink role. `PipelineExecutor` runs pipelines
+on a bounded worker pool: a pipeline becomes runnable once all its
+`FullBarrierProducers()` finish; completion is edge-triggered (nothing
+polls); the claim-input → `MarkTaskCreated()` sequence runs under the
+pipeline's `status_lock()` (the completion-race discipline inherited from
+Sirius); errors stop new scheduling, drain queued work, then join.
+
+Measured on 10M rows / 10k batches (`test_execution_parity.cpp`): fused
+pipeline ~5x faster than thread-per-operator on pure per-batch overhead.
+
+### How a real query enters the push pipeline (Phase 1 bridge)
+
+Production queries historically ran only through Engine A
+(`QueryBuilder` → `CreatePhysicalPlan` → recursive callbacks). Phase 1 of
+`docs/dev/sirius-replication-plan.md` adds a Sirius-style **create_plan gate**:
 
 ```
-Time ─────────────────────────────────────────────────────▶
-
-Thread 1:  ┌──────────────┐
-           │  TableScan A │
-           └──────┬───────┘
-                  │ finish()
-                  ▼
-
-Thread 2:  ┌──────────────┐
-           │  TableScan B │
-           └──────┬───────┘
-                  │ finish()
-                  ▼
-
-Thread 3:            ┌─────────────────────────┐
-                     │         Join            │
-                     │  (waits for both inputs)│
-                     └────────────┬────────────┘
-                                  │ finish()
-                                  ▼
-
-Thread 4:                         ┌──────────────┐
-                                  │    Output    │
-                                  └──────────────┘
+LogicalPlan (Scan / Selection / Projection)
+        │
+        ▼
+execution::CreateGraph(...)          // or QueryBuilder::ExecuteOnGraph()
+        │  translates to role-based Operators
+        ▼
+ExecutableGraph  (owns ops + Graph)
+        │
+        ▼
+Graph::Execute() → MetaPipeline → PipelineExecutor   // push path (unchanged)
 ```
 
-### Flow Control
+- Supported nodes become `TableScanOperator` / `FilterOperator` /
+  `ProjectOperator` / `CollectorOperator` under `src/quest/taskflow/operators/`.
+- Unsupported nodes return an error; `ExecuteOnGraph` falls back to the
+  callback physical engine (Sirius throw→CPU fallback at CPU scale).
+- Default `QueryBuilder::Execute` / `ExecuteCollect` are unchanged.
+- MetaPipeline / PipelineExecutor semantics are not modified by the bridge.
 
-Operators can be throttled when downstream BatchHolders are saturated:
+### Flow control
 
-```cpp
-void Operator::run() {
-    while (has_input()) {
-        auto batch = process(input());
-        
-        // Wait if output is full
-        wait_if_output_saturated();
-        
-        add_to_output(batch);
-    }
-}
-```
+Cross-pipeline BatchHolders keep their saturation thresholds
+(`WaitIfSaturated`) and spill-on-add (`MaybeSpill`) behavior; intra-pipeline
+edges have no holders to throttle — backpressure between pipelines is the
+holder's blocking `Pull()`/bounded capacity. (Task-admission-based
+backpressure — gating task creation instead of blocking a worker — arrives
+with the task-creator phase; see the ordering invariant documented on
+`PipelineExecutor::Execute`.)
 
 ---
 

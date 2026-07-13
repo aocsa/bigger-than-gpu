@@ -1,5 +1,4 @@
-# Google Test configuration
-list(INSERT CMAKE_PREFIX_PATH 0 "/opt/homebrew")
+# Google Test configuration (Homebrew prefix set in root CMakeLists.txt)
 find_package(GTest REQUIRED)
 
 enable_testing()
@@ -50,9 +49,21 @@ add_executable(test_memory_resource test_memory_resource.cpp)
 target_link_libraries(test_memory_resource PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_memory_resource)
 
+add_executable(test_expr_builder test_expr_builder.cpp)
+target_link_libraries(test_expr_builder PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_expr_builder)
+
+add_executable(test_generator test_generator.cpp)
+target_link_libraries(test_generator PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_generator)
+
 add_executable(test_query_builder test_query_builder.cpp)
 target_link_libraries(test_query_builder PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_query_builder)
+
+add_executable(test_streaming_query_builder test_streaming_query_builder.cpp)
+target_link_libraries(test_streaming_query_builder PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_streaming_query_builder)
 
 add_executable(test_logical_plan test_logical_plan.cpp)
 target_link_libraries(test_logical_plan PRIVATE quest::quest GTest::gtest GTest::gtest_main)
@@ -73,3 +84,63 @@ gtest_discover_tests(test_result)
 add_executable(test_record_batch_serializer test_record_batch_serializer.cpp)
 target_link_libraries(test_record_batch_serializer PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_record_batch_serializer)
+
+add_executable(test_barrier_config test_barrier_config.cpp)
+target_link_libraries(test_barrier_config PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_barrier_config)
+
+add_executable(test_operator_roles test_operator_roles.cpp)
+target_link_libraries(test_operator_roles PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_operator_roles)
+
+add_executable(test_meta_pipeline test_meta_pipeline.cpp)
+target_link_libraries(test_meta_pipeline PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_meta_pipeline)
+
+add_executable(test_pipeline_executor test_pipeline_executor.cpp)
+target_link_libraries(test_pipeline_executor PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_pipeline_executor)
+
+add_executable(test_execution_parity test_execution_parity.cpp)
+target_link_libraries(test_execution_parity PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_execution_parity)
+
+add_executable(test_graph_bridge test_graph_bridge.cpp)
+target_link_libraries(test_graph_bridge PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_graph_bridge)
+
+add_executable(test_limit test_limit.cpp)
+target_link_libraries(test_limit PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_limit)
+
+add_executable(test_union test_union.cpp)
+target_link_libraries(test_union PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_union)
+
+add_executable(test_bindable_scan test_bindable_scan.cpp)
+target_link_libraries(test_bindable_scan PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_bindable_scan)
+
+add_executable(test_generate_print test_generate_print.cpp)
+target_link_libraries(test_generate_print PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_generate_print)
+
+add_executable(test_manual_query_walkthrough test_manual_query_walkthrough.cpp)
+target_link_libraries(test_manual_query_walkthrough PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_manual_query_walkthrough)
+
+add_executable(test_prepared_query test_prepared_query.cpp)
+target_link_libraries(test_prepared_query PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_prepared_query)
+
+add_executable(test_graph_builder test_graph_builder.cpp)
+target_link_libraries(test_graph_builder PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_graph_builder)
+
+add_executable(test_runtime_tuning test_runtime_tuning.cpp)
+target_link_libraries(test_runtime_tuning PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_runtime_tuning)
+
+add_executable(test_blazing_parity test_blazing_parity.cpp)
+target_link_libraries(test_blazing_parity PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_blazing_parity)

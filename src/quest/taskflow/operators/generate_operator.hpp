@@ -1,0 +1,108 @@
+// Copyright 2024 Quest Authors
+// SPDX-License-Identifier: Apache-2.0
+
+#ifndef QUEST_TASKFLOW_OPERATORS_GENERATE_OPERATOR_HPP_
+#define QUEST_TASKFLOW_OPERATORS_GENERATE_OPERATOR_HPP_
+
+/// @file generate_operator.hpp
+/// @brief Synthetic data source for dev/test pipelines.
+///
+/// Emits a configurable number of batches of int32 columns filled with a
+/// deterministic sequence. Plays the source role (GetNextBatch), so it can seed
+/// a real pipeline without a Parquet file — a first-class replacement for the
+/// ad-hoc VectorSource doubles scattered across the tests.
+
+#include <algorithm>
+#include <cstdint>
+#include <format>
+#include <memory>
+#include <optional>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "quest/cache/data_block.hpp"
+#include "quest/datasource/column_vector.hpp"
+#include "quest/datasource/record_batch.hpp"
+#include "quest/datasource/schema.hpp"
+#include "quest/datasource/types.hpp"
+#include "quest/execution/batch_kernels.hpp"
+#include "quest/memory/memory_resource.hpp"
+#include "quest/result.hpp"
+#include "quest/taskflow/operator.hpp"
+
+namespace quest::taskflow {
+
+/// @brief Configurable synthetic source: @p batch_count batches of
+/// @p rows_per_batch rows across @p num_columns int32 columns.
+///
+/// Column @c c of global row @c r holds `r * num_columns + c`, so every value
+/// is distinct and rows are recoverable — handy for asserting a pipeline moved
+/// exactly the rows it should.
+class GenerateOperator : public Operator {
+ public:
+  GenerateOperator(std::uint32_t operator_id, std::size_t batch_count, std::size_t rows_per_batch,
+                   std::size_t num_columns = 1,
+                   std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr)
+      : Operator(operator_id, "Generate", OperatorType::Generate),
+        batch_count_(batch_count),
+        rows_per_batch_(rows_per_batch),
+        num_columns_(std::max<std::size_t>(1, num_columns)),
+        memory_manager_(std::move(memory_manager)),
+        schema_(BuildSchema(num_columns_)) {}
+
+  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
+
+  /// @brief Legacy escape hatch — unused by PipelineExecutor.
+  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
+
+  [[nodiscard]] bool IsSource() const noexcept override { return true; }
+
+  /// @brief The (fixed) schema of every generated batch.
+  [[nodiscard]] const datasource::Schema& schema() const noexcept { return schema_; }
+
+  [[nodiscard]] Result<std::optional<cache::DataBlockPtr>> GetNextBatch() override {
+    if (emitted_ >= batch_count_) {
+      return std::optional<cache::DataBlockPtr>{std::nullopt};
+    }
+
+    std::vector<std::shared_ptr<datasource::ColumnVector>> columns;
+    columns.reserve(num_columns_);
+    for (std::size_t col_idx = 0; col_idx < num_columns_; ++col_idx) {
+      auto column = std::make_shared<datasource::TypedColumnVector<std::int32_t>>(
+          datasource::Int32Type{}, rows_per_batch_);
+      for (std::size_t row = 0; row < rows_per_batch_; ++row) {
+        column->Append(static_cast<std::int32_t>(((next_row_ + row) * num_columns_) + col_idx));
+      }
+      columns.push_back(std::move(column));
+    }
+
+    next_row_ += rows_per_batch_;
+    ++emitted_;
+    return std::optional<cache::DataBlockPtr>{execution::MakeTrackedHostBlock(
+        std::format("generate_{}_{}", id(), emitted_),
+        datasource::RecordBatch(schema_, std::move(columns)), memory_manager_)};
+  }
+
+ private:
+  [[nodiscard]] static datasource::Schema BuildSchema(std::size_t num_columns) {
+    std::vector<datasource::Field> fields;
+    fields.reserve(num_columns);
+    for (std::size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
+      fields.emplace_back("col" + std::to_string(col_idx), datasource::Int32Type{});
+    }
+    return datasource::Schema(std::move(fields));
+  }
+
+  std::size_t batch_count_;
+  std::size_t rows_per_batch_;
+  std::size_t num_columns_;
+  std::shared_ptr<memory::MemoryResourceManager> memory_manager_;
+  datasource::Schema schema_;
+  std::size_t emitted_{0};
+  std::size_t next_row_{0};
+};
+
+}  // namespace quest::taskflow
+
+#endif  // QUEST_TASKFLOW_OPERATORS_GENERATE_OPERATOR_HPP_

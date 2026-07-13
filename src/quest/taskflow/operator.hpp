@@ -37,14 +37,17 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "quest/cache/batch_holder.hpp"
+#include "quest/result.hpp"
+#include "quest/taskflow/edge_config.hpp"
 #include "quest/taskflow/operator_type.hpp"
 #include "quest/taskflow/port.hpp"
-#include "quest/result.hpp"
 
 namespace quest::taskflow {
 
@@ -135,6 +138,36 @@ class Operator {
   /// @return true if backpressure is supported, false otherwise.
   [[nodiscard]] virtual bool can_you_throttle_my_input() const = 0;
 
+  // ===========================================================================
+  // Port Contracts (§4.1 of graph-builder-dsl.md)
+  //
+  // Operators may declare which named input ports they accept and what
+  // EdgeConfig each port requires. GraphBuilder::Build() validates edges
+  // against these declarations, so a typo in a port name becomes a compile
+  // error rather than a silent new port.
+  //
+  // Operators that leave these at their defaults are treated as "undeclared" —
+  // the legacy behavior: any port name is allowed and no contract is checked.
+  // ===========================================================================
+
+  /// @brief Input ports this operator accepts.
+  ///
+  /// Empty means undeclared (any name allowed — legacy behavior).
+  /// GraphBuilder::Build() validates edge target port names against this list.
+  [[nodiscard]] virtual std::vector<std::string_view> DeclaredInputPorts() const {
+    return {};
+  }
+
+  /// @brief Required EdgeConfig for the given input port.
+  ///
+  /// Called by GraphBuilder::Build() (config resolution layer 4) to apply
+  /// per-port constraints. The author's explicit Edge/Chain calls (layer 3)
+  /// override this; explicit contradictions without .Config() are a Build() error.
+  /// Default: returns EdgeConfig{} (no constraint — streaming, simple holder).
+  [[nodiscard]] virtual EdgeConfig InputEdgeContract(std::string_view /*port*/) const {
+    return {};
+  }
+
   /// @brief Estimates the number of output rows this operator will produce.
   ///
   /// Used by the query optimizer for cardinality estimation and by the
@@ -144,6 +177,91 @@ class Operator {
   /// @return Pair of (is_estimate_available, estimated_row_count).
   [[nodiscard]] virtual std::pair<bool, std::uint64_t>
   GetEstimatedOutputNumRows() const;
+
+  /// @brief Indicates whether this operator is a pipeline breaker.
+  ///
+  /// A blocking operator must consume (part of) its input before producing
+  /// output (aggregate, sort, join, partition). During pipeline construction
+  /// it becomes the sink of the producer pipeline and the source of the
+  /// consumer pipeline. The default consults the OperatorType classification;
+  /// override for operators whose behavior differs from their type's default
+  /// (mirrors Sirius's overridable build_pipelines()).
+  [[nodiscard]] virtual bool IsBlocking() const noexcept {
+    return is_blocking_operator(operator_type_);
+  }
+
+  // ===========================================================================
+  // Pipeline Roles (mirrors sirius_physical_operator's execute/source/sink)
+  //
+  // In pipeline execution one operator plays up to three roles:
+  // - execute: pure batch-in -> batch-out, called by the pipeline driver on
+  //   every streaming operator in plan order (push loop).
+  // - source:  decides whether a new task can exist and supplies its input
+  //   batch. Sources are scans and blocking operators that have finished
+  //   accumulating (post-FinalizeSink).
+  // - sink:    receives the pipeline's final batch. Blocking operators
+  //   accumulate state here; FinalizeSink() flips them into source mode.
+  // ===========================================================================
+
+  /// @brief Processes a single batch (the execute role).
+  ///
+  /// Called by the pipeline driver on each operator in plan order. The
+  /// default implementation is a passthrough (returns the input unchanged),
+  /// which is correct for operators whose work happens in their source or
+  /// sink role.
+  ///
+  /// @param input The input data block.
+  /// @return The transformed data block, or an error status.
+  [[nodiscard]] virtual Result<cache::DataBlockPtr> ProcessBatch(
+      cache::DataBlockPtr input);
+
+  /// @brief Indicates whether this operator can act as a pipeline source.
+  ///
+  /// Default consults the OperatorType classification (TableScan,
+  /// BindableTableScan, Generate). Blocking operators should report true
+  /// once finalized if they re-emit accumulated state.
+  [[nodiscard]] virtual bool IsSource() const noexcept {
+    return is_source_operator(operator_type_);
+  }
+
+  /// @brief When true, the pipeline drain loop stops claiming further source
+  ///        batches after the current RunTask (single-pipeline early stop).
+  ///
+  /// Default false. LimitOperator returns true once remaining rows hit 0.
+  /// Multi-pipeline / cross-barrier cancellation is out of scope here.
+  [[nodiscard]] virtual bool ShouldStopSource() const noexcept { return false; }
+
+  /// @brief Produces the next batch from this source (the source role).
+  ///
+  /// End-of-stream is a value, not an error: an exhausted source returns
+  /// an engaged Result holding std::nullopt. The default implementation
+  /// returns an error — only sources (and finalized blocking operators)
+  /// may be asked for batches.
+  ///
+  /// @return next batch | std::nullopt on end-of-stream | error status.
+  [[nodiscard]] virtual Result<std::optional<cache::DataBlockPtr>>
+  GetNextBatch();
+
+  /// @brief Indicates whether this operator is a pipeline sink.
+  ///
+  /// Default: blocking operators are sinks (they accumulate their input
+  /// before producing output). Terminal collectors should override to true.
+  [[nodiscard]] virtual bool IsSink() const noexcept { return IsBlocking(); }
+
+  /// @brief Receives one final batch of the pipeline (the sink role).
+  ///
+  /// Blocking operators accumulate state here (hash table, sort buffer).
+  /// The default implementation returns an error — only sinks may be fed.
+  ///
+  /// @param batch The batch arriving at the end of the pipeline.
+  [[nodiscard]] virtual Status Sink(cache::DataBlockPtr batch);
+
+  /// @brief Called exactly once when the producer pipeline completes.
+  ///
+  /// Flips a blocking operator from sink mode to source mode (e.g. hash
+  /// table built -> start emitting). Default is a no-op returning OK so
+  /// non-sink operators are unaffected.
+  [[nodiscard]] virtual Status FinalizeSink();
 
   // ===========================================================================
   // Identity and Type
@@ -303,29 +421,6 @@ class Operator {
   /// Called by the graph scheduler after run() returns Proceed.
   void mark_done() noexcept { execution_completed_.store(true); }
 
-  // ===========================================================================
-  // Limit Optimization (for simple scan+limit queries)
-  // ===========================================================================
-
-  /// @brief Checks if this operator has a limit optimization applied.
-  [[nodiscard]] bool has_limit() const noexcept { return limit_applied_; }
-
-  /// @brief Gets the limit row count (-1 if no limit is applied).
-  [[nodiscard]] std::int64_t limit_rows() const noexcept {
-    return limit_row_count_;
-  }
-
-  /// @brief Applies a limit optimization to this operator.
-  ///
-  /// When set, source operators should stop reading data after producing
-  /// this many rows, avoiding unnecessary I/O for simple limit queries.
-  ///
-  /// @param row_count The maximum number of rows to produce.
-  void set_limit(std::int64_t row_count) noexcept {
-    limit_applied_ = true;
-    limit_row_count_ = row_count;
-  }
-
  protected:
   // Unique identifier for this operator within the graph.
   std::uint32_t operator_id_;
@@ -350,12 +445,6 @@ class Operator {
 
   // Atomic flag indicating execution completion (thread-safe).
   std::atomic<bool> execution_completed_{false};
-
-  // Flag indicating if a limit optimization has been applied.
-  bool limit_applied_{false};
-
-  // Maximum rows to produce when limit is applied (-1 means unlimited).
-  std::int64_t limit_row_count_{-1};
 };
 
 // =============================================================================
@@ -405,12 +494,14 @@ class SimpleOperator : public Operator {
  protected:
   /// @brief Processes a single input batch.
   ///
-  /// Derived classes implement this to define their transformation logic.
+  /// Redeclared pure: SimpleOperator subclasses MUST implement their
+  /// transformation logic (the Operator base default is a passthrough,
+  /// which would silently do nothing useful here).
   ///
   /// @param input The input cache data batch.
   /// @return The transformed cache data, or an error status.
-  [[nodiscard]] virtual Result<std::shared_ptr<cache::DataBlock>> ProcessBatch(
-      std::shared_ptr<cache::DataBlock> input) = 0;
+  [[nodiscard]] Result<cache::DataBlockPtr> ProcessBatch(
+      cache::DataBlockPtr input) override = 0;
 };
 
 }  // namespace quest::taskflow

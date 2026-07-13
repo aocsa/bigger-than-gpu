@@ -4,26 +4,28 @@
     {
       "label": "CMake: Configure",
       "type": "shell",
-      "command": "cmake",
+      "command": "/opt/homebrew/bin/cmake",
       "args": [
-        "-S",
-        "${workspaceFolder}",
-        "-B",
-        "${workspaceFolder}/build",
+        "-B", "${workspaceFolder}/build",
+        "-G", "Ninja",
         "-DCMAKE_BUILD_TYPE=Debug",
+        "-DCMAKE_PREFIX_PATH=/opt/homebrew",
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
       ],
+      "options": {
+        "env": { "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" }
+      },
       "group": "build",
       "problemMatcher": []
     },
     {
       "label": "CMake: Build",
       "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--build",
-        "${workspaceFolder}/build"
-      ],
+      "command": "/opt/homebrew/bin/cmake",
+      "args": ["--build", "${workspaceFolder}/build"],
+      "options": {
+        "env": { "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" }
+      },
       "group": {
         "kind": "build",
         "isDefault": true
@@ -32,23 +34,27 @@
       "problemMatcher": ["$gcc"]
     },
     {
-      "label": "CMake: Clean",
+      "label": "CMake: Clean Build",
       "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--build",
-        "${workspaceFolder}/build",
-        "--target",
-        "clean"
-      ],
+      "command": "rm -rf ${workspaceFolder}/build && /opt/homebrew/bin/cmake -B ${workspaceFolder}/build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH=/opt/homebrew -DCMAKE_EXPORT_COMPILE_COMMANDS=ON && /opt/homebrew/bin/cmake --build ${workspaceFolder}/build",
+      "options": {
+        "env": { "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" }
+      },
       "group": "build",
-      "problemMatcher": []
+      "problemMatcher": ["$gcc"]
     },
     {
-      "label": "Run btree",
+      "label": "Run Tests",
       "type": "shell",
-      "command": "${workspaceFolder}/build/btree",
-      "group": "test",
+      "command": "/opt/homebrew/bin/ctest",
+      "args": ["--test-dir", "${workspaceFolder}/build", "--output-on-failure", "-j4"],
+      "options": {
+        "env": { "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin" }
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
       "dependsOn": ["CMake: Build"],
       "problemMatcher": []
     }

@@ -6,6 +6,12 @@ project(bigger-than-gpu
     LANGUAGES CXX
 )
 
+# Default to Debug for single-config generators (Makefiles, Ninja)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
+endif()
+
 # Require C++23
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,9 +20,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Export compile commands for clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# macOS: Homebrew prefix (centralizes the path so tests/CMakeLists.txt doesn't need it)
+if(APPLE)
+    list(INSERT CMAKE_PREFIX_PATH 0 "/opt/homebrew")
+endif()
+
 # Build options
 option(QUEST_BUILD_TESTS "Build tests" ON)
 option(QUEST_BUILD_EXAMPLES "Build examples" ON)
+option(QUEST_SANITIZERS "Enable sanitizers (asan, tsan, ubsan)" "")
 
 # Compiler warnings
 add_compile_options(
@@ -25,6 +37,14 @@ add_compile_options(
     -Wpedantic
     -Werror=return-type
 )
+
+# Sanitizers
+if(QUEST_SANITIZERS)
+    foreach(sanitizer IN ITEMS ${QUEST_SANITIZERS})
+        add_compile_options(-fsanitize=${sanitizer})
+        add_link_options(-fsanitize=${sanitizer})
+    endforeach()
+endif()
 
 # Find Snappy compression library
 find_package(Snappy REQUIRED)
@@ -37,6 +57,11 @@ set(QUEST_SOURCES
     src/quest/taskflow/port.cpp
     src/quest/taskflow/operator.cpp
     src/quest/taskflow/graph.cpp
+    src/quest/taskflow/graph_builder.cpp
+    src/quest/taskflow/prepared_query.cpp
+    src/quest/taskflow/pipeline.cpp
+    src/quest/taskflow/meta_pipeline.cpp
+    src/quest/taskflow/pipeline_executor.cpp
 )
 
 # Create library

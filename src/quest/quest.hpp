@@ -1,4 +1,5 @@
-#pragma once
+#ifndef QUEST_QUEST_HPP_
+#define QUEST_QUEST_HPP_
 
 /// @file quest.hpp
 /// @brief Main include header for Bigger Than GPU library
@@ -21,8 +22,10 @@
 #include "quest/taskflow/operator_type.hpp"
 #include "quest/taskflow/port.hpp"
 #include "quest/taskflow/operator.hpp"
-#include "quest/taskflow/kpair.hpp"
+#include "quest/taskflow/edge_config.hpp"
+#include "quest/taskflow/edge_ref.hpp"
 #include "quest/taskflow/graph.hpp"
+#include "quest/taskflow/graph_builder.hpp"
 
 namespace quest {
 
@@ -39,3 +42,5 @@ make_default_memory_manager() {
 }
 
 }  // namespace quest
+
+#endif  // QUEST_QUEST_HPP_

@@ -3,19 +3,19 @@
   "C_Cpp.intelliSenseEngine": "disabled",
 
   // Clangd settings
-  "clangd.path": "clangd",
+  "clangd.path": "/usr/bin/clangd",
   "clangd.arguments": [
     "--background-index",
     "--clang-tidy",
     "--completion-style=detailed",
     "--header-insertion=iwyu",
     "--pch-storage=memory",
-    "--log=verbose"
+    "--compile-commands-dir=${workspaceFolder}/build"
   ],
 
   // Editor settings for C++
   "editor.formatOnSave": true,
-  "editor.tabSize": 4,
+  "editor.tabSize": 2,
   "editor.insertSpaces": true,
 
   // Folding settings
@@ -31,7 +31,17 @@
     "*.h": "cpp"
   },
 
-  // CMake settings
+  // CMake settings — Homebrew cmake/ninja required
+  "cmake.cmakePath": "/opt/homebrew/bin/cmake",
+  "cmake.generator": "Ninja",
   "cmake.configureOnOpen": true,
-  "cmake.buildDirectory": "${workspaceFolder}/build"
+  "cmake.buildDirectory": "${workspaceFolder}/build",
+  "cmake.installPrefix": "${workspaceFolder}/install",
+  "cmake.configureArgs": [
+    "-DCMAKE_PREFIX_PATH=/opt/homebrew",
+    "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
+  ],
+  "cmake.environment": {
+    "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+  }
 }

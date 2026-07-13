@@ -20,6 +20,7 @@
 #include "quest/datasource/data_source.hpp"
 #include "quest/datasource/record_batch.hpp"
 #include "quest/datasource/schema.hpp"
+#include "quest/execution/batch_kernels.hpp"
 #include "quest/logical_plan/logical_expr.hpp"
 #include "quest/logical_plan/logical_plan.hpp"
 #include "quest/physical_plan/expressions/physical_expr.hpp"
@@ -33,7 +34,10 @@ using datasource::RecordBatch;
 using datasource::Schema;
 
 /// @brief Callback for streaming batch results.
-using ResultCallback = std::function<void(RecordBatch)>;
+///
+/// Return `true` to continue producing batches; `false` to stop early
+/// (e.g. Limit satisfied, or ExecuteWithControl cancellation).
+using ResultCallback = std::function<bool(RecordBatch)>;
 
 // =============================================================================
 // Abstract Base Class
@@ -48,7 +52,7 @@ class PhysicalPlan {
   [[nodiscard]] virtual Schema schema() const = 0;
 
   /// @brief Executes the plan and calls the callback for each result batch.
-  /// @param callback The callback to invoke for each batch.
+  /// @param callback Invoked per batch; return false to stop producing.
   /// @return Status indicating success or failure.
   [[nodiscard]] virtual Status Execute(const ResultCallback& callback) = 0;
 
@@ -81,8 +85,7 @@ class ScanExec : public PhysicalPlan {
  public:
   ScanExec(std::shared_ptr<DataSource> data_source,
            std::optional<std::vector<std::string>> projection)
-      : data_source_(std::move(data_source)),
-        projection_(std::move(projection)) {}
+      : data_source_(std::move(data_source)), projection_(std::move(projection)) {}
 
   [[nodiscard]] Schema schema() const override {
     if (projection_) {
@@ -91,9 +94,7 @@ class ScanExec : public PhysicalPlan {
     return data_source_->schema();
   }
 
-  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override {
-    return {};
-  }
+  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override { return {}; }
 
   [[nodiscard]] Status Execute(const ResultCallback& callback) override {
     std::vector<std::string> proj;
@@ -111,7 +112,9 @@ class ScanExec : public PhysicalPlan {
       if (!batch_result) {
         return std::unexpected(batch_result.error());
       }
-      callback(std::move(*batch_result));
+      if (!callback(std::move(*batch_result))) {
+        break;  // Early terminate — do not read further batches.
+      }
     }
     return Status::OK();
   }
@@ -158,8 +161,9 @@ class SelectionExec : public PhysicalPlan {
     return input_->Execute([this, &callback](RecordBatch batch) {
       auto filtered_result = FilterBatch(batch);
       if (filtered_result.has_value() && filtered_result.value().num_rows() > 0) {
-        callback(std::move(filtered_result.value()));
+        return callback(std::move(filtered_result.value()));
       }
+      return true;  // Keep scanning (empty / filter error skip).
     });
   }
 
@@ -204,8 +208,7 @@ class SelectionExec : public PhysicalPlan {
   }
 
   [[nodiscard]] std::shared_ptr<datasource::ColumnVector> FilterColumn(
-      const datasource::ColumnVector& col,
-      const std::vector<size_t>& indices) const {
+      const datasource::ColumnVector& col, const std::vector<size_t>& indices) const {
     std::vector<Value> filtered_values;
     filtered_values.reserve(indices.size());
     for (size_t idx : indices) {
@@ -228,8 +231,8 @@ class SelectionExec : public PhysicalPlan {
                 data.push_back(false);
               }
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, type_tag);
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              type_tag);
           } else if constexpr (std::is_same_v<TypeTag, datasource::Int32Type>) {
             std::vector<int32_t> data;
             data.reserve(filtered_values.size());
@@ -240,8 +243,8 @@ class SelectionExec : public PhysicalPlan {
                 data.push_back(0);
               }
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, type_tag);
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              type_tag);
           } else if constexpr (std::is_same_v<TypeTag, datasource::Int64Type>) {
             std::vector<int64_t> data;
             data.reserve(filtered_values.size());
@@ -252,8 +255,8 @@ class SelectionExec : public PhysicalPlan {
                 data.push_back(0);
               }
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, type_tag);
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              type_tag);
           } else if constexpr (std::is_same_v<TypeTag, datasource::FloatType>) {
             std::vector<float> data;
             data.reserve(filtered_values.size());
@@ -264,8 +267,8 @@ class SelectionExec : public PhysicalPlan {
                 data.push_back(0.0f);
               }
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, type_tag);
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              type_tag);
           } else if constexpr (std::is_same_v<TypeTag, datasource::DoubleType>) {
             std::vector<double> data;
             data.reserve(filtered_values.size());
@@ -276,8 +279,8 @@ class SelectionExec : public PhysicalPlan {
                 data.push_back(0.0);
               }
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, type_tag);
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              type_tag);
           } else if constexpr (std::is_same_v<TypeTag, datasource::StringType>) {
             std::vector<std::string> data;
             data.reserve(filtered_values.size());
@@ -288,8 +291,8 @@ class SelectionExec : public PhysicalPlan {
                 data.emplace_back();
               }
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, type_tag);
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              type_tag);
           } else {
             // Default: create string column
             std::vector<std::string> data;
@@ -297,8 +300,8 @@ class SelectionExec : public PhysicalPlan {
             for (const auto& val : filtered_values) {
               data.push_back(datasource::ValueToString(val));
             }
-            return std::make_shared<MaterializedColumnVector>(
-                ColumnData{std::move(data)}, datasource::StringType{});
+            return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
+                                                              datasource::StringType{});
           }
         },
         col.GetType());
@@ -315,8 +318,7 @@ class SelectionExec : public PhysicalPlan {
 /// @brief Projection execution node - selects/transforms columns.
 class ProjectionExec : public PhysicalPlan {
  public:
-  ProjectionExec(PhysicalPlanPtr input, Schema schema,
-                 std::vector<ExpressionPtr> expressions)
+  ProjectionExec(PhysicalPlanPtr input, Schema schema, std::vector<ExpressionPtr> expressions)
       : input_(std::move(input)),
         schema_(std::move(schema)),
         expressions_(std::move(expressions)) {}
@@ -338,8 +340,9 @@ class ProjectionExec : public PhysicalPlan {
         }
       }
       if (columns.size() == expressions_.size()) {
-        callback(RecordBatch(schema_, std::move(columns)));
+        return callback(RecordBatch(schema_, std::move(columns)));
       }
+      return true;  // Skip bad batch; keep scanning.
     });
   }
 
@@ -363,6 +366,95 @@ class ProjectionExec : public PhysicalPlan {
 };
 
 // =============================================================================
+// Limit Execution Node
+// =============================================================================
+
+/// @brief Limit execution node - emits at most @p limit rows across batches.
+class LimitExec : public PhysicalPlan {
+ public:
+  LimitExec(PhysicalPlanPtr input, std::size_t limit)
+      : input_(std::move(input)), limit_(limit), remaining_(limit) {}
+
+  [[nodiscard]] Schema schema() const override { return input_->schema(); }
+
+  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override {
+    return {input_.get()};
+  }
+
+  [[nodiscard]] Status Execute(const ResultCallback& callback) override {
+    remaining_ = limit_;
+    if (remaining_ == 0) {
+      return Status::OK();  // Nothing to emit; do not touch upstream.
+    }
+    return input_->Execute([this, &callback](RecordBatch batch) -> bool {
+      if (remaining_ == 0) {
+        return false;  // Stop upstream scan.
+      }
+      if (batch.num_rows() <= remaining_) {
+        remaining_ -= batch.num_rows();
+        if (!callback(std::move(batch))) {
+          return false;
+        }
+        return remaining_ > 0;
+      }
+      auto truncated = execution::TruncateRecordBatch(batch, remaining_);
+      if (!truncated.has_value()) {
+        return true;  // Skip bad batch; keep scanning.
+      }
+      remaining_ = 0;
+      if (truncated->num_rows() > 0) {
+        (void)callback(std::move(*truncated));
+      }
+      return false;  // Limit exhausted — stop upstream.
+    });
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "LimitExec(" + std::to_string(limit_) + ")";
+  }
+
+ private:
+  PhysicalPlanPtr input_;
+  std::size_t limit_;
+  std::size_t remaining_;
+};
+
+// =============================================================================
+// Union Execution Node
+// =============================================================================
+
+/// @brief UNION ALL execution node - emits every row of @p left then @p right.
+///
+/// Sequential concatenation: the left child is fully executed (its batches
+/// forwarded to the callback) before the right child. Early-stop from the
+/// callback (Limit above a Union) short-circuits both children in order.
+class UnionAllExec : public PhysicalPlan {
+ public:
+  UnionAllExec(PhysicalPlanPtr left, PhysicalPlanPtr right)
+      : left_(std::move(left)), right_(std::move(right)) {}
+
+  [[nodiscard]] Schema schema() const override { return left_->schema(); }
+
+  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override {
+    return {left_.get(), right_.get()};
+  }
+
+  [[nodiscard]] Status Execute(const ResultCallback& callback) override {
+    auto left_status = left_->Execute(callback);
+    if (!left_status.ok()) {
+      return left_status;
+    }
+    return right_->Execute(callback);
+  }
+
+  [[nodiscard]] std::string ToString() const override { return "UnionAllExec"; }
+
+ private:
+  PhysicalPlanPtr left_;
+  PhysicalPlanPtr right_;
+};
+
+// =============================================================================
 // Physical Plan Factory Functions
 // =============================================================================
 
@@ -370,8 +462,8 @@ class ProjectionExec : public PhysicalPlan {
 /// @param expr The logical expression.
 /// @param input The input logical plan (for schema context).
 /// @return The physical expression, or error.
-[[nodiscard]] inline Result<ExpressionPtr> CreatePhysicalExpr(
-    const LogicalExpr& expr, const LogicalPlan& input) {
+[[nodiscard]] inline Result<ExpressionPtr> CreatePhysicalExpr(const LogicalExpr& expr,
+                                                              const LogicalPlan& input) {
   if (const auto* literal = dynamic_cast<const Literal*>(&expr)) {
     return std::make_unique<LiteralExpression>(literal->value());
   }
@@ -383,8 +475,7 @@ class ProjectionExec : public PhysicalPlan {
   if (const auto* col = dynamic_cast<const Column*>(&expr)) {
     auto index = input.schema().GetFieldIndex(col->name());
     if (!index) {
-      return std::unexpected(
-          Status::SchemaError("No column named: " + col->name()));
+      return std::unexpected(Status::SchemaError("No column named: " + col->name()));
     }
     return std::make_unique<ColumnExpression>(*index);
   }
@@ -426,18 +517,31 @@ class ProjectionExec : public PhysicalPlan {
     if (dynamic_cast<const Or*>(binary)) {
       return std::make_unique<OrExpression>(std::move(left), std::move(right));
     }
+    if (dynamic_cast<const Add*>(binary)) {
+      return std::make_unique<AddExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Subtract*>(binary)) {
+      return std::make_unique<SubtractExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Multiply*>(binary)) {
+      return std::make_unique<MultiplyExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Divide*>(binary)) {
+      return std::make_unique<DivideExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Modulo*>(binary)) {
+      return std::make_unique<ModuloExpression>(std::move(left), std::move(right));
+    }
   }
 
   return std::unexpected(
-      Status::PhysicalPlanError("Cannot create physical expression from: " +
-                                expr.ToString()));
+      Status::PhysicalPlanError("Cannot create physical expression from: " + expr.ToString()));
 }
 
 /// @brief Creates a physical plan from a logical plan.
 /// @param plan The logical plan.
 /// @return The physical plan, or error.
-[[nodiscard]] inline Result<PhysicalPlanPtr> CreatePhysicalPlan(
-    const LogicalPlan& plan) {
+[[nodiscard]] inline Result<PhysicalPlanPtr> CreatePhysicalPlan(const LogicalPlan& plan) {
   if (const auto* scan = dynamic_cast<const Scan*>(&plan)) {
     return std::make_unique<ScanExec>(scan->data_source(), scan->projection());
   }
@@ -447,13 +551,11 @@ class ProjectionExec : public PhysicalPlan {
     if (!input_result) {
       return std::unexpected(input_result.error());
     }
-    auto filter_result =
-        CreatePhysicalExpr(selection->condition(), selection->input());
+    auto filter_result = CreatePhysicalExpr(selection->condition(), selection->input());
     if (!filter_result) {
       return std::unexpected(filter_result.error());
     }
-    return std::make_unique<SelectionExec>(std::move(*input_result),
-                                           std::move(*filter_result));
+    return std::make_unique<SelectionExec>(std::move(*input_result), std::move(*filter_result));
   }
 
   if (const auto* projection = dynamic_cast<const Projection*>(&plan)) {
@@ -482,13 +584,34 @@ class ProjectionExec : public PhysicalPlan {
       fields.push_back(*field_result);
     }
 
-    return std::make_unique<ProjectionExec>(std::move(*input_result),
-                                            Schema(std::move(fields)),
+    return std::make_unique<ProjectionExec>(std::move(*input_result), Schema(std::move(fields)),
                                             std::move(exprs));
   }
 
-  return std::unexpected(
-      Status::PhysicalPlanError("Unsupported logical plan type"));
+  if (const auto* limit = dynamic_cast<const Limit*>(&plan)) {
+    auto input_result = CreatePhysicalPlan(limit->input());
+    if (!input_result) {
+      return std::unexpected(input_result.error());
+    }
+    return std::make_unique<LimitExec>(std::move(*input_result), limit->limit());
+  }
+
+  if (const auto* union_all = dynamic_cast<const Union*>(&plan)) {
+    if (!UnionCompatible(union_all->left().schema(), union_all->right().schema())) {
+      return std::unexpected(Status::SchemaError("UNION ALL inputs have mismatched schemas"));
+    }
+    auto left_result = CreatePhysicalPlan(union_all->left());
+    if (!left_result) {
+      return std::unexpected(left_result.error());
+    }
+    auto right_result = CreatePhysicalPlan(union_all->right());
+    if (!right_result) {
+      return std::unexpected(right_result.error());
+    }
+    return std::make_unique<UnionAllExec>(std::move(*left_result), std::move(*right_result));
+  }
+
+  return std::unexpected(Status::PhysicalPlanError("Unsupported logical plan type"));
 }
 
 }  // namespace quest

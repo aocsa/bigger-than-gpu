@@ -13,6 +13,7 @@
 #include "quest/datasource/record_batch.hpp"
 #include "quest/datasource/schema.hpp"
 #include "quest/datasource/types.hpp"
+#include "quest/taskflow/graph_builder.hpp"
 
 using namespace quest;
 using namespace quest::taskflow;
@@ -199,7 +200,6 @@ int main() {
     std::cout << "=== Join Example with Named Ports ===\n\n";
     
     auto memory_manager = make_default_memory_manager();
-    auto graph = std::make_shared<Graph>(memory_manager);
     
     // Create operators
     TableScanOperator scan_a(0, "customers", 2);
@@ -207,21 +207,24 @@ int main() {
     PartwiseJoinOperator join(2, "customers.id = orders.customer_id");
     OutputOperator output(3);
     
-    // Build graph using the DSL with named ports
-    // This is the key pattern from BlazingSQL:
-    //   graph += table_scan_a >> join["input_a"];
-    //   graph += table_scan_b >> join["input_b"];
-    
-    *graph += scan_a >> join["input_a"];
-    *graph += scan_b >> join["input_b"];
-    *graph += join >> output;
+    // Build graph using GraphBuilder with named ports (Phase 2.5 D3)
+    GraphBuilder gb{memory_manager};
+    gb.Edge(scan_a, join["input_a"]);
+    gb.Edge(scan_b, join["input_b"]);
+    gb.Edge(join, output);
+    auto graph_result = std::move(gb).Build();
+    if (!graph_result.has_value()) {
+        std::cerr << "Failed to build graph: " << graph_result.error().message_ << "\n";
+        return 1;
+    }
+    auto graph = *graph_result;
     
     // Show graph
     graph->PrintStructure();
 
     std::cout << "\n--- Executing Join ---\n\n";
 
-    auto status = graph->Execute();
+    auto status = graph->ExecuteLegacy();
     
     if (status.ok()) {
         std::cout << "\n=== Join completed successfully ===\n";
