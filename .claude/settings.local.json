@@ -49,10 +49,21 @@
       "Bash(eza:*)",
       "Bash(git add *)",
       "Bash(sed -i '' -e 's/## Stage 5 — Parity + benchmark ✅ \\(implemented, awaiting commit approval\\)/## Stage 5 — Parity + benchmark ✅ \\(commit 9d9a107\\)/' -e 's/## Stage 6 — Flip default ✅ \\(implemented, awaiting commit approval\\)/## Stage 6 — Flip default ✅ \\(commit 9d9a107\\)/' -e 's/### 2026-07-09 — Stage 5+6 \\(review session; uncommitted, pending REVIEW GATE\\)/### 2026-07-09 — Stage 5+6 \\(review session; committed 9d9a107\\)/' tasks/todo.md)",
-      "Bash(python3 -)"
+      "Bash(python3 -)",
+      "Bash(pixi --version)",
+      "Bash(bat --plain --paging=never /Users/aocsa/git/aocsa/bigger-than-gpu/pixi.toml)",
+      "Bash(pixi install *)",
+      "Bash(pixi run *)",
+      "Bash(rm -rf /Users/aocsa/git/aocsa/bigger-than-gpu/build && pixi run configure 2>&1 | tail -15)",
+      "Bash(timeout 10 ./test_bindable_scan --gtest_list_tests)",
+      "Bash(echo \"exit: $?\")",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "additionalDirectories": [
+      "/Users/aocsa/git/aocsa/bigger-than-gpu/build"
+    ]
   },
   "sandbox": {
     "enabled": false,

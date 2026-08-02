@@ -1,0 +1,17 @@
+[workspace]
+authors = ["Alexander Ocsa <aocsa@nvidia.com>"]
+channels = ["conda-forge"]
+name = "bigger-than-gpu"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+configure = "cmake -B build -G Ninja -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_CXX_STANDARD=26"
+build = "cmake --build build"
+test = "ctest --test-dir build --output-on-failure"
+
+[dependencies]
+clang_osx-arm64 = ">=22.1.8,<23"
+clangxx_osx-arm64 = ">=22.1.8,<23"
+cmake = ">=4.4.0,<5"
+ninja = ">=1.13.2,<2"
