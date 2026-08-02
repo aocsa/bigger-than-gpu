@@ -80,18 +80,12 @@ class GraphBuilder {
   // Construction
   // ===========================================================================
 
-  /// @brief Constructs an empty builder.
-  ///
-  /// @param memory_manager Optional memory manager forwarded to the resulting
-  ///        Graph. If null, the Graph uses its own default.
   explicit GraphBuilder(
       std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr);
 
-  // Non-copyable (edge spec pointers would dangle after copy).
+  // Non-copyable: edge spec pointers would dangle after a copy.
   GraphBuilder(const GraphBuilder&) = delete;
   GraphBuilder& operator=(const GraphBuilder&) = delete;
-
-  // Movable.
   GraphBuilder(GraphBuilder&&) noexcept = default;
   GraphBuilder& operator=(GraphBuilder&&) noexcept = default;
 
@@ -270,10 +264,7 @@ class EdgeBuilder {
 // ChainBuilder  (§3.2)
 // =============================================================================
 
-/// @brief ChainBuilder — EdgeBuilder bound to the chain's last edge.
-///
-/// Returned by `GraphBuilder::Chain()`. All EdgeBuilder vocabulary applies to
-/// the last edge of the chain only.
+/// @brief EdgeBuilder bound to the chain's last edge; returned by GraphBuilder::Chain().
 class ChainBuilder : public EdgeBuilder {
  public:
   using EdgeBuilder::EdgeBuilder;

@@ -126,10 +126,8 @@ class ExprBuilder {
   // Build Methods
   // ===========================================================================
 
-  /// @brief Build and return a clone of the underlying expression.
   [[nodiscard]] LogicalExprPtr Build() const { return expr_->Clone(); }
 
-  /// @brief Get a const reference to the underlying expression.
   [[nodiscard]] const LogicalExpr& GetExpr() const noexcept { return *expr_; }
 
   /// @brief Check if the expression is valid (non-null).
@@ -143,17 +141,10 @@ class ExprBuilder {
 // Expression Factory Functions
 // =============================================================================
 
-/// @brief Create a column reference expression.
-/// @param name The column name.
-/// @return ExprBuilder for the column reference.
 [[nodiscard]] inline ExprBuilder Col(const std::string& name) {
   return ExprBuilder(col(name));
 }
 
-/// @brief Create a literal value expression.
-/// @tparam T The literal type (must satisfy LiteralValue concept).
-/// @param value The literal value.
-/// @return ExprBuilder for the literal.
 template <LiteralValue T>
 [[nodiscard]] ExprBuilder Lit(T value) {
   return ExprBuilder(lit(std::move(value)));

@@ -6,9 +6,6 @@
 
 /// @file encoding.hpp
 /// @brief Value decoders for Parquet encodings (Plain, RLE, Dictionary).
-///
-/// This file provides decoders for the various encoding schemes used in
-/// Parquet files. All decoders return Result types for safe error handling.
 
 #include <bit>
 #include <cstdint>
@@ -28,15 +25,12 @@ namespace quest::datasource::parquet {
 // Base Value Decoder
 // =============================================================================
 
-/// @brief Base class for value decoders.
 class ValueDecoder {
  public:
   virtual ~ValueDecoder() = default;
 
-  /// @brief Sets the input data buffer.
   virtual void SetData(std::span<const uint8_t> data) = 0;
 
-  /// @brief Returns the number of values remaining to read.
   [[nodiscard]] virtual size_t ValuesRemaining() const = 0;
 };
 
@@ -44,11 +38,7 @@ class ValueDecoder {
 // Plain Encoding Decoder
 // =============================================================================
 
-/// @brief Plain encoding decoder for fixed-width types.
-///
-/// This decoder reads values stored in their raw binary representation
-/// without any compression or encoding.
-///
+/// @brief Plain encoding decoder for fixed-width types (raw binary, no compression).
 /// @tparam T The value type (int32_t, int64_t, float, double, etc.)
 template <typename T>
 class PlainDecoder : public ValueDecoder {
@@ -64,8 +54,6 @@ class PlainDecoder : public ValueDecoder {
     return num_values_ - values_read_;
   }
 
-  /// @brief Reads a single value.
-  /// @return The value, or decode error if no more values.
   [[nodiscard]] Result<T> ReadValue() {
     if (values_read_ >= num_values_) {
       return std::unexpected(
@@ -78,9 +66,6 @@ class PlainDecoder : public ValueDecoder {
     return value;
   }
 
-  /// @brief Reads a batch of values into a span.
-  /// @param values The output span to fill.
-  /// @return The number of values read.
   size_t ReadBatch(std::span<T> values) {
     size_t count = std::min(values.size(), ValuesRemaining());
     std::memcpy(values.data(), data_.data() + pos_, count * sizeof(T));
@@ -113,15 +98,12 @@ class PlainDecoder<bool> : public ValueDecoder {
     values_read_ = 0;
   }
 
-  /// @brief Sets the total number of boolean values to read.
   void SetNumValues(size_t num_values) { num_values_ = num_values; }
 
   [[nodiscard]] size_t ValuesRemaining() const override {
     return num_values_ - values_read_;
   }
 
-  /// @brief Reads a single boolean value.
-  /// @return The boolean value, or decode error if no more values.
   [[nodiscard]] Result<bool> ReadValue() {
     if (values_read_ >= num_values_) {
       return std::unexpected(
@@ -164,8 +146,6 @@ class PlainBinaryDecoder : public ValueDecoder {
     return pos_ < data_.size() ? 1 : 0;  // Approximate.
   }
 
-  /// @brief Reads a single string value.
-  /// @return The string, or decode error if insufficient data.
   [[nodiscard]] Result<std::string> ReadValue() {
     if (pos_ + 4 > data_.size()) {
       return std::unexpected(
@@ -202,11 +182,8 @@ class PlainBinaryDecoder : public ValueDecoder {
 /// - Bit-packed: 8 values packed together using minimal bits
 class RleBitPackingDecoder {
  public:
-  /// @brief Constructs a decoder with the given bit width.
-  /// @param bit_width The number of bits per value.
   explicit RleBitPackingDecoder(int bit_width) : bit_width_(bit_width) {}
 
-  /// @brief Sets the input data and expected value count.
   void SetData(std::span<const uint8_t> data, size_t num_values) {
     data_ = data;
     pos_ = 0;
@@ -219,13 +196,10 @@ class RleBitPackingDecoder {
     bit_packed_count_ = 0;
   }
 
-  /// @brief Returns the number of values remaining.
   [[nodiscard]] size_t ValuesRemaining() const {
     return num_values_ - values_read_;
   }
 
-  /// @brief Reads a single value.
-  /// @return The value, or decode error.
   [[nodiscard]] Result<int32_t> ReadValue() {
     if (current_count_ == 0) {
       auto status = ReadNextGroup();
@@ -246,9 +220,6 @@ class RleBitPackingDecoder {
     return value;
   }
 
-  /// @brief Reads a batch of values into a span.
-  /// @param values The output span to fill.
-  /// @return Status indicating success or decode error.
   [[nodiscard]] Status ReadBatch(std::span<int32_t> values) {
     for (size_t i = 0; i < values.size(); ++i) {
       auto result = ReadValue();
@@ -348,37 +319,25 @@ class RleBitPackingDecoder {
 // Dictionary Decoder
 // =============================================================================
 
-/// @brief Dictionary decoder for dictionary-encoded columns.
-///
-/// Dictionary encoding stores unique values in a dictionary and uses
-/// RLE/bit-packed indices to reference them.
-///
+/// @brief Dictionary decoder: unique values stored once, RLE/bit-packed indices reference them.
 /// @tparam T The dictionary value type.
 template <typename T>
 class DictionaryDecoder {
  public:
-  /// @brief Sets the dictionary values.
   void SetDictionary(std::vector<T> dictionary) {
     dictionary_ = std::move(dictionary);
   }
 
-  /// @brief Sets the encoded indices data.
-  /// @param data The RLE/bit-packed index data.
-  /// @param bit_width The bit width for indices.
-  /// @param num_values The number of values to decode.
   void SetIndices(std::span<const uint8_t> data, int bit_width,
                   size_t num_values) {
     index_decoder_ = std::make_unique<RleBitPackingDecoder>(bit_width);
     index_decoder_->SetData(data, num_values);
   }
 
-  /// @brief Returns the number of values remaining.
   [[nodiscard]] size_t ValuesRemaining() const {
     return index_decoder_ ? index_decoder_->ValuesRemaining() : 0;
   }
 
-  /// @brief Reads a single value from the dictionary.
-  /// @return The value, or decode error.
   [[nodiscard]] Result<T> ReadValue() {
     if (!index_decoder_) {
       return std::unexpected(
@@ -396,7 +355,6 @@ class DictionaryDecoder {
     return dictionary_[index];
   }
 
-  /// @brief Returns a reference to the dictionary.
   [[nodiscard]] const std::vector<T>& dictionary() const { return dictionary_; }
 
  private:
@@ -408,9 +366,6 @@ class DictionaryDecoder {
 // Utility Functions
 // =============================================================================
 
-/// @brief Computes the bit width needed to represent a maximum value.
-/// @param max_value The maximum value to represent.
-/// @return The minimum number of bits needed.
 [[nodiscard]] inline int ComputeBitWidth(int max_value) {
   if (max_value <= 0) {
     return 0;

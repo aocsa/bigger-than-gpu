@@ -2,10 +2,7 @@
 #define QUEST_CACHE_DATA_BLOCK_HPP_
 
 /// @file data_block.hpp
-/// @brief Cache data representations for CPU and Disk tiers
-/// @details DataBlock is the abstract representation of data that can be stored
-///          in different memory tiers. Implementations handle the actual
-///          storage.
+/// @brief Abstract cache data representation across CPU and Disk tiers.
 
 #include <cstddef>
 #include <filesystem>
@@ -27,36 +24,25 @@ namespace quest::cache {
 class HostMemoryBlock;
 class DiskBlock;
 
-/// @brief Abstract base class for cached data in any memory tier
 class DataBlock {
  public:
   virtual ~DataBlock() = default;
 
-  /// @brief Get unique identifier for this cache entry
   [[nodiscard]] virtual std::string_view id() const noexcept = 0;
-
-  /// @brief Get the memory tier where this data is stored
   [[nodiscard]] virtual memory::MemoryTier tier() const noexcept = 0;
-
-  /// @brief Get the size in bytes of the cached data
   [[nodiscard]] virtual std::size_t size_in_bytes() const noexcept = 0;
-
-  /// @brief Get the number of rows (if applicable)
   [[nodiscard]] virtual std::size_t num_rows() const noexcept = 0;
-
-  /// @brief Get the number of columns (if applicable)
   [[nodiscard]] virtual std::size_t num_columns() const noexcept = 0;
 
-  /// @brief Check if the data is still valid (not evicted/corrupted)
+  /// Returns false if the data has been evicted or corrupted.
   [[nodiscard]] virtual bool is_valid() const noexcept = 0;
 
-  /// @brief Load data into CPU memory (may be a no-op if already in CPU)
+  /// No-op if already in CPU memory.
   [[nodiscard]] virtual Result<std::shared_ptr<HostMemoryBlock>> ToCpu() = 0;
 
-  /// @brief Spill data to disk (may be a no-op if already on disk)
+  /// No-op if already on disk.
   [[nodiscard]] virtual Result<std::shared_ptr<DiskBlock>> ToDisk() = 0;
 
-  /// @brief Release resources associated with this cache entry
   virtual void Release() = 0;
 
  protected:
@@ -66,7 +52,6 @@ class DataBlock {
   DataBlock(const DataBlock&) = delete;
   DataBlock& operator=(const DataBlock&) = delete;
 
-  // Movable
   DataBlock(DataBlock&&) = default;
   DataBlock& operator=(DataBlock&&) = default;
 };
@@ -75,22 +60,18 @@ class DataBlock {
 // CPU Cache Data
 // =============================================================================
 
-/// @brief Cache data stored in CPU memory
-/// @details Holds a RecordBatch in RAM
+/// Holds a RecordBatch in CPU (RAM).
 class HostMemoryBlock final : public DataBlock {
  public:
-  /// @brief Construct from a RecordBatch
   explicit HostMemoryBlock(
       std::string id, datasource::RecordBatch record_batch,
       std::shared_ptr<memory::CPUMemoryResource> memory_resource = nullptr);
 
   ~HostMemoryBlock() override;
 
-  // Move operations
   HostMemoryBlock(HostMemoryBlock&&) noexcept;
   HostMemoryBlock& operator=(HostMemoryBlock&&) noexcept;
 
-  // DataBlock interface
   [[nodiscard]] std::string_view id() const noexcept override { return id_; }
   [[nodiscard]] memory::MemoryTier tier() const noexcept override {
     return memory::MemoryTier::CPU;
@@ -107,7 +88,6 @@ class HostMemoryBlock final : public DataBlock {
   [[nodiscard]] Result<std::shared_ptr<DiskBlock>> ToDisk() override;
   void Release() override;
 
-  /// @brief Get read-only access to the record batch
   [[nodiscard]] const datasource::RecordBatch* record_batch() const noexcept {
     return record_batch_.get();
   }
@@ -116,12 +96,10 @@ class HostMemoryBlock final : public DataBlock {
     return record_batch_.get();
   }
 
-  /// @brief Get mutable access to the record batch
   [[nodiscard]] datasource::RecordBatch* mutable_record_batch() noexcept {
     return record_batch_.get();
   }
 
-  /// @brief Set the disk memory resource for spilling operations
   void set_disk_resource(
       std::shared_ptr<memory::DiskMemoryResource> disk_resource) {
     disk_resource_ = std::move(disk_resource);
@@ -139,11 +117,9 @@ class HostMemoryBlock final : public DataBlock {
 // Disk Cache Data
 // =============================================================================
 
-/// @brief Cache data stored on disk
-/// @details Holds a reference to a file on disk containing the cached data
+/// Holds a reference to a spill file on disk.
 class DiskBlock final : public DataBlock {
  public:
-  /// @brief Construct from existing file
   DiskBlock(
       std::string id, std::filesystem::path file_path, std::size_t size_bytes,
       std::size_t num_rows, std::size_t num_columns,
@@ -151,11 +127,9 @@ class DiskBlock final : public DataBlock {
 
   ~DiskBlock() override;
 
-  // Move operations
   DiskBlock(DiskBlock&&) noexcept;
   DiskBlock& operator=(DiskBlock&&) noexcept;
 
-  // DataBlock interface
   [[nodiscard]] std::string_view id() const noexcept override { return id_; }
   [[nodiscard]] memory::MemoryTier tier() const noexcept override {
     return memory::MemoryTier::Disk;
@@ -174,12 +148,10 @@ class DiskBlock final : public DataBlock {
   [[nodiscard]] Result<std::shared_ptr<DiskBlock>> ToDisk() override;
   void Release() override;
 
-  /// @brief Get the file path
   [[nodiscard]] const std::filesystem::path& file_path() const noexcept {
     return file_path_;
   }
 
-  /// @brief Set the CPU memory resource for loading operations
   void set_cpu_resource(
       std::shared_ptr<memory::CPUMemoryResource> cpu_resource) {
     cpu_resource_ = std::move(cpu_resource);
@@ -200,7 +172,6 @@ class DiskBlock final : public DataBlock {
 // Type Alias for BlockingQueue
 // =============================================================================
 
-/// @brief Shared pointer type for DataBlock (for use with BlockingQueue)
 using DataBlockPtr = std::shared_ptr<DataBlock>;
 
 }  // namespace quest::cache

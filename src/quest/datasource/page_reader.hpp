@@ -4,12 +4,6 @@
 #ifndef PARQUET_READER_PAGE_READER_HPP
 #define PARQUET_READER_PAGE_READER_HPP
 
-/// @file page_reader.hpp
-/// @brief Page header parsing and page reading for Parquet column chunks.
-///
-/// This file provides the PageHeader structure and PageReader class for
-/// reading and parsing pages from Parquet column chunks.
-
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -23,7 +17,6 @@
 
 namespace quest::datasource {
 
-// Import parquet-specific types into this namespace for convenience
 using parquet::ThriftDecoder;
 using parquet::ThriftType;
 using parquet::RleBitPackingDecoder;
@@ -41,20 +34,17 @@ struct PageHeader {
   int32_t compressed_page_size = 0;
   int32_t crc = 0;
 
-  // Data page specific fields.
   int32_t num_values = 0;
   Encoding encoding = Encoding::kPlain;
   Encoding definition_level_encoding = Encoding::kRle;
   Encoding repetition_level_encoding = Encoding::kRle;
 
-  // Data page v2 specific fields.
   int32_t num_nulls = 0;
   int32_t num_rows = 0;
   int32_t definition_levels_byte_length = 0;
   int32_t repetition_levels_byte_length = 0;
   bool is_compressed = true;
 
-  // Dictionary page specific fields.
   int32_t num_dict_values = 0;
   Encoding dict_encoding = Encoding::kPlain;
 };
@@ -63,13 +53,8 @@ struct PageHeader {
 // Page Header Parser
 // =============================================================================
 
-/// @brief Parser for Thrift-encoded page headers.
 class PageHeaderParser {
  public:
-  /// @brief Parses a page header from a byte span.
-  /// @param data The byte span containing the Thrift-encoded header.
-  /// @param[out] bytes_read The number of bytes consumed by the header.
-  /// @return The parsed PageHeader, or decode error.
   [[nodiscard]] static Result<PageHeader> Parse(std::span<const uint8_t> data,
                                                  size_t& bytes_read) {
     ThriftDecoder decoder(data);
@@ -361,17 +346,9 @@ class PageHeaderParser {
 // Page Reader
 // =============================================================================
 
-/// @brief Page reader that handles reading and decoding pages from a column chunk.
-///
-/// The PageReader iterates through pages in a column chunk, parsing headers
-/// and providing access to page data.
+/// Iterates through pages in a column chunk, parsing headers and exposing page data.
 class PageReader {
  public:
-  /// @brief Constructs a page reader for a column chunk.
-  /// @param data The raw bytes of the column chunk.
-  /// @param type The physical type of the column.
-  /// @param max_definition_level Maximum definition level for the column.
-  /// @param max_repetition_level Maximum repetition level for the column.
   PageReader(std::span<const uint8_t> data, PhysicalType type,
              int max_definition_level, int max_repetition_level)
       : data_(data),
@@ -380,11 +357,8 @@ class PageReader {
         max_definition_level_(max_definition_level),
         max_repetition_level_(max_repetition_level) {}
 
-  /// @brief Checks if there are more pages to read.
   [[nodiscard]] bool HasNextPage() const noexcept { return pos_ < data_.size(); }
 
-  /// @brief Reads the next page header.
-  /// @return The parsed PageHeader, or decode error.
   [[nodiscard]] Result<PageHeader> ReadPageHeader() {
     size_t bytes_read = 0;
     auto result = PageHeaderParser::Parse(data_.subspan(pos_), bytes_read);
@@ -396,8 +370,6 @@ class PageReader {
     return result;
   }
 
-  /// @brief Gets the data for the current page.
-  /// @return The page data span, or error if page exceeds buffer.
   [[nodiscard]] Result<std::span<const uint8_t>> GetPageData() {
     size_t page_size = current_header_.compressed_page_size;
     if (pos_ + page_size > data_.size()) {
@@ -409,7 +381,6 @@ class PageReader {
     return result;
   }
 
-  /// @brief Returns the current page header.
   [[nodiscard]] const PageHeader& current_header() const noexcept {
     return current_header_;
   }
@@ -427,11 +398,6 @@ class PageReader {
 // Definition Level Decoding
 // =============================================================================
 
-/// @brief Decodes definition levels from page data using RLE/bit-packing.
-/// @param data The encoded definition levels data.
-/// @param max_level The maximum definition level.
-/// @param num_values The number of values to decode.
-/// @return The decoded definition levels, or decode error.
 [[nodiscard]] inline Result<std::vector<int32_t>> DecodeDefinitionLevels(
     std::span<const uint8_t> data, int max_level, size_t num_values) {
   std::vector<int32_t> levels(num_values);

@@ -72,7 +72,6 @@ Status BatchHolder::Add(DataBlockPtr data) {
   auto bytes = data->size_in_bytes();
   auto rows = data->num_rows();
 
-  // Check for spilling if auto_spill is enabled
   if (ShouldAutoSpill() && memory_manager_) {
     auto status = MaybeSpill(data);
     if (!status.ok()) {
@@ -116,15 +115,13 @@ void BatchHolder::WaitIfSaturated() {
 
   saturation_cv_.wait(lock, [this] {
     if (queue_.IsFinished()) {
-      return true;  // Don't block if finished
+      return true;
     }
 
-    // Check batch count threshold (live atomic)
     if (queue_.BatchesCount() >= FlowControlBatches()) {
       return false;
     }
 
-    // Check bytes threshold (live atomic)
     if (current_bytes_.load(std::memory_order_acquire) >= FlowControlBytes()) {
       return false;
     }
@@ -146,7 +143,6 @@ Status BatchHolder::MaybeSpill(DataBlockPtr& data) {
   if (data->tier() == memory::MemoryTier::CPU && ShouldSpill()) {
     auto disk_result = data->ToDisk();
     if (disk_result) {
-      // Replace with disk data
       data = std::move(*disk_result);
     }
     // If spilling fails, continue with CPU data
@@ -181,7 +177,6 @@ Status ConcatenatingBatchHolder::Add(DataBlockPtr data) {
 }
 
 Result<DataBlockPtr> ConcatenatingBatchHolder::Pull() {
-  // Wait until queue is finished (all data added) or has items
   auto status = queue_.WaitUntilFinished();
   if (!status.ok() && !queue_.HasNext()) {
     return std::unexpected(status.error());
@@ -348,7 +343,6 @@ std::shared_ptr<IBatchHolder> MakeBatchHolder(
       return std::make_shared<NonWaitingBatchHolder>(id, config, std::move(memory_manager));
   }
 
-  // Default to simple
   return std::make_shared<BatchHolder>(id, config, std::move(memory_manager));
 }
 

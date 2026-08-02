@@ -19,10 +19,8 @@ namespace {
 
 /// @brief Walk state for one MetaPipeline::Build() call.
 ///
-/// Not exposed: MetaPipeline::Build() is the only entry point. Kept as a
-/// class (rather than free functions threading state through parameters)
-/// because the upstream walk is recursive and needs the output vector plus
-/// the sink-id -> Pipeline* memo available at every recursion depth.
+/// Class rather than free functions so the recursive upstream walk can access
+/// the pipeline vector and memo at every depth without threading them as params.
 class MetaPipelineBuilder {
  public:
   explicit MetaPipelineBuilder(const Graph& graph) : graph_(graph) {}
@@ -38,14 +36,11 @@ class MetaPipelineBuilder {
   }
 
  private:
-  /// @brief Builds (or returns the memoized) pipeline whose sink is the
-  /// operator identified by `sink_operator_id`.
+  /// @brief Returns (or builds and memoizes) the pipeline whose sink is `sink_operator_id`.
   ///
-  /// Guards against cyclic graphs (the DSL never validates acyclicity):
-  /// `in_progress_` catches cycles that cross pipeline boundaries (the
-  /// recursion re-entering a sink it is already building), and a per-walk
-  /// visited set catches pure streaming cycles inside one fuse walk.
-  /// Either returns Invalid instead of hanging or overflowing the stack.
+  /// `in_progress_` catches cross-pipeline-boundary cycles; a per-walk visited
+  /// set catches streaming cycles inside one fuse walk. Both return Invalid
+  /// rather than hanging or overflowing the stack.
   [[nodiscard]] Result<Pipeline*> BuildFrom(std::uint32_t sink_operator_id) {
     auto memo_it = memo_.find(sink_operator_id);
     if (memo_it != memo_.end()) {
@@ -107,13 +102,11 @@ class MetaPipelineBuilder {
     return pipeline;
   }
 
-  /// @brief Handles the single-incoming-edge case for `cur` in `pipeline`.
+  /// @brief Single-incoming-edge case.
   ///
-  /// @return An engaged-but-empty optional if the edge ended the pipeline
-  ///         (upstream became a child via a blocking op or an explicit
-  ///         Full/partitioned break); an optional holding the upstream
-  ///         operator if the edge fused (caller should keep walking from
-  ///         it); an error if the graph is malformed.
+  /// Returns nullopt if the edge ended the pipeline (blocking op or explicit
+  /// Full/partitioned break); returns the upstream operator if the edge fused
+  /// (caller keeps walking); returns an error if the graph is malformed.
   [[nodiscard]] Result<std::optional<Operator*>> WalkSingleProducer(const Edge& edge,
                                                                     Pipeline& pipeline) {
     auto* upstream = graph_.GetNode(edge.source_operator_id);
@@ -155,9 +148,7 @@ class MetaPipelineBuilder {
     return std::optional<Operator*>{upstream};
   }
 
-  /// @brief Handles the multi-input case: builds one child pipeline per
-  /// producer, in target-port-name order, and records each as a producer
-  /// of `pipeline`.
+  /// @brief Multi-input case: builds one child pipeline per producer in port-name order.
   [[nodiscard]] Status WalkMultiInputProducers(const std::set<Edge>& incoming, Pipeline& pipeline) {
     std::vector<Edge> ordered(incoming.begin(), incoming.end());
     std::ranges::sort(ordered, {}, &Edge::target_port_name);

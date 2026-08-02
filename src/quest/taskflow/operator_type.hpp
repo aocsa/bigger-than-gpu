@@ -2,17 +2,13 @@
 #define QUEST_TASKFLOW_OPERATOR_TYPE_HPP_
 
 /// @file operator_type.hpp
-/// @brief Defines operator types for the execution graph
-/// @note Modern C++23 implementation focused on CPU/Disk memory tiers
+/// @brief Operator type enum and classification predicates for the execution graph.
 
 #include <cstdint>
 #include <string_view>
 
 namespace quest::taskflow {
 
-/// @brief Enumeration of all operator types in the execution graph
-/// @details Each operator represents a specific computation unit that can be
-///          scheduled and executed as part of a query plan
 enum class OperatorType : std::uint8_t {
     // Data Source Operators
     TableScan,
@@ -50,9 +46,6 @@ enum class OperatorType : std::uint8_t {
     Unknown
 };
 
-/// @brief Convert operator type to its string representation
-/// @param type The operator type to convert
-/// @return A string_view containing the operator name
 [[nodiscard]] constexpr std::string_view to_string(OperatorType type) noexcept {
     switch (type) {
         case OperatorType::TableScan:           return "TableScan";
@@ -99,12 +92,10 @@ enum class OperatorType : std::uint8_t {
            type == OperatorType::MergeStream;
 }
 
-/// @brief Check if operator is blocking (a pipeline breaker)
-/// @details A blocking operator must consume (part of) its input before it can
-///          produce output — aggregates, sorts, joins, partitions, unions.
-///          In pipeline execution it becomes the sink of the producer pipeline
-///          and the source of the consumer pipeline. Streaming operators
-///          (Filter, Project, Limit) fuse into their pipeline instead.
+/// @brief A blocking operator must consume (part of) its input before producing output.
+///
+/// Becomes the sink of the producer pipeline and the source of the consumer pipeline.
+/// Streaming operators (Filter, Project, Limit) fuse into their pipeline instead.
 [[nodiscard]] constexpr bool is_blocking_operator(OperatorType type) noexcept {
     return type == OperatorType::ComputeAggregate ||
            type == OperatorType::DistributeAggregate ||

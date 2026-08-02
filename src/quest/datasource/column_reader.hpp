@@ -4,13 +4,6 @@
 #ifndef PARQUET_READER_COLUMN_READER_HPP
 #define PARQUET_READER_COLUMN_READER_HPP
 
-/// @file column_reader.hpp
-/// @brief Column reader for decoding Parquet column chunks.
-///
-/// This file provides the ColumnReader class which handles reading and
-/// decoding values from Parquet column chunks, supporting various encodings
-/// and data types.
-
 #include <algorithm>
 #include <cstring>
 #include <memory>
@@ -28,7 +21,6 @@
 
 namespace quest::datasource {
 
-// Import parquet-specific types into this namespace for convenience
 using parquet::ColumnChunkMetadata;
 using parquet::CompressionCodec;
 using parquet::ComputeBitWidth;
@@ -37,25 +29,16 @@ using parquet::PlainBinaryDecoder;
 using parquet::RleBitPackingDecoder;
 using parquet::DictionaryDecoder;
 
-// Forward declaration
 class ParquetFileReader;
 
 // =============================================================================
 // Column Reader
 // =============================================================================
 
-/// @brief Column reader that decodes values from a Parquet column chunk.
-///
-/// This class handles reading pages from a column chunk and decoding values
-/// according to their encoding (Plain, Dictionary, RLE). It supports nullable
-/// columns with definition levels.
+/// Decodes pages from a column chunk: Plain, Dictionary, and RLE encodings,
+/// with nullable-column support via definition levels.
 class ColumnReader {
  public:
-  /// @brief Constructs a column reader.
-  /// @param field The schema field for this column.
-  /// @param column_meta The column chunk metadata.
-  /// @param data The raw bytes of the column chunk.
-  /// @param codec The compression codec for this column.
   ColumnReader(const Field& field, const ColumnChunkMetadata& column_meta,
                std::span<const uint8_t> data,
                std::unique_ptr<CompressionCodec> codec)
@@ -67,8 +50,6 @@ class ColumnReader {
                      0),                          // max rep level for flat schema
         codec_(std::move(codec)) {}
 
-  /// @brief Reads all values from this column chunk into a column vector.
-  /// @return The column vector on success, or decode error.
   [[nodiscard]] Result<std::shared_ptr<ColumnVector>> ReadAll() {
     size_t total_values = column_meta_.num_values;
     auto column = CreateColumnVector(field_.data_type, total_values);
@@ -125,13 +106,8 @@ class ColumnReader {
   // Decompression
   // ===========================================================================
 
-  /// @brief Decompresses page data if compression is enabled.
-  /// @param header The page header with size information.
-  /// @param compressed_data The potentially compressed page data.
-  /// @return Span to decompressed data (either original or buffer).
   [[nodiscard]] Result<std::span<const uint8_t>> DecompressPageData(
       const PageHeader& header, std::span<const uint8_t> compressed_data) {
-    // Check if decompression is needed.
     bool needs_decompression =
         (codec_->type() != CompressionType::kUncompressed) &&
         (header.compressed_page_size != header.uncompressed_page_size);
@@ -146,7 +122,6 @@ class ColumnReader {
           std::in_place, compressed_data.data(), compressed_data.size()};
     }
 
-    // Decompress the data.
     auto result =
         codec_->Decompress(compressed_data, header.uncompressed_page_size);
     if (!result.has_value()) {
@@ -176,7 +151,6 @@ class ColumnReader {
     size_t pos = 0;
     int max_def_level = field_.IsNullable() ? 1 : 0;
 
-    // Read definition levels if column is nullable.
     std::vector<int32_t> def_levels;
     if (max_def_level > 0) {
       // Definition levels are prefixed with their byte length.
@@ -197,10 +171,7 @@ class ColumnReader {
       pos += def_level_length;
     }
 
-    // Remaining data contains the values.
     auto values_data = data.subspan(pos);
-
-    // Decode values based on encoding.
     return DecodeValues(header.encoding, values_data, header.num_values,
                         def_levels, column);
   }
@@ -227,9 +198,7 @@ class ColumnReader {
       pos += header.definition_levels_byte_length;
     }
 
-    // Remaining data contains the values.
     auto values_data = data.subspan(pos);
-
     // V2 pages store non-null value count.
     size_t num_non_null = header.num_values - header.num_nulls;
     return DecodeValues(header.encoding, values_data, num_non_null, def_levels,
@@ -257,22 +226,16 @@ class ColumnReader {
   // Definition Level Processing Helper
   // ===========================================================================
 
-  /// @brief Processes values with definition levels using provided callbacks.
-  /// @tparam ReadFn Callable: () -> Result<T> reads the next value.
-  /// @tparam AppendFn Callable: (T&&) -> void appends a value to the column.
-  /// @tparam AppendNullFn Callable: () -> void appends a null to the column.
-  /// @param num_values Number of non-null values to read (when def_levels empty).
-  /// @param def_levels Definition levels (empty if all values present).
-  /// @param read_fn Function to read the next value from decoder.
-  /// @param append_fn Function to append a value to the column.
-  /// @param append_null_fn Function to append a null to the column.
-  /// @return Status::OK() on success, or error from read_fn.
+  /// Iterates over def_levels (or num_values if empty), calling read_fn/append_fn
+  /// for present values and append_null_fn for nulls.
+  /// @tparam ReadFn  () -> Result<T>
+  /// @tparam AppendFn  (T&&) -> void
+  /// @tparam AppendNullFn  () -> void
   template <typename ReadFn, typename AppendFn, typename AppendNullFn>
   [[nodiscard]] Status ProcessWithDefLevels(
       size_t num_values, const std::vector<int32_t>& def_levels,
       ReadFn&& read_fn, AppendFn&& append_fn, AppendNullFn&& append_null_fn) {
     if (def_levels.empty()) {
-      // All values present.
       for (size_t i = 0; i < num_values; ++i) {
         auto result = read_fn();
         if (!result.has_value()) {
@@ -281,7 +244,6 @@ class ColumnReader {
         append_fn(std::move(result.value()));
       }
     } else {
-      // Check definition levels for nulls.
       for (size_t i = 0; i < def_levels.size(); ++i) {
         if (def_levels[i] == 1) {
           auto result = read_fn();
@@ -314,7 +276,6 @@ class ColumnReader {
           "Dictionary encoding but no dictionary page found");
     }
 
-    // Dispatch based on physical type.
     switch (column_meta_.type) {
       case PhysicalType::kBoolean:
         return DecodeBooleanValues(encoding, data, num_values, def_levels,
@@ -397,7 +358,6 @@ class ColumnReader {
   [[nodiscard]] Status DecodeDictionaryValues(
       std::span<const uint8_t> data, size_t num_values,
       const std::vector<int32_t>& def_levels, TypedColumnVector<T>* column) {
-    // First, decode the dictionary.
     PlainDecoder<T> dict_decoder;
     dict_decoder.SetData(dictionary_data_);
     std::vector<T> dictionary(dict_num_values_);
@@ -466,7 +426,6 @@ class ColumnReader {
   [[nodiscard]] Status DecodeDictionaryBinaryValues(
       std::span<const uint8_t> data, size_t num_values,
       const std::vector<int32_t>& def_levels, StringColumnVector* column) {
-    // Decode dictionary.
     PlainBinaryDecoder dict_decoder;
     dict_decoder.SetData(dictionary_data_);
     std::vector<std::string> dictionary;
@@ -479,7 +438,6 @@ class ColumnReader {
       dictionary.push_back(std::move(result.value()));
     }
 
-    // Decode indices.
     if (data.empty()) {
       return Status::OK();
     }
@@ -567,17 +525,12 @@ class ColumnReader {
         [str_col]() { str_col->AppendNull(); });
   }
 
-  // ===========================================================================
-  // Member Variables
-  // ===========================================================================
-
   Field field_;
   ColumnChunkMetadata column_meta_;
   std::span<const uint8_t> data_;
   PageReader page_reader_;
   std::unique_ptr<CompressionCodec> codec_;
 
-  // Dictionary state.
   bool has_dictionary_ = false;
   std::vector<uint8_t> dictionary_data_;
   int32_t dict_num_values_ = 0;

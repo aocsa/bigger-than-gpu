@@ -50,19 +50,17 @@ std::size_t HostMemoryBlock::size_in_bytes() const noexcept {
   if (!record_batch_) {
     return 0;
   }
-  // Estimate size based on serialized format
-  // This is an approximation; actual serialized size may vary
+  // Approximation: 8 bytes per value; actual serialized size may differ.
   std::size_t size = 0;
   for (std::size_t i = 0; i < record_batch_->num_columns(); ++i) {
     const auto& column = record_batch_->column(i);
-    size += column.size() * 8;  // Rough estimate per value
+    size += column.size() * 8;
   }
   return size;
 }
 
 Result<std::shared_ptr<HostMemoryBlock>> HostMemoryBlock::ToCpu() {
-  // Already in CPU memory, return shared_ptr to this
-  // Note: This requires the caller to already have a shared_ptr
+  // Caller must use the existing shared_ptr; no conversion path from raw this.
   return Status::Invalid(
       "Cannot convert HostMemoryBlock to CPU - use existing shared_ptr");
 }
@@ -76,10 +74,8 @@ Result<std::shared_ptr<DiskBlock>> HostMemoryBlock::ToDisk() {
     return Status::Invalid("No disk resource configured for spilling");
   }
 
-  // Generate cache file path
   auto file_path = disk_resource_->generate_cache_path("cpu_spill");
 
-  // Serialize and write record batch to disk
   try {
     datasource::RecordBatchSerializer::SerializeToFile(*record_batch_,
                                                         file_path.string());
@@ -88,7 +84,6 @@ Result<std::shared_ptr<DiskBlock>> HostMemoryBlock::ToDisk() {
                            std::string(e.what()));
   }
 
-  // Get serialized size
   std::error_code ec;
   auto file_size = std::filesystem::file_size(file_path, ec);
   if (ec) {
@@ -96,10 +91,8 @@ Result<std::shared_ptr<DiskBlock>> HostMemoryBlock::ToDisk() {
     return Status::IOError("Failed to get file size: " + ec.message());
   }
 
-  // Record file creation
   disk_resource_->record_file_created(file_path, file_size);
 
-  // Create disk cache data
   auto disk_data = std::make_shared<DiskBlock>(
       id_, file_path, file_size, record_batch_->num_rows(),
       record_batch_->num_columns(), disk_resource_);
@@ -182,12 +175,10 @@ Result<std::shared_ptr<HostMemoryBlock>> DiskBlock::ToCpu() {
     return Status::Invalid("Cache file is not valid");
   }
 
-  // Deserialize record batch from file
   try {
     auto record_batch =
         datasource::RecordBatchSerializer::DeserializeFromFile(file_path_.string());
 
-    // Create CPU cache data
     auto cpu_data = std::make_shared<HostMemoryBlock>(
         id_, std::move(record_batch), cpu_resource_);
 
@@ -202,7 +193,6 @@ Result<std::shared_ptr<HostMemoryBlock>> DiskBlock::ToCpu() {
 }
 
 Result<std::shared_ptr<DiskBlock>> DiskBlock::ToDisk() {
-  // Already on disk
   return Status::Invalid(
       "Cannot convert DiskBlock to Disk - use existing shared_ptr");
 }

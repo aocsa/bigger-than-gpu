@@ -42,7 +42,6 @@ enum class BarrierType : std::uint8_t {
   Full
 };
 
-/// @brief Convert barrier type to its string representation.
 [[nodiscard]] constexpr std::string_view to_string(BarrierType type) noexcept {
   switch (type) {
     case BarrierType::Pipeline:
@@ -118,24 +117,16 @@ struct EdgeConfig {
 
   // ---- Factory helpers -------------------------------------------------------
 
-  /// @brief Creates a configuration for simple (per-batch) delivery.
   [[nodiscard]] static EdgeConfig Simple() {
     return EdgeConfig{.type = cache::BatchHolderType::kSimple};
   }
 
-  /// @brief Creates a configuration for concatenating delivery.
-  ///
-  /// All batches are merged into a single result before delivery.
-  /// Implies a Full barrier: merging everything requires the producer
-  /// pipeline to finish first.
+  /// @brief Implies Full barrier: merging requires the producer to finish first.
   [[nodiscard]] static EdgeConfig Concatenating() {
     return EdgeConfig{.type = cache::BatchHolderType::kConcatenating,
                       .barrier = BarrierType::Full};
   }
 
-  /// @brief Creates a configuration for partitioned parallel outputs.
-  ///
-  /// @param partition_count Fixed number of partitions to create at Prepare().
   [[nodiscard]] static EdgeConfig Partitioned(std::size_t partition_count) {
     return EdgeConfig{.type = cache::BatchHolderType::kSimple,
                       .num_partitions = partition_count};
@@ -143,13 +134,11 @@ struct EdgeConfig {
 
   // ---- Mutating builder methods (for legacy DSL and GraphBuilder internals) --
 
-  /// @brief Adds a barrier type to the configuration.
   EdgeConfig& with_barrier(BarrierType barrier_type) {
     barrier = barrier_type;
     return *this;
   }
 
-  /// @brief Adds flow control thresholds to the configuration.
   EdgeConfig& with_flow_control(
       std::size_t max_batches,
       std::size_t max_bytes = kUnlimited) {

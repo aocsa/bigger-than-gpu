@@ -5,10 +5,7 @@
 #define PARQUET_READER_COMPRESSION_HPP
 
 /// @file compression.hpp
-/// @brief Compression codec abstraction for Parquet decompression.
-///
-/// This file provides a unified interface for decompressing data pages
-/// in Parquet files. Currently supports Snappy compression.
+/// @brief Compression codec abstraction for Parquet decompression. Currently supports Snappy.
 
 #include <cstdint>
 #include <memory>
@@ -22,20 +19,14 @@
 
 namespace quest::datasource::parquet {
 
-/// @brief Abstract base class for compression codecs.
 class CompressionCodec {
  public:
   virtual ~CompressionCodec() = default;
 
-  /// @brief Decompress data from source to destination.
-  /// @param compressed The compressed data.
-  /// @param uncompressed_size The expected uncompressed size.
-  /// @return Decompressed data or error status.
   [[nodiscard]] virtual Result<std::vector<uint8_t>> Decompress(
       std::span<const uint8_t> compressed,
       size_t uncompressed_size) const = 0;
 
-  /// @brief Get the compression type.
   [[nodiscard]] virtual CompressionType type() const = 0;
 };
 
@@ -59,7 +50,6 @@ class UncompressedCodec : public CompressionCodec {
   }
 };
 
-/// @brief Snappy compression codec.
 class SnappyCodec : public CompressionCodec {
  public:
   [[nodiscard]] Result<std::vector<uint8_t>> Decompress(
@@ -84,9 +74,7 @@ class SnappyCodec : public CompressionCodec {
   }
 };
 
-/// @brief Factory function to create a compression codec.
-/// @param type The compression type.
-/// @return A codec instance or error for unsupported types.
+/// @return Error for unsupported compression types.
 [[nodiscard]] inline Result<std::unique_ptr<CompressionCodec>> CreateCodec(
     CompressionType type) {
   switch (type) {
@@ -117,7 +105,6 @@ class SnappyCodec : public CompressionCodec {
       Status::UnsupportedEncoding("Unknown compression type"));
 }
 
-/// @brief Get human-readable name for compression type.
 [[nodiscard]] inline std::string CompressionTypeName(CompressionType type) {
   switch (type) {
     case CompressionType::kUncompressed:

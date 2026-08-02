@@ -33,7 +33,6 @@ class RecordBatch {
 
   size_t num_columns() const { return columns_.size(); }
 
-  // Access column by index
   const ColumnVector& column(size_t index) const {
     if (index >= columns_.size()) {
       throw std::out_of_range("Column index out of range");
@@ -48,7 +47,6 @@ class RecordBatch {
     return columns_[index];
   }
 
-  // Access column by name
   const ColumnVector* GetColumnByName(const std::string& name) const {
     auto idx = schema_.GetFieldIndex(name);
     if (!idx.has_value()) return nullptr;
@@ -58,7 +56,6 @@ class RecordBatch {
   // Alias for compatibility with Kotlin API
   const ColumnVector& field(size_t index) const { return column(index); }
 
-  // Convert to CSV string for testing/debugging
   std::string ToCSV() const {
     std::ostringstream oss;
     size_t rows = num_rows();

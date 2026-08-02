@@ -59,7 +59,6 @@ class UnionOperator : public SimpleOperator {
   /// @brief Typed port accessor for the left input (a typo is a compile error).
   [[nodiscard]] OperatorPortPair input_a() { return {this, "input_a"}; }
 
-  /// @brief Typed port accessor for the right input.
   [[nodiscard]] OperatorPortPair input_b() { return {this, "input_b"}; }
 
  protected:

@@ -87,10 +87,8 @@ void CPUMemoryResource::set_saturation_threshold(double threshold) {
 void CPUMemoryResource::record_allocation(std::size_t bytes) {
     std::size_t current = used_bytes_.fetch_add(bytes) + bytes;
     
-    // Update peak
     std::size_t peak = peak_bytes_.load();
     while (current > peak && !peak_bytes_.compare_exchange_weak(peak, current)) {
-        // Retry until successful
     }
     
     if (config_.track_allocations) {
@@ -111,7 +109,6 @@ void CPUMemoryResource::record_deallocation(std::size_t bytes) {
 
 DiskMemoryResource::DiskMemoryResource(DiskMemoryConfig config)
     : config_(std::move(config)) {
-    // Create base directory if it doesn't exist
     std::filesystem::create_directories(config_.base_path);
     
     if (config_.max_bytes == 0) {
@@ -167,10 +164,8 @@ void DiskMemoryResource::record_file_created(
         std::size_t bytes) {
     std::size_t current = used_bytes_.fetch_add(bytes) + bytes;
     
-    // Update peak
     std::size_t peak = peak_bytes_.load();
     while (current > peak && !peak_bytes_.compare_exchange_weak(peak, current)) {
-        // Retry
     }
     
     file_count_.fetch_add(1);

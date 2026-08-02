@@ -6,9 +6,6 @@
 
 /// @file physical_expr.hpp
 /// @brief Physical expressions for query execution.
-///
-/// This file defines the physical expression types that operate on
-/// RecordBatch data during query execution.
 
 #include <algorithm>
 #include <cmath>
@@ -26,7 +23,6 @@
 
 namespace quest {
 
-// Use types from datasource namespace
 using datasource::ColumnVector;
 using datasource::DataType;
 using datasource::Field;
@@ -114,13 +110,8 @@ class Expression {
  public:
   virtual ~Expression() = default;
 
-  /// @brief Evaluates the expression on a record batch.
-  /// @param input The input record batch.
-  /// @return A new column vector with the result, or error.
   [[nodiscard]] virtual Result<std::shared_ptr<ColumnVector>> Evaluate(
       const RecordBatch& input) const = 0;
-
-  /// @brief Returns a string representation of the expression.
   [[nodiscard]] virtual std::string ToString() const = 0;
 };
 
@@ -246,7 +237,6 @@ class BooleanExpression : public Expression {
   }
 
  protected:
-  /// @brief Evaluates the boolean operation on a pair of values.
   [[nodiscard]] virtual bool EvaluatePair(const Value& left,
                                           const Value& right) const = 0;
 
@@ -378,7 +368,6 @@ class GtEqExpression : public BooleanExpression {
 // Arithmetic Expression Base Class
 // =============================================================================
 
-/// @brief Base class for binary arithmetic expressions.
 class ArithmeticExpression : public Expression {
  public:
   ArithmeticExpression(ExpressionPtr left, ExpressionPtr right)
@@ -413,7 +402,6 @@ class ArithmeticExpression : public Expression {
   }
 
  protected:
-  /// @brief Evaluates the arithmetic operation on a pair of values.
   [[nodiscard]] virtual double EvaluatePair(const Value& left,
                                             const Value& right) const = 0;
 
@@ -570,8 +558,6 @@ class OrExpression : public BooleanExpression {
 // Aggregate Expressions
 // =============================================================================
 
-/// @brief Base class for aggregate expressions.
-/// @details Aggregates compute a single value from all rows in the batch.
 class AggregateExpression : public Expression {
  public:
   explicit AggregateExpression(ExpressionPtr input)
@@ -595,7 +581,6 @@ class AggregateExpression : public Expression {
   ExpressionPtr input_;
 };
 
-/// @brief SUM aggregate - sums all values.
 class SumExpression : public AggregateExpression {
  public:
   using AggregateExpression::AggregateExpression;
@@ -616,7 +601,6 @@ class SumExpression : public AggregateExpression {
       }
     }
 
-    // Return single-row result
     std::vector<double> result{sum};
     return std::make_shared<MaterializedColumnVector>(
         ColumnData{std::move(result)}, datasource::DoubleType{});
@@ -627,7 +611,6 @@ class SumExpression : public AggregateExpression {
   }
 };
 
-/// @brief AVG aggregate - computes average of values.
 class AvgExpression : public AggregateExpression {
  public:
   using AggregateExpression::AggregateExpression;
@@ -710,7 +693,6 @@ class CountStarExpression : public Expression {
   }
 };
 
-/// @brief MIN aggregate - finds minimum value.
 class MinExpression : public AggregateExpression {
  public:
   using AggregateExpression::AggregateExpression;
@@ -756,7 +738,6 @@ class MinExpression : public AggregateExpression {
   }
 };
 
-/// @brief MAX aggregate - finds maximum value.
 class MaxExpression : public AggregateExpression {
  public:
   using AggregateExpression::AggregateExpression;

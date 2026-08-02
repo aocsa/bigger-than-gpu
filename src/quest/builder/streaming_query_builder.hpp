@@ -57,7 +57,6 @@ class StreamingQueryBuilder {
   // Factory Methods
   // ===========================================================================
 
-  /// @brief Start with a Parquet data source.
   [[nodiscard]] static Result<StreamingQueryBuilder> FromParquet(
       const std::string& filename) {
     auto plan_result = QueryPlan::FromParquet(filename);
@@ -67,7 +66,6 @@ class StreamingQueryBuilder {
     return StreamingQueryBuilder(std::move(*plan_result));
   }
 
-  /// @brief Start with a generic data source.
   [[nodiscard]] static StreamingQueryBuilder From(
       std::shared_ptr<DataSource> source, const std::string& name) {
     return StreamingQueryBuilder(QueryPlan::From(std::move(source), name));
@@ -77,30 +75,25 @@ class StreamingQueryBuilder {
   // Query Building (Fluent Interface)
   // ===========================================================================
 
-  /// @brief Add a filter/selection condition.
   [[nodiscard]] StreamingQueryBuilder Where(const ExprBuilder& condition) && {
     return StreamingQueryBuilder(std::move(plan_).Where(condition));
   }
 
-  /// @brief Add a projection with column names.
   [[nodiscard]] StreamingQueryBuilder Select(
       std::initializer_list<std::string> columns) && {
     return StreamingQueryBuilder(std::move(plan_).Select(columns));
   }
 
-  /// @brief Add a projection with expressions.
   [[nodiscard]] StreamingQueryBuilder Select(
       std::initializer_list<ExprBuilder> exprs) && {
     return StreamingQueryBuilder(std::move(plan_).Select(exprs));
   }
 
-  /// @brief Add a projection with a vector of expressions.
   [[nodiscard]] StreamingQueryBuilder Select(
       const std::vector<ExprBuilder>& exprs) && {
     return StreamingQueryBuilder(std::move(plan_).Select(exprs));
   }
 
-  /// @brief Truncate the result to the first @p n rows.
   [[nodiscard]] StreamingQueryBuilder Limit(std::size_t n) && {
     return StreamingQueryBuilder(std::move(plan_).Limit(n));
   }
@@ -109,12 +102,10 @@ class StreamingQueryBuilder {
   // Plan Building
   // ===========================================================================
 
-  /// @brief Build and return the logical plan.
   [[nodiscard]] LogicalPlanPtr BuildLogicalPlan() && {
     return std::move(plan_).BuildLogicalPlan();
   }
 
-  /// @brief Build and return the physical plan.
   [[nodiscard]] Result<PhysicalPlanPtr> BuildPhysicalPlan() && {
     return std::move(plan_).BuildPhysicalPlan();
   }
@@ -123,15 +114,8 @@ class StreamingQueryBuilder {
   // Execution Methods (Streaming / Pull-based)
   // ===========================================================================
 
-  /// @brief Execute with backpressure — returns a lazy generator.
-  ///
-  /// The generator yields Result<RecordBatch> on demand. Execution only
-  /// proceeds when the consumer requests the next batch, providing natural
-  /// backpressure.
-  ///
-  /// @return Generator that yields Result<RecordBatch>.
-  /// @note Current implementation collects all batches first due to synchronous
-  ///       PhysicalPlan::Execute. True streaming requires async execution model.
+  /// Lazy pull-based execution. Current impl collects all batches first — true
+  /// streaming requires an async PhysicalPlan::Execute.
   [[nodiscard]] BatchGenerator ExecuteStream() && {
     auto physical_result = CreatePhysicalPlan(plan_.plan());
     if (!physical_result) {
@@ -155,7 +139,6 @@ class StreamingQueryBuilder {
       co_return;
     }
 
-    // Yield collected batches one at a time
     for (auto& batch : batches) {
       co_yield std::move(batch);
     }
@@ -165,15 +148,12 @@ class StreamingQueryBuilder {
   // Utility Methods
   // ===========================================================================
 
-  /// @brief Get string representation of the logical plan.
   [[nodiscard]] std::string ToString() const { return plan_.ToString(); }
 
-  /// @brief Check if the builder has a valid plan.
   [[nodiscard]] explicit operator bool() const noexcept {
     return static_cast<bool>(plan_);
   }
 
-  /// @brief Get the output schema of the query.
   [[nodiscard]] datasource::Schema schema() const { return plan_.schema(); }
 
  private:

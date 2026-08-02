@@ -5,10 +5,7 @@
 #define PARQUET_READER_METADATA_HPP
 
 /// @file metadata.hpp
-/// @brief Parquet file metadata structures and parser.
-///
-/// This file defines the metadata structures for Parquet files and provides
-/// a parser for reading Thrift-encoded metadata from file footers.
+/// @brief Parquet file metadata structures and Thrift footer parser.
 
 #include <cstdint>
 #include <memory>
@@ -27,7 +24,6 @@ namespace quest::datasource::parquet {
 // Metadata Structures
 // =============================================================================
 
-/// @brief Schema element from Parquet file metadata.
 struct SchemaElement {
   PhysicalType type = PhysicalType::kBoolean;
   std::optional<int32_t> type_length;  ///< For fixed length byte arrays.
@@ -43,7 +39,6 @@ struct SchemaElement {
   [[nodiscard]] bool IsLeaf() const { return num_children == 0; }
 };
 
-/// @brief Column chunk metadata.
 struct ColumnChunkMetadata {
   std::string file_path;  ///< Optional, for external files.
   int64_t file_offset = 0;
@@ -61,7 +56,6 @@ struct ColumnChunkMetadata {
   ColumnStatistics statistics;
 };
 
-/// @brief Row group metadata.
 struct RowGroupMetadata {
   std::vector<ColumnChunkMetadata> columns;
   int64_t total_byte_size = 0;
@@ -71,13 +65,11 @@ struct RowGroupMetadata {
   std::optional<int16_t> ordinal;
 };
 
-/// @brief Key-value metadata pair.
 struct KeyValue {
   std::string key;
   std::optional<std::string> value;
 };
 
-/// @brief File-level metadata for a Parquet file.
 struct FileMetadata {
   int32_t version = 0;
   std::vector<SchemaElement> schema_elements;
@@ -91,16 +83,9 @@ struct FileMetadata {
 // Metadata Parser
 // =============================================================================
 
-/// @brief Parser for Parquet file metadata (Thrift encoded).
-///
-/// This class provides static methods to parse Thrift-encoded metadata
-/// from Parquet file footers. All parsing methods return Result types
-/// to safely handle decode errors.
+/// @brief Parses Thrift-encoded Parquet file footer metadata.
 class MetadataParser {
  public:
-  /// @brief Parses file metadata from a byte span.
-  /// @param data The Thrift-encoded metadata bytes.
-  /// @return The parsed FileMetadata, or decode error.
   [[nodiscard]] static Result<FileMetadata> Parse(
       std::span<const uint8_t> data) {
     ThriftDecoder decoder(data);
@@ -794,9 +779,6 @@ class MetadataParser {
 // Schema Building
 // =============================================================================
 
-/// @brief Converts FileMetadata schema to our Schema type.
-/// @param metadata The parsed file metadata.
-/// @return The constructed Schema.
 inline Schema BuildSchema(const FileMetadata& metadata) {
   std::vector<Field> fields;
 

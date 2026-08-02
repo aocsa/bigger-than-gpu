@@ -19,12 +19,10 @@
 
 namespace quest::datasource {
 
-// Value type that can hold any column value
 using Value = std::variant<std::monostate,  // null
                            bool, int8_t, int16_t, int32_t, int64_t, float,
                            double, std::string, std::vector<uint8_t>>;
 
-// Convert Value to string for display
 inline std::string ValueToString(const Value& value) {
   return std::visit(
       [](const auto& v) -> std::string {
@@ -44,7 +42,6 @@ inline std::string ValueToString(const Value& value) {
       value);
 }
 
-// Abstract interface for column vectors
 class ColumnVector {
  public:
   virtual ~ColumnVector() = default;
@@ -55,7 +52,6 @@ class ColumnVector {
   virtual size_t size() const = 0;
 };
 
-// Typed column vector implementation for fixed-width types
 template <typename T>
 class TypedColumnVector : public  ColumnVector {
  public:
@@ -140,7 +136,6 @@ class TypedColumnVector : public  ColumnVector {
   size_t size_ = 0;
 };
 
-// String/Binary column vector
 class StringColumnVector : public ColumnVector {
  public:
   explicit StringColumnVector(DataType type, size_t capacity = 0)
@@ -203,7 +198,6 @@ class StringColumnVector : public ColumnVector {
   std::vector<uint8_t> null_bitmap_;
 };
 
-// Factory function to create appropriate column vector
 inline std::unique_ptr<ColumnVector> CreateColumnVector(const DataType& type,
                                                         size_t capacity) {
   return std::visit(

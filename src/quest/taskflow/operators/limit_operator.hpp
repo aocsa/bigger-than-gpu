@@ -48,7 +48,6 @@ class LimitOperator : public SimpleOperator {
     return remaining_.load(std::memory_order_relaxed);
   }
 
-  /// @brief Stop further source claims once the limit is satisfied.
   [[nodiscard]] bool ShouldStopSource() const noexcept override {
     return remaining_.load(std::memory_order_relaxed) == 0;
   }

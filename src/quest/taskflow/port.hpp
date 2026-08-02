@@ -47,19 +47,14 @@ class Operator;
 /// during graph construction (single-threaded) and read during execution.
 class Port {
  public:
-  /// @brief Constructs a port associated with an operator.
-  ///
-  /// @param owner_operator The operator that owns this port.
   explicit Port(Operator* owner_operator) noexcept
       : owner_operator_(owner_operator) {}
 
   ~Port() = default;
 
-  // Copyable for operator move semantics.
   Port(const Port&) = default;
   Port& operator=(const Port&) = default;
 
-  // Movable for efficient transfers.
   Port(Port&&) noexcept = default;
   Port& operator=(Port&&) noexcept = default;
 
@@ -67,21 +62,9 @@ class Port {
   // Port Registration
   // ===========================================================================
 
-  /// @brief Registers a named port slot.
-  ///
-  /// Creates an empty slot that can later be populated with a batch holder.
-  /// Used during graph construction to declare expected connections.
-  ///
-  /// @param port_name The unique name for this port.
+  /// @brief Declares a named port slot (filled by RegisterBatchHolder when an edge is created).
   void RegisterPort(std::string port_name);
 
-  /// @brief Associates a batch holder with a named port.
-  ///
-  /// Connects a batch holder to a port, enabling data flow. Called by the
-  /// graph when creating edges between operators.
-  ///
-  /// @param port_name The name of the port to connect.
-  /// @param batch_holder The batch holder for data transfer.
   void RegisterBatchHolder(const std::string& port_name,
                            std::shared_ptr<cache::IBatchHolder> batch_holder);
 
@@ -89,27 +72,15 @@ class Port {
   // Port Access
   // ===========================================================================
 
-  /// @brief Gets the batch holder for a named port.
-  ///
-  /// If an empty port name is provided, returns the batch holder for the
-  /// default port (named after the owning operator's ID).
-  ///
-  /// @param port_name The port name (empty for default).
-  /// @return Reference to the batch holder shared_ptr.
+  /// @brief Returns the holder for the named port; empty string resolves to the operator-ID port.
   /// @throws std::runtime_error if the port doesn't exist.
   [[nodiscard]] std::shared_ptr<cache::IBatchHolder>& get(
       const std::string& port_name = "");
 
-  /// @brief Gets the batch holder for a named port (const version).
   [[nodiscard]] const std::shared_ptr<cache::IBatchHolder>& get(
       const std::string& port_name = "") const;
 
-  /// @brief Array subscript access to batch holders.
-  ///
-  /// Unlike get(), this creates a new entry if the port doesn't exist.
-  ///
-  /// @param port_name The port name.
-  /// @return Reference to the batch holder shared_ptr.
+  /// @brief Unlike get(), inserts a new entry if the port doesn't exist.
   [[nodiscard]] std::shared_ptr<cache::IBatchHolder>& operator[](
       const std::string& port_name) {
     return batch_holder_registry_[port_name];
@@ -119,88 +90,54 @@ class Port {
   // Port Queries
   // ===========================================================================
 
-  /// @brief Returns the number of registered ports.
   [[nodiscard]] std::size_t count() const noexcept {
     return batch_holder_registry_.size();
   }
 
-  /// @brief Checks if a port with the given name exists.
   [[nodiscard]] bool has_port(const std::string& port_name) const {
     return batch_holder_registry_.contains(port_name);
   }
 
-  /// @brief Gets the operator that owns this port.
   [[nodiscard]] Operator* owner() const noexcept { return owner_operator_; }
 
   // ===========================================================================
   // Lifecycle Management
   // ===========================================================================
 
-  /// @brief Marks all batch holders as finished.
-  ///
-  /// Called when the owning operator completes execution to signal to
-  /// downstream operators that no more data will be sent.
+  /// @brief Signals all batch holders that no more data will arrive.
   void Finish();
 
-  /// @brief Checks if all batch holders are finished.
-  ///
-  /// @return true if all ports are finished or have no batch holder.
   [[nodiscard]] bool AllFinished() const;
 
-  /// @brief Checks if a specific port's batch holder is finished.
-  ///
-  /// @param port_name The port name (empty for default).
-  /// @return true if finished or non-existent.
   [[nodiscard]] bool IsFinished(const std::string& port_name = "") const;
 
   // ===========================================================================
   // Statistics
   // ===========================================================================
 
-  /// @brief Gets total bytes added across all ports.
   [[nodiscard]] std::size_t TotalBytesAdded() const;
-
-  /// @brief Gets total rows added across all ports.
   [[nodiscard]] std::size_t TotalRowsAdded() const;
-
-  /// @brief Gets rows added to a specific port.
-  ///
-  /// @param port_name The port name (empty for default).
   [[nodiscard]] std::size_t RowsAdded(const std::string& port_name = "") const;
 
   // ===========================================================================
   // Iteration Support
   // ===========================================================================
 
-  /// @brief Returns iterator to the beginning of the port registry.
   [[nodiscard]] auto begin() { return batch_holder_registry_.begin(); }
   [[nodiscard]] auto end() { return batch_holder_registry_.end(); }
   [[nodiscard]] auto begin() const { return batch_holder_registry_.begin(); }
   [[nodiscard]] auto end() const { return batch_holder_registry_.end(); }
 
  private:
-  // Type alias for the registry map
   using RegistryMap = std::map<std::string, std::shared_ptr<cache::IBatchHolder>>;
 
-  /// @brief Gets the default port name based on the owning operator's ID.
   [[nodiscard]] std::string default_port_name() const;
-
-  /// @brief Resolves the port name (uses default if empty) and returns the name.
   [[nodiscard]] std::string resolve_port_name(const std::string& port_name) const;
-
-  /// @brief Looks up a port and returns an iterator. Throws if not found.
   [[nodiscard]] RegistryMap::iterator find_port_or_throw(const std::string& port_name);
-
-  /// @brief Looks up a port and returns a const iterator. Throws if not found.
   [[nodiscard]] RegistryMap::const_iterator find_port_or_throw(const std::string& port_name) const;
-
-  /// @brief Looks up a port and returns an iterator (no throw, may be end()).
   [[nodiscard]] RegistryMap::const_iterator find_port(const std::string& port_name) const;
 
-  // The operator that owns this port.
   Operator* owner_operator_;
-
-  // Registry mapping port names to batch holders.
   RegistryMap batch_holder_registry_;
 };
 
@@ -223,17 +160,10 @@ void RegisterPortsImpl(PortType& port,
 
 }  // namespace detail
 
-/// @brief Registers multiple ports at once using variadic arguments.
-///
-/// Convenience function for multi-input operators to register all their
-/// input ports in a single call.
-///
+/// @brief Registers multiple ports in one call.
 /// @code
-///   add_ports(input_port, "left_input", "right_input", "probe_input");
+///   AddPorts(input_port, "left_input", "right_input", "probe_input");
 /// @endcode
-///
-/// @param port The port to register names on.
-/// @param names The port names to register.
 template <typename... PortNames>
 void AddPorts(Port& port, PortNames&&... names) {
   if constexpr (sizeof...(names) > 0) {

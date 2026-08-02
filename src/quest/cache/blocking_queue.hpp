@@ -256,13 +256,11 @@ class BlockingQueue {
     return item;
   }
 
-  // Helper: Check if queue contains message with given ID
   [[nodiscard]] bool ContainsId(std::string_view msg_id) const {
     return std::ranges::any_of(
         queue_, [msg_id](const auto& item) { return item->id() == msg_id; });
   }
 
-  // Helper: Wait for predicate with optional timeout
   template <typename Predicate>
   bool WaitFor(std::unique_lock<std::mutex>& lock, Predicate predicate) {
     if (config_.timeout.count() > 0) {

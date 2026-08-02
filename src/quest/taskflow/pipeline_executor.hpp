@@ -74,11 +74,6 @@ class PipelineExecutor {
   ///          themselves, or provide at least one worker per concurrently
   ///          blocked consumer.
   ///
-  /// @param pipelines The pipelines to run, typically `MetaPipeline::
-  ///        Build`'s output. Ownership passes to this call; pipelines are
-  ///        destroyed when it returns.
-  /// @return Status::OK() if every pipeline finished without error, or the
-  ///         first error encountered.
   [[nodiscard]] Status Execute(std::vector<PipelinePtr> pipelines);
 
  private:
@@ -131,24 +126,10 @@ class PipelineExecutor {
       const std::vector<std::shared_ptr<cache::IBatchHolder>>& ordered_inputs,
       std::size_t& input_cursor);
 
-  /// @brief One worker thread's loop: pop a ready pipeline, drain it,
-  /// record any error, then let `OnPipelineFinished` re-evaluate the
-  /// runnable set. Exits once nothing is queued and either every pipeline
-  /// has finished or scheduling has stopped due to an error.
   void WorkerLoop();
 
-  /// @brief Called once a pipeline's drain loop returns (success or
-  /// error). Under `schedule_mutex_`: decrements the outstanding and
-  /// in-flight counts, and — unless a prior error already stopped
-  /// scheduling — pushes any dependent whose `FullBarrierProducers()` are
-  /// now all finished. If that leaves nothing queued and nothing in
-  /// flight while pipelines remain unfinished, no further progress is
-  /// possible (a Full-barrier cycle); records that as an error and stops
-  /// scheduling rather than letting every worker wait forever.
   void OnPipelineFinished(Pipeline* finished_pipeline);
 
-  /// @brief Records the first error seen, if none was recorded yet, and
-  /// flips `stop_scheduling_` so no further pipelines get dispatched.
   void RecordError(Status status);
 
   std::size_t num_workers_;

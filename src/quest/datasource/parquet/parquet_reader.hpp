@@ -4,9 +4,6 @@
 #ifndef PARQUET_READER_HPP
 #define PARQUET_READER_HPP
 
-// Main include file for the Parquet reader library
-// Include this file to get access to all public APIs
-
 // Core datasource types (in quest::datasource namespace)
 #include "quest/datasource/column_reader.hpp"
 #include "quest/datasource/column_vector.hpp"

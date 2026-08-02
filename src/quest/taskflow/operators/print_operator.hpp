@@ -59,7 +59,6 @@ class PrintOperator : public Operator {
   /// @brief Total rows printed (valid after Execute() returns).
   [[nodiscard]] std::size_t total_rows() const noexcept { return total_rows_; }
 
-  /// @brief Number of batches printed.
   [[nodiscard]] std::size_t batch_count() const noexcept { return batch_count_; }
 
  private:

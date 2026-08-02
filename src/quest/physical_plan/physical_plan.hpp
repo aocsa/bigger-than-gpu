@@ -6,9 +6,6 @@
 
 /// @file physical_plan.hpp
 /// @brief Physical plan nodes for query execution.
-///
-/// This file defines the physical plan tree nodes that execute queries
-/// on actual data sources.
 
 #include <functional>
 #include <memory>
@@ -28,7 +25,6 @@
 
 namespace quest {
 
-// Use types from datasource namespace
 using datasource::DataSource;
 using datasource::RecordBatch;
 using datasource::Schema;
@@ -48,21 +44,15 @@ class PhysicalPlan {
  public:
   virtual ~PhysicalPlan() = default;
 
-  /// @brief Returns the output schema for this plan node.
   [[nodiscard]] virtual Schema schema() const = 0;
 
-  /// @brief Executes the plan and calls the callback for each result batch.
-  /// @param callback Invoked per batch; return false to stop producing.
-  /// @return Status indicating success or failure.
+  /// @brief Execute and stream results; return false from callback to stop early.
   [[nodiscard]] virtual Status Execute(const ResultCallback& callback) = 0;
 
-  /// @brief Returns the child plan nodes.
   [[nodiscard]] virtual std::vector<const PhysicalPlan*> Children() const = 0;
-
-  /// @brief Returns a string representation of this node.
   [[nodiscard]] virtual std::string ToString() const = 0;
 
-  /// @brief Returns a pretty-printed representation of the plan tree.
+  /// @brief Pretty-prints the full plan subtree with indentation.
   [[nodiscard]] std::string Pretty(size_t indent = 0) const {
     std::string indentation(indent * 2, ' ');
     std::ostringstream result;
@@ -215,8 +205,6 @@ class SelectionExec : public PhysicalPlan {
       filtered_values.push_back(col.GetValue(idx));
     }
 
-    // Create a materialized column with the filtered values
-    // Determine the type and create appropriate vector
     return std::visit(
         [&filtered_values](const auto& type_tag) -> std::shared_ptr<datasource::ColumnVector> {
           using TypeTag = std::decay_t<decltype(type_tag)>;
@@ -294,7 +282,6 @@ class SelectionExec : public PhysicalPlan {
             return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
                                                               type_tag);
           } else {
-            // Default: create string column
             std::vector<std::string> data;
             data.reserve(filtered_values.size());
             for (const auto& val : filtered_values) {
@@ -458,10 +445,6 @@ class UnionAllExec : public PhysicalPlan {
 // Physical Plan Factory Functions
 // =============================================================================
 
-/// @brief Creates a physical expression from a logical expression.
-/// @param expr The logical expression.
-/// @param input The input logical plan (for schema context).
-/// @return The physical expression, or error.
 [[nodiscard]] inline Result<ExpressionPtr> CreatePhysicalExpr(const LogicalExpr& expr,
                                                               const LogicalPlan& input) {
   if (const auto* literal = dynamic_cast<const Literal*>(&expr)) {
@@ -538,9 +521,6 @@ class UnionAllExec : public PhysicalPlan {
       Status::PhysicalPlanError("Cannot create physical expression from: " + expr.ToString()));
 }
 
-/// @brief Creates a physical plan from a logical plan.
-/// @param plan The logical plan.
-/// @return The physical plan, or error.
 [[nodiscard]] inline Result<PhysicalPlanPtr> CreatePhysicalPlan(const LogicalPlan& plan) {
   if (const auto* scan = dynamic_cast<const Scan*>(&plan)) {
     return std::make_unique<ScanExec>(scan->data_source(), scan->projection());

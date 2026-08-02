@@ -139,12 +139,10 @@ class Generator {
 
   [[nodiscard]] iterator end() noexcept { return iterator{}; }
 
-  /// @brief Check if generator has more values.
   [[nodiscard]] bool has_next() const noexcept {
     return handle_ && !handle_.done();
   }
 
-  /// @brief Get next value (advances generator).
   [[nodiscard]] std::optional<T> next() {
     if (!handle_ || handle_.done()) {
       return std::nullopt;
@@ -164,7 +162,7 @@ class Generator {
   handle_type handle_{};
 };
 
-/// @brief Type alias for batch generators with backpressure.
+/// Batch generator alias — pull-based, consumer-paced.
 using BatchGenerator = Generator<Result<datasource::RecordBatch>>;
 
 }  // namespace quest

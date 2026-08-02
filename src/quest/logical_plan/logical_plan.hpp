@@ -6,9 +6,6 @@
 
 /// @file logical_plan.hpp
 /// @brief Logical plan nodes for query execution.
-///
-/// This file defines the logical plan tree nodes used to represent
-/// query operations before physical execution planning.
 
 #include <cstddef>
 #include <memory>
@@ -24,7 +21,6 @@
 
 namespace quest {
 
-// Use types from datasource namespace
 using datasource::DataSource;
 using datasource::Schema;
 
@@ -37,16 +33,11 @@ class LogicalPlan {
  public:
   virtual ~LogicalPlan() = default;
 
-  /// @brief Returns the output schema for this plan node.
   [[nodiscard]] virtual Schema schema() const = 0;
-
-  /// @brief Returns the child plan nodes.
   [[nodiscard]] virtual std::vector<const LogicalPlan*> Children() const = 0;
-
-  /// @brief Returns a string representation of this node.
   [[nodiscard]] virtual std::string ToString() const = 0;
 
-  /// @brief Returns a pretty-printed representation of the plan tree.
+  /// @brief Pretty-prints the full plan subtree with indentation.
   [[nodiscard]] std::string Pretty(size_t indent = 0) const {
     std::string indentation(indent * 2, ' ');
     std::ostringstream result;
@@ -64,7 +55,6 @@ using LogicalPlanPtr = std::unique_ptr<LogicalPlan>;
 // Scan Node
 // =============================================================================
 
-/// @brief Scan node - reads from a data source.
 class Scan : public LogicalPlan {
  public:
   Scan(std::string path, std::shared_ptr<DataSource> data_source,
@@ -126,7 +116,6 @@ class Scan : public LogicalPlan {
 // Selection Node
 // =============================================================================
 
-/// @brief Selection node - filters rows based on a condition.
 class Selection : public LogicalPlan {
  public:
   Selection(LogicalPlanPtr input, LogicalExprPtr condition)
@@ -154,7 +143,6 @@ class Selection : public LogicalPlan {
 // Projection Node
 // =============================================================================
 
-/// @brief Projection node - selects specific columns/expressions.
 class Projection : public LogicalPlan {
  public:
   Projection(LogicalPlanPtr input, std::vector<LogicalExprPtr> expressions)

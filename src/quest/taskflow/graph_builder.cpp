@@ -71,11 +71,9 @@ EdgeConfig ResolveEdgeConfig(const GraphBuilder::EdgeSpec& spec) {
     contract = spec.target->InputEdgeContract(spec.target_port);
   }
 
-  // Start from contract defaults (already incorporates default EdgeConfig{} via
-  // InputEdgeContract returning EdgeConfig{} when no contract is set).
   EdgeConfig result = contract;
 
-  // Apply author's explicit fields (layer 3 overrides layer 4).
+  // Layer 3 (author) overrides layer 4 (contract).
   if (spec.explicit_barrier) {
     result.barrier = spec.config.barrier;
   }
@@ -249,7 +247,6 @@ Result<std::shared_ptr<Graph>> GraphBuilder::Build() && {
     }
   }
 
-  // Per-edge validations.
   for (const auto& spec : edge_specs_) {
     if (auto status = CheckPartial(spec); !status.ok()) { return std::unexpected(status.error()); }
     if (auto status = CheckDeclaredPorts(spec); !status.ok()) { return std::unexpected(status.error()); }
@@ -260,7 +257,6 @@ Result<std::shared_ptr<Graph>> GraphBuilder::Build() && {
   // (b) Acyclicity.
   if (auto status = CheckAcyclic(edge_specs_); !status.ok()) { return std::unexpected(status.error()); }
 
-  // All validations passed — build the Graph.
   auto graph = std::make_shared<Graph>(std::move(memory_manager_));
 
   for (const auto& spec : edge_specs_) {
@@ -268,7 +264,7 @@ Result<std::shared_ptr<Graph>> GraphBuilder::Build() && {
 
     EdgeConfig resolved = ResolveEdgeConfig(spec);
 
-    // Resolve default port names to operator-id strings (matching old DSL convention).
+    // Default port names resolve to operator-id strings (matches old DSL convention).
     std::string src_port =
         spec.source_port.empty() ? std::to_string(spec.source->id()) : spec.source_port;
     std::string tgt_port =

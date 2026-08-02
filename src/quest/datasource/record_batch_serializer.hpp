@@ -38,43 +38,34 @@ namespace quest::datasource {
 
 class RecordBatchSerializer {
  public:
-  // Serialize RecordBatch to a byte vector
   static std::vector<uint8_t> Serialize(const RecordBatch& batch) {
     std::vector<uint8_t> buffer;
 
-    // Magic number
     const char magic[4] = {'Q', 'R', 'B', 'T'};
     buffer.insert(buffer.end(), magic, magic + 4);
 
-    // Version
     uint32_t version = 1;
     WriteValue(buffer, version);
 
-    // Number of rows and columns
     uint64_t num_rows = batch.num_rows();
     uint32_t num_columns = static_cast<uint32_t>(batch.num_columns());
     WriteValue(buffer, num_rows);
     WriteValue(buffer, num_columns);
 
-    // Serialize schema
     const Schema& schema = batch.schema();
     for (size_t i = 0; i < num_columns; ++i) {
       const Field& field = schema.field(i);
 
-      // Field name
       uint32_t name_len = static_cast<uint32_t>(field.name.size());
       WriteValue(buffer, name_len);
       buffer.insert(buffer.end(), field.name.begin(), field.name.end());
 
-      // Data type
       WriteDataType(buffer, field.data_type);
 
-      // Repetition
       uint8_t rep = static_cast<uint8_t>(field.repetition);
       WriteValue(buffer, rep);
     }
 
-    // Serialize column data
     for (size_t i = 0; i < num_columns; ++i) {
       const ColumnVector& column = batch.column(i);
       WriteColumn(buffer, column, num_rows);
@@ -83,11 +74,9 @@ class RecordBatchSerializer {
     return buffer;
   }
 
-  // Deserialize RecordBatch from a byte vector
   static RecordBatch Deserialize(const std::vector<uint8_t>& buffer) {
     size_t offset = 0;
 
-    // Validate magic number
     if (buffer.size() < 4 ||
         buffer[0] != 'Q' || buffer[1] != 'R' ||
         buffer[2] != 'B' || buffer[3] != 'T') {
@@ -95,30 +84,24 @@ class RecordBatchSerializer {
     }
     offset += 4;
 
-    // Read version
     uint32_t version = ReadValue<uint32_t>(buffer, offset);
     if (version != 1) {
       throw std::runtime_error("Unsupported version");
     }
 
-    // Read dimensions
     uint64_t num_rows = ReadValue<uint64_t>(buffer, offset);
     uint32_t num_columns = ReadValue<uint32_t>(buffer, offset);
 
-    // Read schema
     std::vector<Field> fields;
     fields.reserve(num_columns);
 
     for (uint32_t i = 0; i < num_columns; ++i) {
-      // Field name
       uint32_t name_len = ReadValue<uint32_t>(buffer, offset);
       std::string name(buffer.begin() + offset, buffer.begin() + offset + name_len);
       offset += name_len;
 
-      // Data type
       DataType data_type = ReadDataType(buffer, offset);
 
-      // Repetition
       uint8_t rep = ReadValue<uint8_t>(buffer, offset);
       Repetition repetition = static_cast<Repetition>(rep);
 
@@ -127,7 +110,6 @@ class RecordBatchSerializer {
 
     Schema schema(std::move(fields));
 
-    // Read column data
     std::vector<std::shared_ptr<ColumnVector>> columns;
     columns.reserve(num_columns);
 
@@ -138,7 +120,6 @@ class RecordBatchSerializer {
     return RecordBatch(std::move(schema), std::move(columns));
   }
 
-  // Serialize to file
   static void SerializeToFile(const RecordBatch& batch, const std::string& filename) {
     std::vector<uint8_t> data = Serialize(batch);
     std::ofstream file(filename, std::ios::binary);
@@ -148,7 +129,6 @@ class RecordBatchSerializer {
     file.write(reinterpret_cast<const char*>(data.data()), data.size());
   }
 
-  // Deserialize from file
   static RecordBatch DeserializeFromFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
     if (!file) {
@@ -167,14 +147,12 @@ class RecordBatchSerializer {
   }
 
  private:
-  // Write a value to buffer
   template <typename T>
   static void WriteValue(std::vector<uint8_t>& buffer, const T& value) {
     const uint8_t* ptr = reinterpret_cast<const uint8_t*>(&value);
     buffer.insert(buffer.end(), ptr, ptr + sizeof(T));
   }
 
-  // Read a value from buffer
   template <typename T>
   static T ReadValue(const std::vector<uint8_t>& buffer, size_t& offset) {
     if (offset + sizeof(T) > buffer.size()) {
@@ -186,7 +164,6 @@ class RecordBatchSerializer {
     return value;
   }
 
-  // Write DataType to buffer
   static void WriteDataType(std::vector<uint8_t>& buffer, const DataType& type) {
     uint8_t type_index = static_cast<uint8_t>(type.index());
     WriteValue(buffer, type_index);
@@ -198,7 +175,6 @@ class RecordBatchSerializer {
     }
   }
 
-  // Read DataType from buffer
   static DataType ReadDataType(const std::vector<uint8_t>& buffer, size_t& offset) {
     uint8_t type_index = ReadValue<uint8_t>(buffer, offset);
 
@@ -222,14 +198,11 @@ class RecordBatchSerializer {
     }
   }
 
-  // Write column data to buffer
   static void WriteColumn(std::vector<uint8_t>& buffer, const ColumnVector& column, size_t num_rows) {
-    // Write null bitmap
     size_t bitmap_bytes = (num_rows + 7) / 8;
     uint32_t bitmap_size = static_cast<uint32_t>(bitmap_bytes);
     WriteValue(buffer, bitmap_size);
 
-    // Collect null bitmap
     std::vector<uint8_t> null_bitmap(bitmap_bytes, 0);
     for (size_t i = 0; i < num_rows; ++i) {
       if (!column.IsNull(i)) {
@@ -240,11 +213,9 @@ class RecordBatchSerializer {
     }
     buffer.insert(buffer.end(), null_bitmap.begin(), null_bitmap.end());
 
-    // Write values based on type
     WriteColumnValues(buffer, column, num_rows);
   }
 
-  // Write column values (type-specific)
   static void WriteColumnValues(std::vector<uint8_t>& buffer, const ColumnVector& column, size_t num_rows) {
     const DataType& type = column.GetType();
 
@@ -302,25 +273,21 @@ class RecordBatchSerializer {
     }, type);
   }
 
-  // Read column from buffer
   static std::shared_ptr<ColumnVector> ReadColumn(const std::vector<uint8_t>& buffer,
                                                    size_t& offset,
                                                    const DataType& type,
                                                    size_t num_rows) {
-    // Read null bitmap
     uint32_t bitmap_size = ReadValue<uint32_t>(buffer, offset);
     std::vector<uint8_t> null_bitmap(buffer.begin() + offset,
                                      buffer.begin() + offset + bitmap_size);
     offset += bitmap_size;
 
-    // Create column and read values
     auto column = CreateColumnVector(type, num_rows);
     ReadColumnValues(buffer, offset, *column, type, num_rows, null_bitmap);
 
     return column;
   }
 
-  // Read column values (type-specific)
   static void ReadColumnValues(const std::vector<uint8_t>& buffer,
                                 size_t& offset,
                                 ColumnVector& column,

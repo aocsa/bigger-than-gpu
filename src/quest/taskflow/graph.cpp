@@ -18,29 +18,22 @@ namespace quest::taskflow {
 
 Graph::Graph(std::shared_ptr<memory::MemoryResourceManager> memory_manager)
     : memory_resource_manager_(std::move(memory_manager)) {
-  // Initialize the sentinel entry point node.
-  // This virtual node serves as the parent for all root operators (sources).
   operator_lookup_table_[kGraphEntryPointId] = nullptr;
 }
 
 std::size_t Graph::AddNode(Operator* node_operator) {
-  // Handle null operator by returning sentinel ID.
   if (node_operator == nullptr) {
     return kGraphEntryPointId;
   }
 
   auto operator_id = static_cast<std::int32_t>(node_operator->id());
 
-  // Skip if operator is already registered.
   if (operator_lookup_table_.contains(operator_id)) {
     return node_operator->id();
   }
 
-  // Register the operator in both data structures.
   operator_lookup_table_[operator_id] = node_operator;
   registered_operators_.push_back(node_operator);
-
-  // Establish bidirectional reference between operator and graph.
   node_operator->set_graph(shared_from_this());
 
   return node_operator->id();
@@ -49,32 +42,26 @@ std::size_t Graph::AddNode(Operator* node_operator) {
 void Graph::AddEdge(Operator* source_operator, Operator* target_operator,
                     const std::string& source_port_name, const std::string& target_port_name,
                     const EdgeConfig& edge_config, const std::string& edge_name) {
-  // Ensure both operators are registered in the graph.
   AddNode(source_operator);
   AddNode(target_operator);
 
   auto source_id = static_cast<std::int32_t>(source_operator->id());
   auto target_id = static_cast<std::int32_t>(target_operator->id());
 
-  // Create the edge structure with resolved identifiers.
   Edge new_edge{.source_operator_id = source_id,
                 .target_operator_id = target_id,
                 .source_port_name = source_port_name,
                 .target_port_name = target_port_name};
 
-  // Add to both adjacency lists for bidirectional traversal.
   outgoing_edges_[source_id].insert(new_edge);
   incoming_edges_[target_id].insert(new_edge);
-
-  // Establish the parent-child dependency relationship.
   target_operator->set_parent(source_id);
 
-  // Remember the configuration this edge was created with, keyed by
-  // endpoint identity (see GetEdgeConfig() for why this lives in a side
-  // map instead of on Edge itself).
+  // Keyed by endpoint identity; see GetEdgeConfig() for why this lives in a
+  // side map instead of on Edge itself.
   edge_configs_[{source_id, target_id}] = edge_config;
 
-  // Record the edge spec; holders materialize in Prepare()/Materialize().
+  // Holders materialize in Prepare()/Materialize().
   edge_specs_.push_back(EdgeSpec{.source = source_operator,
                                  .target = target_operator,
                                  .source_port_name = source_port_name,
@@ -83,8 +70,6 @@ void Graph::AddEdge(Operator* source_operator, Operator* target_operator,
                                  .name = edge_name,
                                  .synthesized = false});
 
-  // If source has no parent, connect it to the sentinel entry point.
-  // This marks it as a root operator in the graph.
   if (!source_operator->has_parent()) {
     Edge sentinel_edge{.source_operator_id = kGraphEntryPointId,
                        .target_operator_id = source_id,
@@ -352,11 +337,8 @@ EdgeTuner& EdgeTuner::Config(EdgeConfig config) noexcept {
 // =============================================================================
 
 void Graph::FinalizeWorkflow() {
-  // Iterate through all registered operators to find terminal nodes.
   for (auto& [operator_id, current_operator] : operator_lookup_table_) {
-    // Skip the sentinel node and check for missing outgoing edges.
     if (current_operator != nullptr && GetOutgoingEdges(current_operator).empty()) {
-      // Mark this as a terminal node by adding a sentinel target edge.
       auto current_id = static_cast<std::int32_t>(current_operator->id());
       Edge terminal_edge{.source_operator_id = current_id,
                          .target_operator_id = -1,  // Sentinel indicates terminal
@@ -379,30 +361,18 @@ Status Graph::Execute() {
 Status Graph::ExecuteLegacy() {
   // Holders are deferred from AddEdge; materialize before run()-based I/O.
   Materialize();
-
-  // Prepare the graph by marking terminal operators.
   FinalizeWorkflow();
 
-  // Thread pool for parallel operator execution.
   std::vector<ExecutionThread> execution_threads;
-
-  // Track which edges have been processed to avoid duplicate execution.
   std::set<std::pair<std::size_t, std::size_t>> processed_edges;
-
-  // Work queue containing operator IDs ready for execution.
   std::deque<std::size_t> ready_operator_queue;
-
-  // Mutex protecting the work queue for thread-safe access.
   std::mutex queue_mutex;
 
-  // Seed the queue with root operators (connected to sentinel).
   for (const auto& edge : GetOutgoingEdges(kGraphEntryPointId)) {
     ready_operator_queue.push_back(edge.target_operator_id);
   }
 
-  // Process operators until the queue is exhausted.
   while (!ready_operator_queue.empty()) {
-    // Dequeue the next operator to process.
     std::size_t current_operator_id;
     {
       std::lock_guard<std::mutex> lock(queue_mutex);
@@ -418,7 +388,6 @@ Status Graph::ExecuteLegacy() {
       continue;
     }
 
-    // Check if all dependencies (incoming edges) are satisfied.
     auto dependency_edges = GetIncomingEdges(current_operator);
     bool all_dependencies_satisfied =
         dependency_edges.empty() ||
@@ -428,37 +397,32 @@ Status Graph::ExecuteLegacy() {
             });
 
     if (!all_dependencies_satisfied) {
-      // Re-queue this operator to try again after dependencies complete.
+      // Re-queue and retry once upstream edges complete.
       std::lock_guard<std::mutex> lock(queue_mutex);
       ready_operator_queue.push_back(current_operator_id);
       continue;
     }
 
-    // Process all outgoing edges from this operator.
     for (const auto& edge : GetOutgoingEdges(current_operator)) {
       auto edge_key =
           std::make_pair(current_operator_id, static_cast<std::size_t>(edge.target_operator_id));
 
-      // Skip already processed edges.
       if (processed_edges.contains(edge_key)) {
         continue;
       }
 
       processed_edges.insert(edge_key);
 
-      // Queue downstream operators for execution.
       if (edge.target_operator_id >= 0) {
         std::lock_guard<std::mutex> lock(queue_mutex);
         ready_operator_queue.push_back(edge.target_operator_id);
       }
 
-      // Launch the operator in a dedicated thread.
       execution_threads.emplace_back(
           [current_operator, current_operator_id, target = edge.target_operator_id]() {
             auto execution_status = current_operator->run();
 
             if (execution_status == ExecutionStatus::Proceed) {
-              // Signal completion to downstream operators.
               current_operator->output().Finish();
               current_operator->mark_done();
             } else if (target >= 0) {
@@ -469,7 +433,6 @@ Status Graph::ExecuteLegacy() {
     }
   }
 
-  // Wait for all operator threads to complete.
   for (auto& thread : execution_threads) {
     if (thread.joinable()) {
       thread.join();
@@ -559,13 +522,9 @@ std::pair<bool, std::uint64_t> Graph::EstimateInputRowCount(std::int32_t operato
   if (target_operator == nullptr) {
     return {false, 0};
   }
-
-  // If all inputs are complete, return the actual count.
   if (target_operator->InputAllFinished()) {
     return {true, target_operator->TotalInputRowsAdded()};
   }
-
-  // Try to estimate from upstream operators.
   auto upstream_edges = GetIncomingEdges(operator_id);
   if (upstream_edges.size() == 1) {
     auto* source_operator = GetNode(upstream_edges.begin()->source_operator_id);
@@ -573,7 +532,6 @@ std::pair<bool, std::uint64_t> Graph::EstimateInputRowCount(std::int32_t operato
       return source_operator->GetEstimatedOutputNumRows();
     }
   }
-
   return {false, 0};
 }
 
@@ -583,13 +541,9 @@ std::pair<bool, std::uint64_t> Graph::EstimateInputRowCountForPort(
   if (target_operator == nullptr) {
     return {false, 0};
   }
-
-  // If the specific port is complete, return the actual count.
   if (target_operator->InputCacheFinished(port_name)) {
     return {true, target_operator->InputCacheNumRowsAdded(port_name)};
   }
-
-  // Find the upstream operator connected to this specific port.
   auto upstream_edges = GetIncomingEdges(operator_id);
   for (const auto& edge : upstream_edges) {
     if (edge.target_port_name == port_name) {
@@ -599,7 +553,6 @@ std::pair<bool, std::uint64_t> Graph::EstimateInputRowCountForPort(
       }
     }
   }
-
   return {false, 0};
 }
 
@@ -611,18 +564,15 @@ void Graph::PrintStructure() const {
   std::println("=== Execution Graph ===");
   std::println("Operators (id -> type):");
 
-  // Print each operator with its type.
   for (const auto* current_operator : registered_operators_) {
     std::println("  {} -> {}", current_operator->id(), to_string(current_operator->type()));
   }
 
   std::println("\nEdges:");
 
-  // Perform breadth-first traversal to print edges.
   std::set<std::pair<std::size_t, std::size_t>> visited_edges;
   std::deque<std::size_t> traversal_queue;
 
-  // Start from root operators.
   for (const auto& edge : GetOutgoingEdges(kGraphEntryPointId)) {
     traversal_queue.push_back(edge.target_operator_id);
   }
@@ -653,11 +603,9 @@ void Graph::PrintStructure() const {
 void Graph::PrintBackwardsFrom(std::int32_t operator_id) const {
   std::println("=== Graph from operator {} (backwards) ===", operator_id);
 
-  // Perform reverse breadth-first traversal.
   std::set<std::pair<std::size_t, std::size_t>> visited_edges;
   std::deque<std::size_t> traversal_queue;
 
-  // Start from the specified operator's incoming edges.
   for (const auto& edge : GetIncomingEdges(operator_id)) {
     traversal_queue.push_back(edge.source_operator_id);
   }

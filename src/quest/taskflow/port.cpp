@@ -12,15 +12,12 @@ namespace quest::taskflow {
 // =============================================================================
 
 void Port::RegisterPort(std::string port_name) {
-  // Create an empty slot for this port name.
-  // The batch holder will be assigned later when edges are created.
   batch_holder_registry_[std::move(port_name)] = nullptr;
 }
 
 void Port::RegisterBatchHolder(
     const std::string& port_name,
     std::shared_ptr<cache::IBatchHolder> batch_holder) {
-  // Associate the batch holder with the named port.
   batch_holder_registry_[port_name] = std::move(batch_holder);
 }
 
@@ -42,7 +39,6 @@ const std::shared_ptr<cache::IBatchHolder>& Port::get(
 // =============================================================================
 
 void Port::Finish() {
-  // Signal completion on all batch holders.
   for (auto& [port_name, batch_holder] : batch_holder_registry_) {
     if (batch_holder) {
       batch_holder->Finish();
@@ -51,7 +47,6 @@ void Port::Finish() {
 }
 
 bool Port::AllFinished() const {
-  // Check if all batch holders report finished status.
   for (const auto& [port_name, batch_holder] : batch_holder_registry_) {
     if (batch_holder && !batch_holder->IsFinished()) {
       return false;
@@ -75,8 +70,6 @@ bool Port::IsFinished(const std::string& port_name) const {
 
 std::size_t Port::TotalBytesAdded() const {
   std::size_t total_bytes = 0;
-
-  // Sum bytes across all batch holders.
   for (const auto& [port_name, batch_holder] : batch_holder_registry_) {
     if (batch_holder) {
       total_bytes += batch_holder->bytes_added();
@@ -88,8 +81,6 @@ std::size_t Port::TotalBytesAdded() const {
 
 std::size_t Port::TotalRowsAdded() const {
   std::size_t total_rows = 0;
-
-  // Sum rows across all batch holders.
   for (const auto& [port_name, batch_holder] : batch_holder_registry_) {
     if (batch_holder) {
       total_rows += batch_holder->rows_added();
@@ -112,7 +103,6 @@ std::size_t Port::RowsAdded(const std::string& port_name) const {
 // =============================================================================
 
 std::string Port::default_port_name() const {
-  // Use the owning operator's ID as the default port name.
   if (owner_operator_ != nullptr) {
     return std::to_string(owner_operator_->id());
   }

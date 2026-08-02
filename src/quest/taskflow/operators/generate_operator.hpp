@@ -58,7 +58,6 @@ class GenerateOperator : public Operator {
 
   [[nodiscard]] bool IsSource() const noexcept override { return true; }
 
-  /// @brief The (fixed) schema of every generated batch.
   [[nodiscard]] const datasource::Schema& schema() const noexcept { return schema_; }
 
   [[nodiscard]] Result<std::optional<cache::DataBlockPtr>> GetNextBatch() override {

@@ -4,12 +4,6 @@
 #ifndef PARQUET_READER_DATA_SOURCE_HPP
 #define PARQUET_READER_DATA_SOURCE_HPP
 
-/// @file data_source.hpp
-/// @brief Abstract data source interface and Parquet implementation.
-///
-/// This file provides the DataSource interface for reading tabular data
-/// and the ParquetDataSource implementation for Parquet files.
-
 #include <memory>
 #include <string>
 #include <vector>
@@ -21,16 +15,13 @@
 
 namespace quest::datasource {
 
-// Forward declaration
 class ParquetDataSource;
 
 // =============================================================================
 // Record Batch Iterator
 // =============================================================================
 
-/// @brief Iterator for scanning record batches from a Parquet file.
-///
-/// This iterator returns Result<RecordBatch> to handle errors during scanning.
+/// Dereferencing yields Result<RecordBatch> so scan errors propagate without exceptions.
 class RecordBatchIterator {
  public:
   RecordBatchIterator(ParquetFileReader* reader,
@@ -50,8 +41,6 @@ class RecordBatchIterator {
     return index_ == other.index_;
   }
 
-  /// @brief Reads the current row group.
-  /// @return The RecordBatch on success, or error Status.
   [[nodiscard]] Result<RecordBatch> operator*() const {
     return reader_->ReadRowGroup(index_, columns_);
   }
@@ -66,11 +55,6 @@ class RecordBatchIterator {
 // Record Batch Sequence
 // =============================================================================
 
-/// @brief Range object for iterating over record batches.
-///
-/// This provides the begin/end interface for range-based for loops.
-/// Note: Since dereferencing returns Result<RecordBatch>, users must
-/// handle errors during iteration.
 class RecordBatchSequence {
  public:
   RecordBatchSequence(ParquetFileReader* reader,
@@ -94,20 +78,13 @@ class RecordBatchSequence {
 // Abstract Data Source
 // =============================================================================
 
-/// @brief Abstract data source interface.
-///
-/// This interface represents a source of tabular data that can be scanned
-/// to produce record batches.
 class DataSource {
  public:
   virtual ~DataSource() = default;
 
-  /// @brief Returns the schema for the underlying data source.
   [[nodiscard]] virtual Schema schema() const = 0;
 
-  /// @brief Scans the data source, selecting the specified columns.
-  /// @param projection The columns to select (empty = all columns).
-  /// @return A sequence that can be iterated to yield RecordBatch results.
+  /// @param projection Columns to select; empty selects all.
   [[nodiscard]] virtual RecordBatchSequence Scan(
       const std::vector<std::string>& projection) = 0;
 };
@@ -116,13 +93,9 @@ class DataSource {
 // Parquet Data Source
 // =============================================================================
 
-/// @brief Parquet file data source implementation.
+/// Must be opened via Open() which returns Result to propagate file errors.
 ///
-/// This class provides a DataSource interface for reading Parquet files.
-/// It must be opened using the static Open() factory method which returns
-/// a Result to handle file opening errors.
-///
-/// Example usage:
+/// Example:
 /// @code
 ///   auto source_result = ParquetDataSource::Open("data.parquet");
 ///   if (!source_result.has_value()) {
@@ -140,9 +113,6 @@ class DataSource {
 /// @endcode
 class ParquetDataSource : public DataSource {
  public:
-  /// @brief Opens a Parquet file as a data source.
-  /// @param filename The path to the Parquet file.
-  /// @return The ParquetDataSource on success, or error Status.
   [[nodiscard]] static Result<ParquetDataSource> Open(
       const std::string& filename) {
     auto reader_result = ParquetFileReader::Open(filename);
@@ -170,17 +140,14 @@ class ParquetDataSource : public DataSource {
   // Parquet-Specific Accessors
   // ===========================================================================
 
-  /// @brief Returns the Parquet file metadata.
   [[nodiscard]] const FileMetadata& metadata() const {
     return reader_.metadata();
   }
 
-  /// @brief Returns the number of row groups in the file.
   [[nodiscard]] size_t num_row_groups() const {
     return reader_.num_row_groups();
   }
 
-  /// @brief Returns the total number of rows in the file.
   [[nodiscard]] int64_t num_rows() const { return reader_.num_rows(); }
 
  private:

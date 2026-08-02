@@ -62,9 +62,6 @@ class QueryPlan {
   // Factory Methods
   // ===========================================================================
 
-  /// @brief Start with a Parquet data source.
-  /// @param filename Path to the Parquet file.
-  /// @return Result containing QueryPlan or error.
   [[nodiscard]] static Result<QueryPlan> FromParquet(
       const std::string& filename) {
     auto source_result = datasource::ParquetDataSource::Open(filename);
@@ -77,10 +74,6 @@ class QueryPlan {
         std::make_unique<Scan>(filename, std::move(source), std::nullopt));
   }
 
-  /// @brief Start with a generic data source.
-  /// @param source The data source (shared ownership).
-  /// @param name A name for the data source.
-  /// @return QueryPlan instance.
   [[nodiscard]] static QueryPlan From(std::shared_ptr<DataSource> source,
                                       const std::string& name) {
     return QueryPlan(
@@ -91,17 +84,11 @@ class QueryPlan {
   // Query Building (Fluent Interface)
   // ===========================================================================
 
-  /// @brief Add a filter/selection condition.
-  /// @param condition The filter expression.
-  /// @return QueryPlan with the filter applied.
   [[nodiscard]] QueryPlan Where(const ExprBuilder& condition) && {
     return QueryPlan(
         std::make_unique<Selection>(std::move(plan_), condition.Build()));
   }
 
-  /// @brief Add a projection with column names.
-  /// @param columns List of column names to select.
-  /// @return QueryPlan with the projection applied.
   [[nodiscard]] QueryPlan Select(
       std::initializer_list<std::string> columns) && {
     std::vector<LogicalExprPtr> exprs;
@@ -113,9 +100,6 @@ class QueryPlan {
         std::make_unique<Projection>(std::move(plan_), std::move(exprs)));
   }
 
-  /// @brief Add a projection with expressions.
-  /// @param exprs List of expressions to compute.
-  /// @return QueryPlan with the projection applied.
   [[nodiscard]] QueryPlan Select(
       std::initializer_list<ExprBuilder> exprs) && {
     std::vector<LogicalExprPtr> expr_list;
@@ -127,9 +111,6 @@ class QueryPlan {
         std::make_unique<Projection>(std::move(plan_), std::move(expr_list)));
   }
 
-  /// @brief Add a projection with a vector of expressions.
-  /// @param exprs Vector of expressions to compute.
-  /// @return QueryPlan with the projection applied.
   [[nodiscard]] QueryPlan Select(const std::vector<ExprBuilder>& exprs) && {
     std::vector<LogicalExprPtr> expr_list;
     expr_list.reserve(exprs.size());
@@ -140,9 +121,6 @@ class QueryPlan {
         std::make_unique<Projection>(std::move(plan_), std::move(expr_list)));
   }
 
-  /// @brief Truncate the result to the first @p n rows.
-  /// @param n Maximum number of rows to keep.
-  /// @return QueryPlan with the limit applied.
   [[nodiscard]] QueryPlan Limit(std::size_t n) && {
     return QueryPlan(std::make_unique<quest::Limit>(std::move(plan_), n));
   }
@@ -157,10 +135,8 @@ class QueryPlan {
   // Plan Building
   // ===========================================================================
 
-  /// @brief Build and return the logical plan.
   [[nodiscard]] LogicalPlanPtr BuildLogicalPlan() && { return std::move(plan_); }
 
-  /// @brief Build and return the physical plan.
   [[nodiscard]] Result<PhysicalPlanPtr> BuildPhysicalPlan() && {
     return CreatePhysicalPlan(*plan_);
   }
@@ -169,13 +145,10 @@ class QueryPlan {
   // Utility Methods
   // ===========================================================================
 
-  /// @brief Get string representation of the logical plan.
   [[nodiscard]] std::string ToString() const { return plan_->Pretty(); }
 
-  /// @brief Check if the plan is valid (non-null).
   [[nodiscard]] explicit operator bool() const noexcept { return plan_ != nullptr; }
 
-  /// @brief Get the output schema of the query.
   [[nodiscard]] datasource::Schema schema() const { return plan_->schema(); }
 
  private:

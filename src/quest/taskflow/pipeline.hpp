@@ -91,16 +91,11 @@ class Pipeline {
   // Cross-pipeline dependencies
   // ===========================================================================
 
-  /// @brief Records that `producer` feeds this pipeline across the given
-  /// barrier.
+  /// @brief Records that `producer` feeds this pipeline across the given barrier.
   ///
-  /// `Full`-barrier producers are the pipelines this pipeline may not start
-  /// consuming from until they finish (Stage 4's runnable-set check).
-  /// `Pipeline`-barrier producers may run concurrently with this one.
-  ///
-  /// @param producer The upstream pipeline (non-owning; owned by the
-  ///        vector `MetaPipeline::Build` returns).
-  /// @param barrier The barrier semantics of the edge connecting them.
+  /// `Full`-barrier producers block this pipeline until they finish (Stage 4's
+  /// runnable-set check). `Pipeline`-barrier producers may run concurrently.
+  /// `producer` is non-owning; owned by the vector `MetaPipeline::Build` returns.
   void AddProducer(Pipeline* producer, BarrierType barrier) {
     if (barrier == BarrierType::Full) {
       full_barrier_producers_.push_back(producer);
@@ -175,11 +170,8 @@ class Pipeline {
   /// (Sirius's `compute_task` start_index) can resume mid-pipeline by
   /// passing a larger value.
   ///
-  /// @param batch The batch to push through the pipeline.
-  /// @param start_index The first operator index to run ProcessBatch on.
-  /// @return Status::OK() on success (including "a streaming operator
-  ///         consumed the batch to zero rows"), or the first error
-  ///         encountered.
+  /// @return Status::OK() on success (including "a streaming operator consumed
+  ///         the batch to zero rows"), or the first error encountered.
   [[nodiscard]] Status RunTask(cache::DataBlockPtr batch, std::size_t start_index = 1);
 
   // ===========================================================================
@@ -229,8 +221,6 @@ class Pipeline {
   std::mutex status_lock_;
 };
 
-/// @brief Owning handle for a Pipeline (see the class comment for why
-/// Pipeline itself cannot be stored by value).
 using PipelinePtr = std::unique_ptr<Pipeline>;
 
 }  // namespace quest::taskflow

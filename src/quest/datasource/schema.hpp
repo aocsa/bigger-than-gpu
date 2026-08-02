@@ -15,7 +15,6 @@
 
 namespace quest::datasource {
 
-// Statistics for a column chunk
 struct ColumnStatistics {
   std::optional<std::vector<uint8_t>> min_value;
   std::optional<std::vector<uint8_t>> max_value;
@@ -90,7 +89,6 @@ class Schema {
     return idx.has_value() ? &fields_[*idx] : nullptr;
   }
 
-  // Project schema to only include specified column indices
   Schema Project(const std::vector<size_t>& indices) const {
     std::vector<Field> projected_fields;
     projected_fields.reserve(indices.size());
@@ -104,7 +102,6 @@ class Schema {
     return Schema(std::move(projected_fields));
   }
 
-  // Select fields by name
   Schema Select(const std::vector<std::string>& names) const {
     std::vector<Field> selected_fields;
     selected_fields.reserve(names.size());

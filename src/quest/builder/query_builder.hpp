@@ -76,22 +76,18 @@ class QueryBuilder {
   // Query Building (Fluent Interface)
   // ===========================================================================
 
-  /// @brief Add a filter/selection condition.
   [[nodiscard]] QueryBuilder Where(const ExprBuilder& condition) && {
     return QueryBuilder(std::move(plan_).Where(condition));
   }
 
-  /// @brief Add a projection with column names.
   [[nodiscard]] QueryBuilder Select(std::initializer_list<std::string> columns) && {
     return QueryBuilder(std::move(plan_).Select(columns));
   }
 
-  /// @brief Add a projection with expressions.
   [[nodiscard]] QueryBuilder Select(std::initializer_list<ExprBuilder> exprs) && {
     return QueryBuilder(std::move(plan_).Select(exprs));
   }
 
-  /// @brief Add a projection with a vector of expressions.
   [[nodiscard]] QueryBuilder Select(const std::vector<ExprBuilder>& exprs) && {
     return QueryBuilder(std::move(plan_).Select(exprs));
   }
@@ -110,10 +106,8 @@ class QueryBuilder {
   // Plan Building
   // ===========================================================================
 
-  /// @brief Build and return the logical plan.
   [[nodiscard]] LogicalPlanPtr BuildLogicalPlan() && { return std::move(plan_).BuildLogicalPlan(); }
 
-  /// @brief Build and return the physical plan.
   [[nodiscard]] Result<PhysicalPlanPtr> BuildPhysicalPlan() && {
     return std::move(plan_).BuildPhysicalPlan();
   }
@@ -122,10 +116,7 @@ class QueryBuilder {
   // Execution Methods (Synchronous / Push-based)
   // ===========================================================================
 
-  /// @brief Execute the query with a callback for each batch (push-based).
-  /// @tparam F Callback type (must satisfy BatchCallback concept).
-  /// @param callback Function called for each result batch.
-  /// @return Status indicating success or failure.
+  /// Push-based execution: callback invoked for each result batch.
   template <BatchCallback F>
   [[nodiscard]] Status Execute(F&& callback) && {
     auto physical_result = CreatePhysicalPlan(plan_.plan());
@@ -139,10 +130,7 @@ class QueryBuilder {
         });
   }
 
-  /// @brief Execute with early termination support (callback returns bool).
-  /// @tparam F Callback type (must satisfy BatchCallbackWithControl concept).
-  /// @param callback Function returning false to stop execution.
-  /// @return Status indicating success, failure, or cancellation.
+  /// Push-based execution with early termination: callback returns false to stop.
   template <BatchCallbackWithControl F>
   [[nodiscard]] Status ExecuteWithControl(F&& callback) && {
     auto physical_result = CreatePhysicalPlan(plan_.plan());
@@ -166,9 +154,7 @@ class QueryBuilder {
     return status;
   }
 
-  /// @brief Execute and collect all results into memory.
-  /// @return Vector of RecordBatches or error.
-  /// @note For large datasets, consider StreamingQueryBuilder::ExecuteStream().
+  /// Collects all results into memory. For large datasets prefer StreamingQueryBuilder::ExecuteStream().
   [[nodiscard]] Result<std::vector<datasource::RecordBatch>> ExecuteCollect() && {
     std::vector<datasource::RecordBatch> results;
     auto physical_result = CreatePhysicalPlan(plan_.plan());
@@ -230,13 +216,10 @@ class QueryBuilder {
   // Utility Methods
   // ===========================================================================
 
-  /// @brief Get string representation of the logical plan.
   [[nodiscard]] std::string ToString() const { return plan_.ToString(); }
 
-  /// @brief Check if the builder has a valid plan.
   [[nodiscard]] explicit operator bool() const noexcept { return static_cast<bool>(plan_); }
 
-  /// @brief Get the output schema of the query.
   [[nodiscard]] datasource::Schema schema() const { return plan_.schema(); }
 
  private:

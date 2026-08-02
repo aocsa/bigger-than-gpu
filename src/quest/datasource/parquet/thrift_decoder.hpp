@@ -6,10 +6,6 @@
 
 /// @file thrift_decoder.hpp
 /// @brief Thrift Compact Protocol decoder for Parquet metadata.
-///
-/// This file implements a decoder for the Thrift Compact Protocol used in
-/// Parquet file metadata. It provides safe, error-handling reads using the
-/// Result type pattern instead of exceptions.
 
 #include <bit>
 #include <cstdint>
@@ -27,7 +23,6 @@ namespace quest::datasource::parquet {
 // Thrift Protocol Types
 // =============================================================================
 
-/// @brief Thrift Compact Protocol type IDs.
 enum class ThriftType : uint8_t {
   kStop = 0,       ///< End of struct marker.
   kBoolTrue = 1,   ///< Boolean true value.
@@ -48,25 +43,8 @@ enum class ThriftType : uint8_t {
 // ThriftDecoder Class
 // =============================================================================
 
-/// @brief Decoder for Thrift Compact Protocol used in Parquet metadata.
-///
-/// This decoder reads Thrift-encoded data from a byte buffer, supporting
-/// all Compact Protocol types. All read operations return Result types
-/// to safely handle decode errors.
-///
-/// Example usage:
-/// @code
-///   ThriftDecoder decoder(metadata_bytes);
-///   auto version_result = decoder.ReadI32();
-///   if (!version_result.has_value()) {
-///     return std::unexpected(version_result.error());
-///   }
-///   int32_t version = version_result.value();
-/// @endcode
 class ThriftDecoder {
  public:
-  /// @brief Constructs a decoder over a span of bytes.
-  /// @param data The byte buffer to decode from.
   explicit ThriftDecoder(std::span<const uint8_t> data) noexcept
       : data_(data), pos_(0) {}
 
@@ -74,24 +52,18 @@ class ThriftDecoder {
   // Position Queries
   // ===========================================================================
 
-  /// @brief Returns the current read position in bytes.
   [[nodiscard]] size_t position() const noexcept { return pos_; }
 
-  /// @brief Returns the number of bytes remaining to read.
   [[nodiscard]] size_t remaining() const noexcept {
     return data_.size() - pos_;
   }
 
-  /// @brief Checks if there are more bytes to read.
   [[nodiscard]] bool HasMore() const noexcept { return pos_ < data_.size(); }
 
   // ===========================================================================
   // Basic Read Operations
   // ===========================================================================
 
-  /// @brief Skips a specified number of bytes.
-  /// @param count Number of bytes to skip.
-  /// @return Status indicating success or end-of-data error.
   [[nodiscard]] Status Skip(size_t count) noexcept {
     if (pos_ + count > data_.size()) {
       return Status::ThriftDecodeError("Unexpected end of data during skip");
@@ -100,8 +72,6 @@ class ThriftDecoder {
     return Status::OK();
   }
 
-  /// @brief Reads a single byte.
-  /// @return The byte value, or error if end of data.
   [[nodiscard]] Result<uint8_t> ReadByte() noexcept {
     if (pos_ >= data_.size()) {
       return std::unexpected(
@@ -115,7 +85,6 @@ class ThriftDecoder {
   // ===========================================================================
 
   /// @brief Reads a zigzag-encoded 32-bit varint.
-  /// @return The decoded signed 32-bit integer, or decode error.
   [[nodiscard]] Result<int32_t> ReadVarint32() noexcept {
     uint32_t result = 0;
     uint32_t shift = 0;
@@ -144,7 +113,6 @@ class ThriftDecoder {
   }
 
   /// @brief Reads a zigzag-encoded 64-bit varint.
-  /// @return The decoded signed 64-bit integer, or decode error.
   [[nodiscard]] Result<int64_t> ReadVarint64() noexcept {
     uint64_t result = 0;
     uint64_t shift = 0;
@@ -172,8 +140,7 @@ class ThriftDecoder {
     return static_cast<int64_t>((result >> 1) ^ -(result & 1));
   }
 
-  /// @brief Reads an unsigned 32-bit varint (for lengths).
-  /// @return The decoded unsigned 32-bit integer, or decode error.
+  /// @brief Reads an unsigned 32-bit varint (used for lengths).
   [[nodiscard]] Result<uint32_t> ReadUvarint32() noexcept {
     uint32_t result = 0;
     uint32_t shift = 0;
@@ -196,7 +163,6 @@ class ThriftDecoder {
     return result;
   }
 
-  /// @brief Reads a 16-bit signed integer.
   [[nodiscard]] Result<int16_t> ReadI16() noexcept {
     auto result = ReadVarint32();
     if (!result.has_value()) {
@@ -205,18 +171,14 @@ class ThriftDecoder {
     return static_cast<int16_t>(result.value());
   }
 
-  /// @brief Reads a 32-bit signed integer.
   [[nodiscard]] Result<int32_t> ReadI32() noexcept { return ReadVarint32(); }
 
-  /// @brief Reads a 64-bit signed integer.
   [[nodiscard]] Result<int64_t> ReadI64() noexcept { return ReadVarint64(); }
 
   // ===========================================================================
   // Floating-Point Read Operations
   // ===========================================================================
 
-  /// @brief Reads a 64-bit IEEE double.
-  /// @return The decoded double, or decode error.
   [[nodiscard]] Result<double> ReadDouble() noexcept {
     if (pos_ + 8 > data_.size()) {
       return std::unexpected(
@@ -235,7 +197,6 @@ class ThriftDecoder {
   // ===========================================================================
 
   /// @brief Reads a length-prefixed UTF-8 string.
-  /// @return The decoded string, or decode error.
   [[nodiscard]] Result<std::string> ReadString() noexcept {
     auto length_result = ReadUvarint32();
     if (!length_result.has_value()) {
@@ -254,7 +215,6 @@ class ThriftDecoder {
   }
 
   /// @brief Reads a length-prefixed binary blob.
-  /// @return The decoded bytes, or decode error.
   [[nodiscard]] Result<std::vector<uint8_t>> ReadBinary() noexcept {
     auto length_result = ReadUvarint32();
     if (!length_result.has_value()) {
@@ -277,15 +237,13 @@ class ThriftDecoder {
   // Struct Field Header
   // ===========================================================================
 
-  /// @brief Field header containing field ID and type.
   struct FieldHeader {
-    int16_t field_id;  ///< The field identifier.
-    ThriftType type;   ///< The field's Thrift type.
+    int16_t field_id;
+    ThriftType type;
   };
 
-  /// @brief Reads a field header in Compact Protocol format.
-  /// @param last_field_id The previous field ID (for delta encoding).
-  /// @return The field header, or nullopt for STOP field, or decode error.
+  /// @param last_field_id Previous field ID used for delta decoding.
+  /// @return nullopt on STOP field.
   [[nodiscard]] Result<std::optional<FieldHeader>> ReadFieldHeader(
       int16_t last_field_id) noexcept {
     auto byte_result = ReadByte();
@@ -324,14 +282,11 @@ class ThriftDecoder {
   // List/Set Header
   // ===========================================================================
 
-  /// @brief List or set header containing element type and count.
   struct ListHeader {
-    ThriftType element_type;  ///< Type of list elements.
-    uint32_t size;            ///< Number of elements.
+    ThriftType element_type;
+    uint32_t size;
   };
 
-  /// @brief Reads a list or set header.
-  /// @return The list header, or decode error.
   [[nodiscard]] Result<ListHeader> ReadListHeader() noexcept {
     auto byte_result = ReadByte();
     if (!byte_result.has_value()) {
@@ -359,9 +314,6 @@ class ThriftDecoder {
   // Field Skipping
   // ===========================================================================
 
-  /// @brief Skips a field of the given Thrift type.
-  /// @param type The type of field to skip.
-  /// @return Status indicating success or decode error.
   [[nodiscard]] Status SkipField(ThriftType type) noexcept {
     switch (type) {
       case ThriftType::kBoolTrue:
@@ -472,8 +424,7 @@ class ThriftDecoder {
     }
   }
 
-  /// @brief Skips an entire struct (reads fields until STOP).
-  /// @return Status indicating success or decode error.
+  /// @brief Skips an entire struct, reading fields until STOP.
   [[nodiscard]] Status SkipStruct() noexcept {
     int16_t last_field_id = 0;
 
@@ -500,8 +451,8 @@ class ThriftDecoder {
   }
 
  private:
-  std::span<const uint8_t> data_;  ///< The byte buffer being decoded.
-  size_t pos_;                     ///< Current read position.
+  std::span<const uint8_t> data_;
+  size_t pos_;
 };
 
 }  // namespace quest::datasource::parquet

@@ -2,7 +2,7 @@
 #define QUEST_TESTS_UTILS_HPP_
 
 #include <gtest/gtest.h>
-#include <utility> // for std::move
+#include <utility>
 
 #include "quest/datasource/column_vector.hpp"
 #include "quest/datasource/record_batch.hpp"
@@ -16,9 +16,7 @@
 
 namespace quest::testing {
 
-/// @brief Creates a simple RecordBatch with a single int32 column for testing
-/// @param num_rows Number of rows to generate (values will be 0, 1, 2, ...)
-/// @return A RecordBatch with one column named "value"
+/// @brief Single int32 column named "value"; values are 0, 1, 2, …
 inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows) {
   using namespace quest::datasource;
 
@@ -33,10 +31,7 @@ inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows) {
   return RecordBatch(schema, {col});
 }
 
-/// @brief Creates a RecordBatch with multiple columns for testing
-/// @param num_rows Number of rows
-/// @param num_columns Number of int32 columns to create
-/// @return A RecordBatch with columns named "col0", "col1", etc.
+/// @brief Multiple int32 columns named "col0", "col1", etc.
 inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows,
                                                     size_t num_columns) {
   using namespace quest::datasource;
@@ -59,10 +54,7 @@ inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows,
 
 }  // namespace quest::testing
 
-// ---------------------------------------------------------
-// ASSERT_OK
-// Checks if a Status or Result is OK. Fails the test if not.
-// ---------------------------------------------------------
+// Fails the test if Status/Result is not OK.
 #define ASSERT_OK(expr)                                                    \
   do {                                                                     \
     auto _res = (expr);                                                    \
@@ -71,24 +63,13 @@ inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows,
         << "Error: " << _res.error().ToString();                           \
   } while (0)
 
-// ---------------------------------------------------------
-// ASSERT_OK_AND_ASSIGN
-// 1. Executes the expression (returning Result<T>).
-// 2. Asserts that it has a value.
-// 3. If successful, moves the inner value into 'lhs'.
-//
+// Asserts Result<T> has a value, then moves the inner value into lhs.
 // Usage: ASSERT_OK_AND_ASSIGN(auto value, MyFunc());
-// ---------------------------------------------------------
 #define ASSERT_OK_AND_ASSIGN(lhs, expr)                                    \
-  /* 1. Create a unique variable to hold the result */                     \
   auto _QUEST_GTEST_NAME(_result) = (expr);                                \
-                                                                           \
-  /* 2. Verify success using GTest's ASSERT_TRUE */                        \
   ASSERT_TRUE(_QUEST_GTEST_NAME(_result).has_value())                      \
       << "Operation failed: " << #expr << "\n"                             \
       << "Error: " << _QUEST_GTEST_NAME(_result).error().ToString();       \
-                                                                           \
-  /* 3. Assign/Move the value to the user's variable */                    \
   lhs = std::move(*_QUEST_GTEST_NAME(_result));
 
 #endif  // QUEST_TESTS_UTILS_HPP_

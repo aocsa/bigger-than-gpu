@@ -6,9 +6,6 @@
 
 /// @file logical_expr.hpp
 /// @brief Logical expressions for query plans.
-///
-/// This file defines the expression types used in logical query plans,
-/// including column references, literals, and boolean expressions.
 
 #include <memory>
 #include <string>
@@ -20,10 +17,8 @@
 
 namespace quest {
 
-// Forward declaration
 class LogicalPlan;
 
-// Use types from datasource namespace
 using datasource::DataType;
 using datasource::Field;
 using datasource::Value;
@@ -37,15 +32,8 @@ class LogicalExpr {
  public:
   virtual ~LogicalExpr() = default;
 
-  /// @brief Derives the output field for this expression.
-  /// @param input The input logical plan providing schema context.
-  /// @return The output Field on success, or error Status.
   [[nodiscard]] virtual Result<Field> ToField(const LogicalPlan& input) const = 0;
-
-  /// @brief Returns a string representation of the expression.
   [[nodiscard]] virtual std::string ToString() const = 0;
-
-  /// @brief Creates a deep copy of the expression.
   [[nodiscard]] virtual std::unique_ptr<LogicalExpr> Clone() const = 0;
 };
 
@@ -99,7 +87,6 @@ class ColumnIndex : public LogicalExpr {
 // Literal Expression
 // =============================================================================
 
-/// @brief Literal value expression.
 class Literal : public LogicalExpr {
  public:
   explicit Literal(Value value) : value_(std::move(value)) {}
@@ -159,7 +146,6 @@ class Literal : public LogicalExpr {
 // Binary Expressions
 // =============================================================================
 
-/// @brief Base class for binary expressions.
 class BinaryExpr : public LogicalExpr {
  public:
   BinaryExpr(LogicalExprPtr left, LogicalExprPtr right, std::string op)
@@ -184,7 +170,6 @@ class BinaryExpr : public LogicalExpr {
   std::string op_;
 };
 
-/// @brief Base class for boolean binary expressions.
 class BooleanBinaryExpr : public BinaryExpr {
  public:
   using BinaryExpr::BinaryExpr;
@@ -258,8 +243,7 @@ class LtEq : public BooleanBinaryExpr {
 // Arithmetic Operators
 // =============================================================================
 
-/// @brief Base class for arithmetic binary expressions.
-/// @details Arithmetic expressions derive their output type from the input types.
+/// @brief Arithmetic binary expression; result type matches the left operand.
 class ArithmeticBinaryExpr : public BinaryExpr {
  public:
   using BinaryExpr::BinaryExpr;
@@ -329,8 +313,6 @@ class Modulo : public ArithmeticBinaryExpr {
 // Aggregate Expressions
 // =============================================================================
 
-/// @brief Base class for aggregate expressions.
-/// @details Aggregate expressions compute a single value from multiple rows.
 class AggregateExpr : public LogicalExpr {
  public:
   explicit AggregateExpr(LogicalExprPtr input, std::string op)
@@ -344,7 +326,6 @@ class AggregateExpr : public LogicalExpr {
   std::string op_;
 };
 
-/// @brief SUM aggregate - sums all values in a column.
 class Sum : public AggregateExpr {
  public:
   explicit Sum(LogicalExprPtr input)
@@ -368,7 +349,6 @@ class Sum : public AggregateExpr {
   }
 };
 
-/// @brief AVG aggregate - computes average of values in a column.
 class Avg : public AggregateExpr {
  public:
   explicit Avg(LogicalExprPtr input)
@@ -388,7 +368,6 @@ class Avg : public AggregateExpr {
   }
 };
 
-/// @brief COUNT aggregate - counts rows (or non-null values).
 class Count : public AggregateExpr {
  public:
   explicit Count(LogicalExprPtr input)
@@ -408,7 +387,6 @@ class Count : public AggregateExpr {
   }
 };
 
-/// @brief COUNT(*) aggregate - counts all rows including nulls.
 class CountStar : public LogicalExpr {
  public:
   CountStar() = default;
@@ -426,7 +404,6 @@ class CountStar : public LogicalExpr {
   }
 };
 
-/// @brief MIN aggregate - finds minimum value in a column.
 class Min : public AggregateExpr {
  public:
   explicit Min(LogicalExprPtr input)
@@ -450,7 +427,6 @@ class Min : public AggregateExpr {
   }
 };
 
-/// @brief MAX aggregate - finds maximum value in a column.
 class Max : public AggregateExpr {
  public:
   explicit Max(LogicalExprPtr input)
@@ -502,83 +478,67 @@ class Or : public BooleanBinaryExpr {
 // Factory Functions
 // =============================================================================
 
-/// @brief Create a column reference by name.
 inline LogicalExprPtr col(const std::string& name) {
   return std::make_unique<Column>(name);
 }
 
-/// @brief Create a column reference by index.
 inline LogicalExprPtr col_idx(size_t index) {
   return std::make_unique<ColumnIndex>(index);
 }
 
-/// @brief Create a literal value.
 template <typename T>
 LogicalExprPtr lit(T value) {
   return std::make_unique<Literal>(Value{value});
 }
 
-/// @brief Create an equality expression.
 inline LogicalExprPtr eq(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<Eq>(std::move(left), std::move(right));
 }
 
-/// @brief Create an inequality expression.
 inline LogicalExprPtr neq(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<Neq>(std::move(left), std::move(right));
 }
 
-/// @brief Create a greater-than expression.
 inline LogicalExprPtr gt(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<Gt>(std::move(left), std::move(right));
 }
 
-/// @brief Create a greater-than-or-equal expression.
 inline LogicalExprPtr gte(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<GtEq>(std::move(left), std::move(right));
 }
 
-/// @brief Create a less-than expression.
 inline LogicalExprPtr lt(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<Lt>(std::move(left), std::move(right));
 }
 
-/// @brief Create a less-than-or-equal expression.
 inline LogicalExprPtr lte(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<LtEq>(std::move(left), std::move(right));
 }
 
-/// @brief Create a logical AND expression.
 inline LogicalExprPtr and_expr(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<And>(std::move(left), std::move(right));
 }
 
-/// @brief Create a logical OR expression.
 inline LogicalExprPtr or_expr(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<Or>(std::move(left), std::move(right));
 }
 
-/// @brief Create an addition expression.
 inline LogicalExprPtr add(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<Add>(std::move(left), std::move(right));
 }
 
-/// @brief Create a subtraction expression.
 inline LogicalExprPtr subtract(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<Subtract>(std::move(left), std::move(right));
 }
 
-/// @brief Create a multiplication expression.
 inline LogicalExprPtr multiply(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<Multiply>(std::move(left), std::move(right));
 }
 
-/// @brief Create a division expression.
 inline LogicalExprPtr divide(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<Divide>(std::move(left), std::move(right));
 }
 
-/// @brief Create a modulo expression.
 inline LogicalExprPtr modulo(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<Modulo>(std::move(left), std::move(right));
 }
@@ -587,32 +547,26 @@ inline LogicalExprPtr modulo(LogicalExprPtr left, LogicalExprPtr right) {
 // Aggregate Factory Functions
 // =============================================================================
 
-/// @brief Create a SUM aggregate expression.
 inline LogicalExprPtr sum(LogicalExprPtr input) {
   return std::make_unique<Sum>(std::move(input));
 }
 
-/// @brief Create an AVG aggregate expression.
 inline LogicalExprPtr avg(LogicalExprPtr input) {
   return std::make_unique<Avg>(std::move(input));
 }
 
-/// @brief Create a COUNT aggregate expression.
 inline LogicalExprPtr count(LogicalExprPtr input) {
   return std::make_unique<Count>(std::move(input));
 }
 
-/// @brief Create a COUNT(*) aggregate expression.
 inline LogicalExprPtr count_star() {
   return std::make_unique<CountStar>();
 }
 
-/// @brief Create a MIN aggregate expression.
 inline LogicalExprPtr min(LogicalExprPtr input) {
   return std::make_unique<Min>(std::move(input));
 }
 
-/// @brief Create a MAX aggregate expression.
 inline LogicalExprPtr max(LogicalExprPtr input) {
   return std::make_unique<Max>(std::move(input));
 }

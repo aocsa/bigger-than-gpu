@@ -23,7 +23,6 @@ enum class PhysicalType : int8_t {
   kFixedLenByteArray = 7
 };
 
-// Logical type annotations for semantic meaning
 enum class LogicalType : int8_t {
   kNone = 0,
   kString,
@@ -40,7 +39,6 @@ enum class LogicalType : int8_t {
   kUuid
 };
 
-// Encoding types supported by this reader
 enum class Encoding : int8_t {
   kPlain = 0,
   kPlainDictionary = 2,
@@ -53,7 +51,6 @@ enum class Encoding : int8_t {
   kByteStreamSplit = 9
 };
 
-// Page types in Parquet
 enum class PageType : int8_t {
   kDataPage = 0,
   kIndexPage = 1,
@@ -61,7 +58,6 @@ enum class PageType : int8_t {
   kDataPageV2 = 3
 };
 
-// Compression codecs supported by Parquet
 enum class CompressionType : int8_t {
   kUncompressed = 0,
   kSnappy = 1,
@@ -73,7 +69,6 @@ enum class CompressionType : int8_t {
   kLz4Raw = 7
 };
 
-// Repetition levels
 enum class Repetition : int8_t { kRequired = 0, kOptional = 1, kRepeated = 2 };
 
 // Arrow-compatible data types for our query engine
@@ -122,12 +117,10 @@ struct FixedLenByteArrayType {
   static constexpr const char* name = "FixedLenByteArray";
 };
 
-// Type variant for runtime type handling
 using DataType = std::variant<BoolType, Int8Type, Int16Type, Int32Type, Int64Type,
                               FloatType, DoubleType, StringType, BinaryType,
                               Int96Type, FixedLenByteArrayType>;
 
-// Convert PhysicalType to DataType
 inline DataType PhysicalTypeToDataType(PhysicalType type,
                                        int32_t type_length = 0) {
   switch (type) {
@@ -151,7 +144,6 @@ inline DataType PhysicalTypeToDataType(PhysicalType type,
   return BinaryType{};  // Default fallback
 }
 
-// Get type name string
 inline std::string GetTypeName(const DataType& type) {
   return std::visit(
       [](const auto& t) -> std::string {
@@ -165,7 +157,6 @@ inline std::string GetTypeName(const DataType& type) {
       type);
 }
 
-// Get the byte width of a fixed-width type
 inline int32_t GetTypeByteWidth(const DataType& type) {
   return std::visit(
       [](const auto& t) -> int32_t {
@@ -195,7 +186,6 @@ inline int32_t GetTypeByteWidth(const DataType& type) {
       type);
 }
 
-// Check if type is fixed width
 inline bool IsFixedWidth(const DataType& type) {
   return GetTypeByteWidth(type) > 0;
 }
