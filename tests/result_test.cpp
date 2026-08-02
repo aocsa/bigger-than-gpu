@@ -96,7 +96,6 @@ TEST(ErrorTest, ConstructionWithEmptyMessage) {
 
 TEST(ErrorTest, SourceLocation) {
     Error error(ErrorCode::Invalid, "Test");
-    // Check that source location is captured
     const auto& loc = error.location();
     EXPECT_GT(loc.line(), 0U);
     EXPECT_NE(std::string_view(loc.file_name()).find("result_test.cpp"),
@@ -292,13 +291,11 @@ TEST(HelperTest, OkFunctionWithString) {
 // =============================================================================
 
 TEST(ErrorCodeTest, AllCodes) {
-    // Ensure all error codes are distinct
     EXPECT_NE(ErrorCode::None, ErrorCode::Invalid);
     EXPECT_NE(ErrorCode::Invalid, ErrorCode::IOError);
     EXPECT_NE(ErrorCode::IOError, ErrorCode::OutOfMemory);
     EXPECT_NE(ErrorCode::OutOfMemory, ErrorCode::NotFound);
 
-    // None should be 0
     EXPECT_EQ(static_cast<int>(ErrorCode::None), 0);
 }
 

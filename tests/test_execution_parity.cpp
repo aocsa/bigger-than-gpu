@@ -84,7 +84,6 @@ class DualSource : public Operator {
     return ExecutionStatus::Proceed;
   }
 
-  // Pipelined engine: yield the same batches one at a time.
   [[nodiscard]] Result<std::optional<DataBlockPtr>> GetNextBatch() override {
     if (next_index_ >= batches_.size()) {
       return std::optional<DataBlockPtr>{std::nullopt};

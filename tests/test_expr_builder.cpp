@@ -152,7 +152,7 @@ TEST(ExprBuilderTest, ComplexLogical) {
 
 TEST(ExprBuilderRuleOfFive, CopyConstruction) {
   auto original = Col("id") == Lit(42);
-  ExprBuilder copy(original);  // Copy constructor
+  ExprBuilder copy(original);
 
   EXPECT_NE(original.Build(), nullptr);
   EXPECT_NE(copy.Build(), nullptr);
@@ -161,8 +161,8 @@ TEST(ExprBuilderRuleOfFive, CopyConstruction) {
 
 TEST(ExprBuilderRuleOfFive, CopyAssignment) {
   auto original = Col("salary") > Lit(50000.0);
-  ExprBuilder copy = Col("name");  // Different initial value
-  copy = original;  // Copy assignment
+  ExprBuilder copy = Col("name");
+  copy = original;
 
   EXPECT_NE(copy.Build(), nullptr);
   EXPECT_EQ(original.Build()->ToString(), copy.Build()->ToString());
@@ -172,7 +172,7 @@ TEST(ExprBuilderRuleOfFive, MoveConstruction) {
   auto original = Col("id") == Lit(100);
   auto original_str = original.Build()->ToString();
 
-  ExprBuilder moved(std::move(original));  // Move constructor
+  ExprBuilder moved(std::move(original));
 
   EXPECT_NE(moved.Build(), nullptr);
   EXPECT_EQ(moved.Build()->ToString(), original_str);
@@ -183,7 +183,7 @@ TEST(ExprBuilderRuleOfFive, MoveAssignment) {
   auto original_str = original.Build()->ToString();
 
   ExprBuilder moved = Col("name");
-  moved = std::move(original);  // Move assignment
+  moved = std::move(original);
 
   EXPECT_NE(moved.Build(), nullptr);
   EXPECT_EQ(moved.Build()->ToString(), original_str);
@@ -202,10 +202,6 @@ static_assert(LiteralValue<int>);
 static_assert(LiteralValue<double>);
 static_assert(LiteralValue<bool>);
 static_assert(LiteralValue<std::string>);
-static_assert(!LiteralValue<std::vector<int>>);  // Should not match
-
-// Validate BatchCallback concept
+static_assert(!LiteralValue<std::vector<int>>);
 static_assert(BatchCallback<std::function<void(RecordBatch)>>);
-
-// Validate BatchCallbackWithControl concept
 static_assert(BatchCallbackWithControl<std::function<bool(RecordBatch)>>);

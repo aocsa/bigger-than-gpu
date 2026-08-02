@@ -97,7 +97,6 @@ TEST(GraphBuilderTest, LinearChainBuildSucceeds) {
 }
 
 TEST(GraphBuilderTest, LinearChainFullInferredFromCollectorContract) {
-  // The collector declares Full barrier; Build() should resolve without errors.
   TestSource scan{0};
   CollectorOperator collector{1};
 
@@ -106,7 +105,6 @@ TEST(GraphBuilderTest, LinearChainFullInferredFromCollectorContract) {
   auto result = std::move(gb).Build();
   ASSERT_TRUE(result.has_value()) << result.error().ToString();
 
-  // Verify the edge spec has Full barrier (contract was applied).
   auto& specs = result.value()->edge_specs();
   ASSERT_EQ(specs.size(), 1U);
   EXPECT_EQ(specs[0].config.barrier, BarrierType::Full);
@@ -126,10 +124,7 @@ TEST(GraphBuilderTest, ChainLastEdgeRuleAppliesFullToLastEdgeOnly) {
   auto& specs = result.value()->edge_specs();
   ASSERT_EQ(specs.size(), 2U);
 
-  // First edge (scan→filter) should remain Streaming (Pipeline barrier).
   EXPECT_EQ(specs[0].config.barrier, BarrierType::Pipeline);
-
-  // Last edge (filter→collector) should be Full (contract + explicit).
   EXPECT_EQ(specs[1].config.barrier, BarrierType::Full);
 }
 

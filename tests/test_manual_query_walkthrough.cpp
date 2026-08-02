@@ -104,7 +104,6 @@ TEST(ManualQueryWalkthroughTest, RolesOnlyNoEngine) {
     projection_fields.push_back(field);
   }
 
-  // --- The four operators, as plain objects --------------------------------
   TableScanOperator scan{0, data_source, std::nullopt, memory_manager};
   FilterOperator filter{1, std::move(predicate), memory_manager};
   ProjectOperator project{2, Schema(projection_fields), std::move(projection_exprs),
@@ -136,7 +135,6 @@ TEST(ManualQueryWalkthroughTest, RolesOnlyNoEngine) {
     }
     ASSERT_OK_AND_ASSIGN(auto projected, project_role.ProcessBatch(std::move(filtered)));
 
-    // Sink role.
     ASSERT_OK(collector.Sink(std::move(projected)));
   }
 

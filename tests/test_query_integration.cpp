@@ -54,7 +54,6 @@ class InMemoryDataSource : public DataSource {
 class QueryIntegrationTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    // Create test schema
     std::vector<Field> fields = {
         Field("id", Int32Type{}),
         Field("name", StringType{}),
@@ -64,7 +63,6 @@ class QueryIntegrationTest : public ::testing::Test {
     };
     schema_ = Schema(fields);
 
-    // Create test data
     CreateTestBatch();
 
     data_source_ = std::make_shared<InMemoryDataSource>(schema_, batches_);
@@ -78,35 +76,30 @@ class QueryIntegrationTest : public ::testing::Test {
     auto dept_col = std::make_unique<StringColumnVector>(StringType{}, 10);
     auto active_col = std::make_unique<TypedColumnVector<bool>>(BoolType{}, 10);
 
-    // Row 0
     id_col->Append(1);
     name_col->Append("Alice");
     salary_col->Append(75000.0);
     dept_col->Append("Engineering");
     active_col->Append(true);
 
-    // Row 1
     id_col->Append(2);
     name_col->Append("Bob");
     salary_col->Append(65000.0);
     dept_col->Append("Engineering");
     active_col->Append(true);
 
-    // Row 2
     id_col->Append(3);
     name_col->Append("Charlie");
     salary_col->Append(80000.0);
     dept_col->Append("Sales");
     active_col->Append(false);
 
-    // Row 3
     id_col->Append(4);
     name_col->Append("Diana");
     salary_col->Append(90000.0);
     dept_col->Append("Engineering");
     active_col->Append(true);
 
-    // Row 4
     id_col->Append(5);
     name_col->Append("Eve");
     salary_col->Append(55000.0);

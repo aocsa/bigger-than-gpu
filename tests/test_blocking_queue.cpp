@@ -12,7 +12,6 @@
 using namespace quest;
 using namespace quest::cache;
 
-// Test message type
 struct TestMessage {
   std::string id_;
   int value;
@@ -54,12 +53,10 @@ TEST_F(BlockingQueueTest, Finish) {
   auto result = queue_.Pop();
   ASSERT_TRUE(result.has_value());
 
-  // But next pop returns error
   result = queue_.Pop();
   ASSERT_FALSE(result.has_value());
   EXPECT_EQ(result.error().code(), ErrorCode::Invalid);
 
-  // Can't add after finish
   auto status = queue_.Put(std::make_unique<TestMessage>("2", 2));
   EXPECT_FALSE(status.ok());
 }

@@ -50,7 +50,6 @@ TEST(HostMemoryBlockTest, RecordBatchAccess) {
   EXPECT_EQ(cache.num_columns(), 2U);
   EXPECT_TRUE(cache.is_valid());
 
-  // Should be able to access the record batch
   const auto* rb = cache.record_batch();
   ASSERT_NE(rb, nullptr);
   EXPECT_EQ(rb->num_rows(), 50U);
@@ -168,7 +167,6 @@ TEST(BatchHolderTest, Construction) {
 TEST(BatchHolderTest, AddAndPull) {
   BatchHolder holder(2);
 
-  // Create and add a data block
   auto batch = quest::testing::MakeTestRecordBatch(100, 2);
   auto cache_data =
       std::make_shared<HostMemoryBlock>("data1", std::move(batch));
@@ -180,7 +178,6 @@ TEST(BatchHolderTest, AddAndPull) {
   EXPECT_EQ(holder.rows_added(), 100U);
   EXPECT_TRUE(holder.HasNext());
 
-  // Pull the data block
   holder.Finish();  // Must finish to allow blocking pop to return
   auto result = holder.Pull();
   ASSERT_TRUE(result.has_value());
@@ -191,17 +188,14 @@ TEST(BatchHolderTest, AddAndPull) {
 TEST(BatchHolderTest, TryPull) {
   BatchHolder holder(3);
 
-  // Try pull from empty queue
   auto empty_result = holder.TryPull();
   EXPECT_FALSE(empty_result.has_value());
 
-  // Add a data block
   auto batch = quest::testing::MakeTestRecordBatch(50, 1);
   auto cache_data =
       std::make_shared<HostMemoryBlock>("data2", std::move(batch));
   (void)holder.Add(cache_data);
 
-  // Try pull should succeed
   auto result = holder.TryPull();
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result.value()->id(), "data2");
@@ -210,7 +204,6 @@ TEST(BatchHolderTest, TryPull) {
 TEST(BatchHolderTest, Finish) {
   BatchHolder holder(4);
 
-  // Add some data blocks
   for (int i = 0; i < 3; ++i) {
     auto batch = quest::testing::MakeTestRecordBatch(10, 1);
     auto cache_data = std::make_shared<HostMemoryBlock>(
@@ -226,13 +219,12 @@ TEST(BatchHolderTest, Finish) {
   // IsFinished returns true only when finished AND empty
   EXPECT_FALSE(holder.IsFinished());  // Still has data blocks
 
-  // Pull all data blocks
   for (int i = 0; i < 3; ++i) {
     auto result = holder.Pull();
     ASSERT_TRUE(result.has_value());
   }
 
-  EXPECT_TRUE(holder.IsFinished());  // Now finished and empty
+  EXPECT_TRUE(holder.IsFinished());
 }
 
 TEST(BatchHolderTest, NullMessage) {
@@ -245,7 +237,6 @@ TEST(BatchHolderTest, NullMessage) {
 TEST(BatchHolderTest, MultipleBatches) {
   BatchHolder holder(6);
 
-  // Add multiple batches
   for (int i = 0; i < 5; ++i) {
     auto batch = quest::testing::MakeTestRecordBatch(20, 2);
     auto cache_data = std::make_shared<HostMemoryBlock>(
@@ -259,7 +250,6 @@ TEST(BatchHolderTest, MultipleBatches) {
 
   holder.Finish();
 
-  // Pull all in order
   for (int i = 0; i < 5; ++i) {
     auto result = holder.Pull();
     ASSERT_TRUE(result.has_value());
@@ -309,12 +299,10 @@ TEST(ConcatenatingBatchHolderTest, SingleMessagePull) {
 
   holder.Finish();
 
-  // Pull should return the single block
   auto result = holder.Pull();
   ASSERT_TRUE(result.has_value());
   EXPECT_EQ(result.value()->num_rows(), original_size);
 
-  // Queue should now be empty
   EXPECT_EQ(holder.batch_count(), 0U);
   EXPECT_TRUE(holder.IsFinished());
 }
@@ -327,13 +315,11 @@ TEST(ConcatenatingBatchHolderTest, TryPullNotFinished) {
       std::make_shared<HostMemoryBlock>("test", std::move(batch));
   (void)holder.Add(cache_data);
 
-  // Try pull before finish should fail
   auto result = holder.TryPull();
   EXPECT_FALSE(result.has_value());
 
   holder.Finish();
 
-  // Now it should work
   result = holder.TryPull();
   EXPECT_TRUE(result.has_value());
 }
@@ -377,7 +363,6 @@ TEST(MakeBatchHolderTest, WithConfig) {
 TEST(BatchHolderThreadSafetyTest, ProducerConsumer) {
   BatchHolder holder(200);
 
-  // Producer thread
   auto producer = std::async(std::launch::async, [&holder]() {
     for (int i = 0; i < 10; ++i) {
       auto batch = quest::testing::MakeTestRecordBatch(4, 1);
@@ -389,7 +374,6 @@ TEST(BatchHolderThreadSafetyTest, ProducerConsumer) {
     holder.Finish();
   });
 
-  // Consumer thread
   auto consumer = std::async(std::launch::async, [&holder]() {
     int count = 0;
     while (!holder.IsFinished() || holder.HasNext()) {
@@ -436,7 +420,6 @@ TEST(BatchHolderThreadSafetyTest, ConcurrentAdds) {
             static_cast<size_t>(num_threads * blocks_per_thread));
   holder.Finish();
 
-  // Consume all
   int count = 0;
   while (holder.HasNext()) {
     auto result = holder.TryPull();

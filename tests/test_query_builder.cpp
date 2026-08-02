@@ -184,7 +184,7 @@ TEST_F(QueryBuilderTest, MoveConstruction) {
   auto builder1 = QueryBuilder::From(data_source_, "test");
   auto str1 = builder1.ToString();
 
-  QueryBuilder builder2(std::move(builder1));  // Move constructor
+  QueryBuilder builder2(std::move(builder1));
 
   EXPECT_EQ(builder2.ToString(), str1);
 }
@@ -243,5 +243,5 @@ TEST_F(QueryBuilderParquetTest, ExecuteWithControlStop) {
   // Should be cancelled after first batch
   EXPECT_FALSE(status.ok());
   EXPECT_EQ(status.code(), ErrorCode::Cancelled);
-  EXPECT_EQ(batch_count, 1);  // Only processed one batch
+  EXPECT_EQ(batch_count, 1);
 }

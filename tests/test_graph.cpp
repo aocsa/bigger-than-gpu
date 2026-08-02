@@ -15,7 +15,6 @@ using namespace quest::cache;
 // Test Helper Operators
 // =============================================================================
 
-/// @brief Simple operator that counts how many times it was invoked.
 class CountingOperator : public Operator {
  public:
   CountingOperator(std::uint32_t operator_id, std::size_t& invocation_counter)
@@ -33,7 +32,6 @@ class CountingOperator : public Operator {
   std::size_t& invocation_counter_;
 };
 
-/// @brief Source operator that produces a configurable number of data batches.
 class SourceOperator : public Operator {
  public:
   SourceOperator(std::uint32_t operator_id, std::size_t batch_count)
@@ -58,7 +56,6 @@ class SourceOperator : public Operator {
   std::size_t batch_count_;
 };
 
-/// @brief Sink operator that counts received batches.
 class SinkOperator : public Operator {
  public:
   SinkOperator(std::uint32_t operator_id, std::size_t& received_batch_count)
@@ -86,7 +83,6 @@ class SinkOperator : public Operator {
   std::size_t& received_batch_count_;
 };
 
-/// @brief Passthrough operator that forwards data unchanged.
 class PassthroughOperator : public SimpleOperator {
  public:
   explicit PassthroughOperator(std::uint32_t operator_id)
@@ -99,7 +95,7 @@ class PassthroughOperator : public SimpleOperator {
   }
 };
 
-/// @brief Multi-input operator simulating a join with two inputs.
+/// Two-input operator simulating a join; registers named "left_input" / "right_input" ports.
 class JoinOperator : public Operator {
  public:
   JoinOperator(std::uint32_t operator_id,

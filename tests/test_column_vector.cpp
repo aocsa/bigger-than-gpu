@@ -276,9 +276,9 @@ TEST(StringColumnVectorTest, BinaryData) {
   // Build a binary string with embedded null bytes
   std::string binary_data;
   binary_data.push_back('\x01');
-  binary_data.push_back('\x00');  // Embedded null
+  binary_data.push_back('\x00');
   binary_data.push_back('\x02');
-  binary_data.push_back('\x00');  // Another embedded null
+  binary_data.push_back('\x00');
   binary_data.push_back('\x03');
   col.Append(binary_data);
 

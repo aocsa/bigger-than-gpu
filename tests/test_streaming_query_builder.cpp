@@ -60,7 +60,6 @@ TEST_F(StreamingQueryBuilderParquetTest, ExecuteStreamNextMethod) {
 
   auto stream = std::move(builder_result.value()).ExecuteStream();
 
-  // Use next() method for manual control
   size_t batch_count = 0;
   while (auto batch_opt = stream.next()) {
     ++batch_count;

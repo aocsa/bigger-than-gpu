@@ -39,7 +39,7 @@ TEST(GeneratorTest, MoveOnly) {
     co_yield 42;
   }();
 
-  Generator<int> gen2 = std::move(gen1);  // Move construction
+  Generator<int> gen2 = std::move(gen1);
 
   auto it = gen2.begin();
   EXPECT_EQ(*it, 42);
@@ -47,7 +47,7 @@ TEST(GeneratorTest, MoveOnly) {
 
 TEST(GeneratorTest, EmptyGenerator) {
   auto gen = []() -> Generator<int> {
-    co_return;  // Yields nothing
+    co_return;
   }();
 
   int count = 0;
@@ -77,5 +77,5 @@ TEST(GeneratorTest, NextMethod) {
   EXPECT_EQ(*v3, 3);
 
   auto v4 = gen.next();
-  EXPECT_FALSE(v4.has_value());  // No more values
+  EXPECT_FALSE(v4.has_value());
 }

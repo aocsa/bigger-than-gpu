@@ -44,7 +44,6 @@ TEST(HostMemoryBlockTest, RecordBatchAccess) {
   EXPECT_EQ(cache.num_columns(), 2U);
   EXPECT_TRUE(cache.is_valid());
 
-  // Access the record batch
   const auto* record_batch = cache.record_batch();
   ASSERT_NE(record_batch, nullptr);
   EXPECT_EQ(record_batch->num_rows(), 50U);

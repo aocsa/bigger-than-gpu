@@ -148,7 +148,6 @@ TEST(SchemaTest, Project) {
   };
   Schema s(fields);
 
-  // Project columns 0 and 2
   Schema projected = s.Project({0, 2});
 
   EXPECT_EQ(projected.num_fields(), 2U);
@@ -164,7 +163,6 @@ TEST(SchemaTest, ProjectReorder) {
   };
   Schema s(fields);
 
-  // Project in reverse order
   Schema projected = s.Project({2, 1, 0});
 
   EXPECT_EQ(projected.num_fields(), 3U);
@@ -196,7 +194,6 @@ TEST(SchemaTest, SelectNonexistent) {
   };
   Schema s(fields);
 
-  // Selecting nonexistent column should throw
   EXPECT_THROW(s.Select({"a", "nonexistent", "b"}), std::invalid_argument);
 }
 

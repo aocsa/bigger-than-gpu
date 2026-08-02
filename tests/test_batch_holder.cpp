@@ -72,14 +72,11 @@ TEST(BatchHolderTest, AddNullMessage) {
 TEST(BatchHolderTest, TryPull) {
   BatchHolder holder(1);
 
-  // Empty queue
   auto empty_result = holder.TryPull();
   EXPECT_FALSE(empty_result.has_value());
 
-  // Add data block
   (void)holder.Add(MakeTestData("data1", 256, 10));
 
-  // Pull it
   ASSERT_OK_AND_ASSIGN(auto data, holder.TryPull());
   EXPECT_EQ(data->id(), "data1");
   EXPECT_EQ(holder.batch_count(), 0U);
@@ -107,7 +104,6 @@ TEST(BatchHolderTest, IsFinished) {
   // Still has data blocks
   EXPECT_FALSE(holder.IsFinished());
 
-  // Pull all data blocks
   (void)holder.Pull();
   // Now finished and empty
   EXPECT_TRUE(holder.IsFinished());
@@ -126,7 +122,6 @@ TEST(BatchHolderTest, MultipleBatches) {
 
   holder.Finish();
 
-  // Pull in order (FIFO)
   for (int i = 0; i < 5; ++i) {
     ASSERT_OK_AND_ASSIGN(auto data, holder.Pull());
     EXPECT_EQ(data->id(), "data" + std::to_string(i));
@@ -233,7 +228,6 @@ TEST(MakeBatchHolderTest, WithConfig) {
 TEST(BatchHolderThreadTest, ProducerConsumer) {
   BatchHolder holder(1);
 
-  // Producer
   auto producer = std::async(std::launch::async, [&holder]() {
     for (int i = 0; i < 10; ++i) {
       (void)holder.Add(MakeTestData("data" + std::to_string(i), 64, 4));
@@ -242,7 +236,6 @@ TEST(BatchHolderThreadTest, ProducerConsumer) {
     holder.Finish();
   });
 
-  // Consumer
   auto consumer = std::async(std::launch::async, [&holder]() {
     int count = 0;
     while (!holder.IsFinished() || holder.HasNext()) {
@@ -286,7 +279,6 @@ TEST(BatchHolderThreadTest, ConcurrentAdds) {
 
   holder.Finish();
 
-  // Consume all
   int count = 0;
   while (holder.HasNext()) {
     auto result = holder.TryPull();
@@ -340,7 +332,6 @@ TEST(BatchHolderEdgeCaseTest, ZeroSizeDataBlock) {
 TEST(BatchHolderEdgeCaseTest, LargeBatch) {
   BatchHolder holder(1);
 
-  // Large data block with many rows
   auto data = MakeTestData("large", 0, 10000);
   auto status = holder.Add(std::move(data));
 

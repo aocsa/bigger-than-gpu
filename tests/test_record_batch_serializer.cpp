@@ -25,7 +25,6 @@ using namespace quest::datasource;
 // =============================================================================
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeInt32Column) {
-  // Create a simple RecordBatch with one Int32 column
   Schema schema({Field("id", Int32Type{})});
 
   auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 5);
@@ -38,14 +37,11 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeInt32Column) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  // Serialize
   std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
   EXPECT_GT(data.size(), 0U);
 
-  // Deserialize
   RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
 
-  // Verify
   EXPECT_EQ(deserialized.num_rows(), original.num_rows());
   EXPECT_EQ(deserialized.num_columns(), original.num_columns());
   EXPECT_EQ(deserialized.schema().num_fields(), 1U);
@@ -59,7 +55,6 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeInt32Column) {
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeMultipleColumns) {
-  // Create RecordBatch with multiple columns of different types
   Schema schema({
     Field("id", Int32Type{}),
     Field("name", StringType{}),
@@ -84,20 +79,16 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeMultipleColumns) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {id_col, name_col, value_col};
   RecordBatch original(schema, columns);
 
-  // Serialize and deserialize
   std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
   RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
 
-  // Verify dimensions
   EXPECT_EQ(deserialized.num_rows(), 3U);
   EXPECT_EQ(deserialized.num_columns(), 3U);
 
-  // Verify schema
   EXPECT_EQ(deserialized.schema().field(0).name, "id");
   EXPECT_EQ(deserialized.schema().field(1).name, "name");
   EXPECT_EQ(deserialized.schema().field(2).name, "value");
 
-  // Verify data
   for (size_t i = 0; i < 3; ++i) {
     EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(i)),
               std::get<int32_t>(original.column(0).GetValue(i)));
@@ -125,18 +116,15 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeWithNulls) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  // Serialize and deserialize
   std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
   RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
 
-  // Verify null pattern
   EXPECT_FALSE(deserialized.column(0).IsNull(0));
   EXPECT_TRUE(deserialized.column(0).IsNull(1));
   EXPECT_FALSE(deserialized.column(0).IsNull(2));
   EXPECT_TRUE(deserialized.column(0).IsNull(3));
   EXPECT_FALSE(deserialized.column(0).IsNull(4));
 
-  // Verify non-null values
   EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(0)), 10);
   EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(2)), 20);
   EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(4)), 30);
@@ -154,11 +142,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeStringWithNulls) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  // Serialize and deserialize
   std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
   RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
 
-  // Verify
   EXPECT_FALSE(deserialized.column(0).IsNull(0));
   EXPECT_TRUE(deserialized.column(0).IsNull(1));
   EXPECT_FALSE(deserialized.column(0).IsNull(2));
@@ -276,7 +262,6 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeAllIntTypes) {
 // =============================================================================
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeFile) {
-  // Create a RecordBatch
   Schema schema({
     Field("id", Int32Type{}),
     Field("name", StringType{})
@@ -295,14 +280,11 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeFile) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {id_col, name_col};
   RecordBatch original(schema, columns);
 
-  // Serialize to file
   std::string filename = "/tmp/test_record_batch.bin";
   RecordBatchSerializer::SerializeToFile(original, filename);
 
-  // Deserialize from file
   RecordBatch deserialized = RecordBatchSerializer::DeserializeFromFile(filename);
 
-  // Verify
   EXPECT_EQ(deserialized.num_rows(), original.num_rows());
   EXPECT_EQ(deserialized.num_columns(), original.num_columns());
 
@@ -313,7 +295,6 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeFile) {
               std::get<std::string>(original.column(1).GetValue(i)));
   }
 
-  // Cleanup
   std::filesystem::remove(filename);
 }
 
@@ -376,7 +357,6 @@ TEST(RecordBatchSerializerTest, TruncatedBuffer) {
 
   std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
 
-  // Truncate the buffer
   data.resize(10);
 
   EXPECT_THROW(RecordBatchSerializer::Deserialize(data), std::runtime_error);
@@ -402,7 +382,6 @@ TEST(RecordBatchSerializerTest, LargeNumberOfRows) {
 
   EXPECT_EQ(deserialized.num_rows(), 10000U);
 
-  // Spot check some values
   EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(0)), 0);
   EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(5000)), 5000);
   EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(9999)), 9999);
