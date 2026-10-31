@@ -4,13 +4,14 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <format>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
 #include "types.hpp"
+#include "quest/result.hpp"
 
 namespace quest::datasource {
 
@@ -66,11 +67,7 @@ class Schema {
   size_t num_fields() const { return fields_.size(); }
 
   const Field& field(size_t index) const {
-    if (index >= fields_.size()) {
-      throw std::out_of_range(
-          std::format("Field index {} out of range (size={})", index,
-                      fields_.size()));
-    }
+    assert(index < fields_.size() && "field index out of range");
     return fields_[index];
   }
 
@@ -88,27 +85,25 @@ class Schema {
     return idx.has_value() ? &fields_[*idx] : nullptr;
   }
 
-  Schema Project(const std::vector<size_t>& indices) const {
+  [[nodiscard]] Result<Schema> Project(const std::vector<size_t>& indices) const {
     std::vector<Field> projected_fields;
     projected_fields.reserve(indices.size());
     for (size_t idx : indices) {
       if (idx >= fields_.size()) {
-        throw std::out_of_range(
-            std::format("Projection index {} out of range", idx));
+        return Error::OutOfRange(std::format("Projection index {} out of range", idx));
       }
       projected_fields.push_back(fields_[idx]);
     }
     return Schema(std::move(projected_fields));
   }
 
-  Schema Select(const std::vector<std::string>& names) const {
+  [[nodiscard]] Result<Schema> Select(const std::vector<std::string>& names) const {
     std::vector<Field> selected_fields;
     selected_fields.reserve(names.size());
     for (const auto& name : names) {
       auto idx = GetFieldIndex(name);
       if (!idx.has_value()) {
-        throw std::invalid_argument(
-            std::format("Field '{}' not found in schema", name));
+        return Error::SchemaError(std::format("Field '{}' not found in schema", name));
       }
       selected_fields.push_back(fields_[*idx]);
     }

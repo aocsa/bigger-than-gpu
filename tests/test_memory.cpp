@@ -329,17 +329,6 @@ TEST(MemoryResourceManagerTest, Construction) {
   EXPECT_EQ(&manager.disk(), disk.get());
 }
 
-TEST(MemoryResourceManagerTest, NullResources) {
-  auto cpu = std::make_shared<CPUMemoryResource>();
-  auto disk_config = DiskMemoryConfig{
-      .base_path = std::filesystem::temp_directory_path() / "test_manager_2",
-      .cleanup_on_destroy = true};
-  auto disk = std::make_shared<DiskMemoryResource>(disk_config);
-
-  EXPECT_THROW(MemoryResourceManager(nullptr, disk), std::invalid_argument);
-  EXPECT_THROW(MemoryResourceManager(cpu, nullptr), std::invalid_argument);
-}
-
 TEST(MemoryResourceManagerTest, GetByTier) {
   auto cpu = std::make_shared<CPUMemoryResource>();
   auto disk_config = DiskMemoryConfig{

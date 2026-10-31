@@ -153,7 +153,7 @@ class Operator {
   // ===========================================================================
 
   /// @brief Returns the primary input cache; multi-input operators use input()[port] instead.
-  [[nodiscard]] std::shared_ptr<cache::IBatchHolder> InputCache();
+  [[nodiscard]] Result<std::shared_ptr<cache::IBatchHolder>> InputCache();
 
   [[nodiscard]] Status AddToOutput(std::shared_ptr<cache::DataBlock> data,
                                    const std::string& cache_id = "");

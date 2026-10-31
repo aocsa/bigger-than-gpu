@@ -446,7 +446,7 @@ TEST(PipelineRunTaskTest, NonBlockingSinkRunsProcessBatchThenAddToOutput) {
   ASSERT_TRUE(status.has_value());
 
   // The batch crossed into the downstream holder via AddToOutput.
-  auto downstream_holder = downstream.InputCache();
+  ASSERT_OK_AND_ASSIGN(auto downstream_holder, downstream.InputCache());
   ASSERT_NE(downstream_holder, nullptr);
   EXPECT_TRUE(downstream_holder->HasNext());
 }

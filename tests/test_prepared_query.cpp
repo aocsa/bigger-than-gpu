@@ -65,9 +65,10 @@ TEST(PreparedQueryTest, MaterializeRegistersHoldersOnPorts) {
 
   EXPECT_TRUE(source.output().has_port(std::to_string(source.id())));
   EXPECT_TRUE(sink.input().has_port(std::to_string(sink.id())));
-  EXPECT_NE(source.output().get(std::to_string(source.id())), nullptr);
-  EXPECT_EQ(source.output().get(std::to_string(source.id())),
-            sink.input().get(std::to_string(sink.id())));
+  ASSERT_OK_AND_ASSIGN(auto source_holder, source.output().get(std::to_string(source.id())));
+  ASSERT_OK_AND_ASSIGN(auto sink_holder, sink.input().get(std::to_string(sink.id())));
+  EXPECT_NE(source_holder, nullptr);
+  EXPECT_EQ(source_holder, sink_holder);
 }
 
 TEST(PreparedQueryTest, PrepareBuildsPipelinesAndIsIndependentAcrossCalls) {

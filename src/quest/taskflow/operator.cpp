@@ -43,18 +43,21 @@ Status Operator::FinalizeSink() {
   return {};
 }
 
-std::shared_ptr<cache::IBatchHolder> Operator::InputCache() {
+Result<std::shared_ptr<cache::IBatchHolder>> Operator::InputCache() {
   return input_port_.get(std::to_string(operator_id_));
 }
 
 Status Operator::AddToOutput(std::shared_ptr<cache::DataBlock> data, const std::string& cache_id) {
   std::string port_name = cache_id.empty() ? std::to_string(operator_id_) : cache_id;
-  auto& batch_holder = output_port_.get(port_name);
+  auto batch_holder = output_port_.get(port_name);
   if (!batch_holder) {
+    return std::unexpected(batch_holder.error());
+  }
+  if (!*batch_holder) {
     return Error::Invalid(
         std::format("Output cache '{}' not found for operator {}", port_name, operator_id_));
   }
-  return batch_holder->Add(std::move(data));
+  return (*batch_holder)->Add(std::move(data));
 }
 
 }  // namespace quest::taskflow

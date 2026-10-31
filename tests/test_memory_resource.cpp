@@ -338,14 +338,6 @@ TEST_F(MemoryResourceManagerTest, Construction) {
   EXPECT_EQ(&manager.disk(), disk.get());
 }
 
-TEST_F(MemoryResourceManagerTest, NullResources) {
-  auto cpu = std::make_shared<CPUMemoryResource>();
-  auto disk = MakeDisk("test_manager_2");
-
-  EXPECT_THROW(MemoryResourceManager(nullptr, disk), std::invalid_argument);
-  EXPECT_THROW(MemoryResourceManager(cpu, nullptr), std::invalid_argument);
-}
-
 TEST_F(MemoryResourceManagerTest, GetByTier) {
   auto cpu = std::make_shared<CPUMemoryResource>();
   auto disk = MakeDisk("test_manager_3");

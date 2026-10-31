@@ -193,7 +193,11 @@ class ParquetFileReader {
         }
         column_indices.push_back(*idx);
       }
-      projected_schema = schema_.Select(columns);
+      auto selected = schema_.Select(columns);
+      if (!selected) {
+        return std::unexpected(selected.error());
+      }
+      projected_schema = std::move(*selected);
     }
 
     std::vector<std::shared_ptr<ColumnVector>> column_vectors;

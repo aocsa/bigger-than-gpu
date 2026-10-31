@@ -93,7 +93,6 @@ TEST(SchemaTest, FieldAccess) {
 
   EXPECT_EQ(s.field(0).name, "col1");
   EXPECT_EQ(s.field(1).name, "col2");
-  EXPECT_THROW(s.field(2), std::out_of_range);
 }
 
 TEST(SchemaTest, GetFieldIndex) {
@@ -148,7 +147,7 @@ TEST(SchemaTest, Project) {
   };
   Schema s(fields);
 
-  Schema projected = s.Project({0, 2});
+  ASSERT_OK_AND_ASSIGN(Schema projected, s.Project({0, 2}));
 
   EXPECT_EQ(projected.num_fields(), 2U);
   EXPECT_EQ(projected.field(0).name, "a");
@@ -163,7 +162,7 @@ TEST(SchemaTest, ProjectReorder) {
   };
   Schema s(fields);
 
-  Schema projected = s.Project({2, 1, 0});
+  ASSERT_OK_AND_ASSIGN(Schema projected, s.Project({2, 1, 0}));
 
   EXPECT_EQ(projected.num_fields(), 3U);
   EXPECT_EQ(projected.field(0).name, "c");
@@ -180,7 +179,7 @@ TEST(SchemaTest, Select) {
   };
   Schema s(fields);
 
-  Schema selected = s.Select({"name", "age"});
+  ASSERT_OK_AND_ASSIGN(Schema selected, s.Select({"name", "age"}));
 
   EXPECT_EQ(selected.num_fields(), 2U);
   EXPECT_EQ(selected.field(0).name, "name");
@@ -194,7 +193,9 @@ TEST(SchemaTest, SelectNonexistent) {
   };
   Schema s(fields);
 
-  EXPECT_THROW(s.Select({"a", "nonexistent", "b"}), std::invalid_argument);
+  auto selected = s.Select({"a", "nonexistent", "b"});
+  ASSERT_FALSE(selected.has_value());
+  EXPECT_EQ(selected.error().code(), quest::ErrorCode::SchemaError);
 }
 
 TEST(SchemaTest, ToString) {

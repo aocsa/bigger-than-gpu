@@ -3,7 +3,6 @@
 #include "quest/taskflow/operator.hpp"
 
 #include <format>
-#include <stdexcept>
 
 namespace quest::taskflow {
 
@@ -25,13 +24,13 @@ void Port::RegisterBatchHolder(
 // Port Access
 // =============================================================================
 
-std::shared_ptr<cache::IBatchHolder>& Port::get(const std::string& port_name) {
-  return find_port_or_throw(port_name)->second;
-}
-
-const std::shared_ptr<cache::IBatchHolder>& Port::get(
-    const std::string& port_name) const {
-  return find_port_or_throw(port_name)->second;
+Result<std::shared_ptr<cache::IBatchHolder>> Port::get(const std::string& port_name) const {
+  auto iterator = find_port(port_name);
+  if (iterator == batch_holder_registry_.end()) {
+    return Error::NotFound(std::format("Port '{}' not found in operator {}",
+                                       resolve_port_name(port_name), owner_operator_->id()));
+  }
+  return iterator->second;
 }
 
 // =============================================================================
@@ -74,26 +73,6 @@ std::string Port::default_port_name() const {
 
 std::string Port::resolve_port_name(const std::string& port_name) const {
   return port_name.empty() ? default_port_name() : port_name;
-}
-
-Port::RegistryMap::iterator Port::find_port_or_throw(const std::string& port_name) {
-  std::string resolved_name = resolve_port_name(port_name);
-  auto iterator = batch_holder_registry_.find(resolved_name);
-  if (iterator == batch_holder_registry_.end()) {
-    throw std::runtime_error(std::format(
-        "Port '{}' not found in operator {}", resolved_name, owner_operator_->id()));
-  }
-  return iterator;
-}
-
-Port::RegistryMap::const_iterator Port::find_port_or_throw(const std::string& port_name) const {
-  std::string resolved_name = resolve_port_name(port_name);
-  auto iterator = batch_holder_registry_.find(resolved_name);
-  if (iterator == batch_holder_registry_.end()) {
-    throw std::runtime_error(std::format(
-        "Port '{}' not found in operator {}", resolved_name, owner_operator_->id()));
-  }
-  return iterator;
 }
 
 Port::RegistryMap::const_iterator Port::find_port(const std::string& port_name) const {

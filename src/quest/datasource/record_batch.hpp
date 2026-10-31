@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <memory>
 #include <sstream>
 #include <string>
@@ -18,10 +19,8 @@ class RecordBatch {
  public:
   RecordBatch(Schema schema, std::vector<std::shared_ptr<ColumnVector>> columns)
       : schema_(std::move(schema)), columns_(std::move(columns)) {
-    if (!columns_.empty() && schema_.num_fields() != columns_.size()) {
-      throw std::invalid_argument(
-          "Schema field count doesn't match column count");
-    }
+    assert((columns_.empty() || schema_.num_fields() == columns_.size()) &&
+           "schema field count doesn't match column count");
   }
 
   const Schema& schema() const { return schema_; }
@@ -33,16 +32,12 @@ class RecordBatch {
   size_t num_columns() const { return columns_.size(); }
 
   const ColumnVector& column(size_t index) const {
-    if (index >= columns_.size()) {
-      throw std::out_of_range("Column index out of range");
-    }
+    assert(index < columns_.size() && "column index out of range");
     return *columns_[index];
   }
 
   std::shared_ptr<ColumnVector> column_ptr(size_t index) const {
-    if (index >= columns_.size()) {
-      throw std::out_of_range("Column index out of range");
-    }
+    assert(index < columns_.size() && "column index out of range");
     return columns_[index];
   }
 

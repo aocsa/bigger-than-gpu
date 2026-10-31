@@ -6,6 +6,7 @@
 /// @file logical_plan.hpp
 /// @brief Logical plan nodes for query execution.
 
+#include <cassert>
 #include <cstddef>
 #include <memory>
 #include <optional>
@@ -100,7 +101,9 @@ class Scan : public LogicalPlan {
   [[nodiscard]] Schema DeriveSchema() const {
     const auto& source_schema = data_source_->schema();
     if (projection_) {
-      return source_schema.Select(*projection_);
+      auto selected = source_schema.Select(*projection_);
+      assert(selected && "Scan projection names a column missing from the source schema");
+      return *std::move(selected);
     }
     return source_schema;
   }

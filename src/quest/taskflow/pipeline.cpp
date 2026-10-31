@@ -70,9 +70,8 @@ std::vector<std::shared_ptr<cache::IBatchHolder>> Pipeline::InputPorts() const {
   std::vector<std::shared_ptr<cache::IBatchHolder>> ports;
   Port& input = source_op->input();
   for (std::string_view port_name : source_op->DeclaredInputPorts()) {
-    std::string name(port_name);
-    if (input.has_port(name)) {
-      ports.push_back(input.get(name));
+    if (auto holder = input.get(std::string(port_name))) {
+      ports.push_back(*holder);
     }
   }
   return ports;

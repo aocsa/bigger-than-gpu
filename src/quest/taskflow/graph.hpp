@@ -150,8 +150,7 @@ class Graph : public std::enable_shared_from_this<Graph> {
   // ===========================================================================
 
   [[nodiscard]] Operator* GetNode(std::size_t operator_id) const;
-  [[nodiscard]] Operator& GetLastOperator();
-  [[nodiscard]] const Operator& GetLastOperator() const;
+  [[nodiscard]] Result<Operator*> GetLastOperator() const;
   [[nodiscard]] std::size_t GetNodeCount() const noexcept { return registered_operators_.size(); }
 
   [[nodiscard]] std::set<Edge> GetOutgoingEdges(Operator* from_operator) const;

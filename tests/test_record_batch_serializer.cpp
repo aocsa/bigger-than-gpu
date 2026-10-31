@@ -17,6 +17,7 @@
 #include "quest/datasource/record_batch_serializer.hpp"
 #include "quest/datasource/schema.hpp"
 #include "quest/datasource/types.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest::datasource;
 
@@ -37,10 +38,10 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeInt32Column) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
   EXPECT_GT(data.size(), 0U);
 
-  RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
   EXPECT_EQ(deserialized.num_rows(), original.num_rows());
   EXPECT_EQ(deserialized.num_columns(), original.num_columns());
@@ -79,8 +80,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeMultipleColumns) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {id_col, name_col, value_col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
-  RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
   EXPECT_EQ(deserialized.num_rows(), 3U);
   EXPECT_EQ(deserialized.num_columns(), 3U);
@@ -116,8 +117,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeWithNulls) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
-  RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
   EXPECT_FALSE(deserialized.column(0).IsNull(0));
   EXPECT_TRUE(deserialized.column(0).IsNull(1));
@@ -142,8 +143,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeStringWithNulls) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
-  RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
   EXPECT_FALSE(deserialized.column(0).IsNull(0));
   EXPECT_TRUE(deserialized.column(0).IsNull(1));
@@ -170,8 +171,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeBool) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
-  RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
   EXPECT_EQ(std::get<bool>(deserialized.column(0).GetValue(0)), true);
   EXPECT_EQ(std::get<bool>(deserialized.column(0).GetValue(1)), false);
@@ -190,8 +191,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeInt64) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
-  RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
   EXPECT_EQ(std::get<int64_t>(deserialized.column(0).GetValue(0)), 9223372036854775807LL);
   EXPECT_EQ(std::get<int64_t>(deserialized.column(0).GetValue(1)), 0);
@@ -209,8 +210,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeFloat) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
-  RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
   EXPECT_FLOAT_EQ(std::get<float>(deserialized.column(0).GetValue(0)), 1.5f);
   EXPECT_FLOAT_EQ(std::get<float>(deserialized.column(0).GetValue(1)), 2.75f);
@@ -244,8 +245,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeAllIntTypes) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {int8_col, int16_col, int32_col, int64_col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
-  RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
   EXPECT_EQ(std::get<int8_t>(deserialized.column(0).GetValue(0)), 127);
   EXPECT_EQ(std::get<int8_t>(deserialized.column(0).GetValue(1)), -128);
@@ -281,9 +282,10 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeFile) {
   RecordBatch original(schema, columns);
 
   std::string filename = "/tmp/test_record_batch.bin";
-  RecordBatchSerializer::SerializeToFile(original, filename);
+  ASSERT_OK(RecordBatchSerializer::SerializeToFile(original, filename));
 
-  RecordBatch deserialized = RecordBatchSerializer::DeserializeFromFile(filename);
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized,
+                       RecordBatchSerializer::DeserializeFromFile(filename));
 
   EXPECT_EQ(deserialized.num_rows(), original.num_rows());
   EXPECT_EQ(deserialized.num_columns(), original.num_columns());
@@ -308,8 +310,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeEmptyBatch) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
-  RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
   EXPECT_EQ(deserialized.num_rows(), 0U);
   EXPECT_EQ(deserialized.num_columns(), 1U);
@@ -326,8 +328,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeEmptyStrings) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
-  RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
   EXPECT_EQ(std::get<std::string>(deserialized.column(0).GetValue(0)), "");
   EXPECT_EQ(std::get<std::string>(deserialized.column(0).GetValue(1)), "non-empty");
@@ -336,7 +338,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeEmptyStrings) {
 
 TEST(RecordBatchSerializerTest, InvalidMagicNumber) {
   std::vector<uint8_t> invalid_data = {'X', 'X', 'X', 'X'};
-  EXPECT_THROW(RecordBatchSerializer::Deserialize(invalid_data), std::runtime_error);
+  auto result = RecordBatchSerializer::Deserialize(invalid_data);
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error().code(), quest::ErrorCode::Invalid);
 }
 
 TEST(RecordBatchSerializerTest, InvalidVersion) {
@@ -345,7 +349,9 @@ TEST(RecordBatchSerializerTest, InvalidVersion) {
   const uint8_t* ptr = reinterpret_cast<const uint8_t*>(&invalid_version);
   data.insert(data.end(), ptr, ptr + sizeof(uint32_t));
 
-  EXPECT_THROW(RecordBatchSerializer::Deserialize(data), std::runtime_error);
+  auto result = RecordBatchSerializer::Deserialize(data);
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error().code(), quest::ErrorCode::Invalid);
 }
 
 TEST(RecordBatchSerializerTest, TruncatedBuffer) {
@@ -355,11 +361,13 @@ TEST(RecordBatchSerializerTest, TruncatedBuffer) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
 
   data.resize(10);
 
-  EXPECT_THROW(RecordBatchSerializer::Deserialize(data), std::runtime_error);
+  auto result = RecordBatchSerializer::Deserialize(data);
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error().code(), quest::ErrorCode::Invalid);
 }
 
 // =============================================================================
@@ -377,8 +385,8 @@ TEST(RecordBatchSerializerTest, LargeNumberOfRows) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
-  RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
   EXPECT_EQ(deserialized.num_rows(), 10000U);
 
@@ -398,8 +406,8 @@ TEST(RecordBatchSerializerTest, LongStrings) {
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
-  std::vector<uint8_t> data = RecordBatchSerializer::Serialize(original);
-  RecordBatch deserialized = RecordBatchSerializer::Deserialize(data);
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
   EXPECT_EQ(std::get<std::string>(deserialized.column(0).GetValue(0)), long_string);
   EXPECT_EQ(std::get<std::string>(deserialized.column(0).GetValue(1)), "short");

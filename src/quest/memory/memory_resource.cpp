@@ -1,9 +1,10 @@
 #include "quest/memory/memory_resource.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <format>
 #include <fstream>
-#include <stdexcept>
+#include <utility>
 
 #include <unistd.h>
 
@@ -196,12 +197,8 @@ MemoryResourceManager::MemoryResourceManager(
     std::shared_ptr<DiskMemoryResource> disk_resource)
     : cpu_resource_(std::move(cpu_resource))
     , disk_resource_(std::move(disk_resource)) {
-    if (!cpu_resource_) {
-        throw std::invalid_argument("CPU memory resource cannot be null");
-    }
-    if (!disk_resource_) {
-        throw std::invalid_argument("Disk memory resource cannot be null");
-    }
+    assert(cpu_resource_ && "CPU memory resource cannot be null");
+    assert(disk_resource_ && "Disk memory resource cannot be null");
 }
 
 MemoryResource& MemoryResourceManager::get(MemoryTier tier) {
@@ -209,7 +206,7 @@ MemoryResource& MemoryResourceManager::get(MemoryTier tier) {
         case MemoryTier::CPU:  return *cpu_resource_;
         case MemoryTier::Disk: return *disk_resource_;
     }
-    throw std::invalid_argument("Unknown memory tier");
+    std::unreachable();
 }
 
 const MemoryResource& MemoryResourceManager::get(MemoryTier tier) const {
@@ -217,7 +214,7 @@ const MemoryResource& MemoryResourceManager::get(MemoryTier tier) const {
         case MemoryTier::CPU:  return *cpu_resource_;
         case MemoryTier::Disk: return *disk_resource_;
     }
-    throw std::invalid_argument("Unknown memory tier");
+    std::unreachable();
 }
 
 MemoryTier MemoryResourceManager::recommend_tier(std::size_t bytes) const {

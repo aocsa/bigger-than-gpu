@@ -76,12 +76,10 @@ Result<std::shared_ptr<DiskBlock>> HostMemoryBlock::ToDisk() {
 
   auto file_path = disk_resource_->generate_cache_path("cpu_spill");
 
-  try {
-    datasource::RecordBatchSerializer::SerializeToFile(*record_batch_,
-                                                        file_path.string());
-  } catch (const std::exception& e) {
-    return Error::IOError("Failed to serialize record batch: " +
-                           std::string(e.what()));
+  if (auto status = datasource::RecordBatchSerializer::SerializeToFile(*record_batch_,
+                                                                       file_path.string());
+      !status) {
+    return std::unexpected(status.error());
   }
 
   std::error_code ec;
@@ -175,21 +173,19 @@ Result<std::shared_ptr<HostMemoryBlock>> DiskBlock::ToCpu() {
     return Error::Invalid("Cache file is not valid");
   }
 
-  try {
-    auto record_batch =
-        datasource::RecordBatchSerializer::DeserializeFromFile(file_path_.string());
-
-    auto cpu_data = std::make_shared<HostMemoryBlock>(
-        id_, std::move(record_batch), cpu_resource_);
-
-    // Set disk resource for potential re-spill
-    cpu_data->set_disk_resource(disk_resource_);
-
-    return cpu_data;
-  } catch (const std::exception& e) {
-    return Error::IOError("Failed to deserialize record batch: " +
-                           std::string(e.what()));
+  auto record_batch =
+      datasource::RecordBatchSerializer::DeserializeFromFile(file_path_.string());
+  if (!record_batch) {
+    return std::unexpected(record_batch.error());
   }
+
+  auto cpu_data = std::make_shared<HostMemoryBlock>(
+      id_, std::move(*record_batch), cpu_resource_);
+
+  // Set disk resource for potential re-spill
+  cpu_data->set_disk_resource(disk_resource_);
+
+  return cpu_data;
 }
 
 Result<std::shared_ptr<DiskBlock>> DiskBlock::ToDisk() {

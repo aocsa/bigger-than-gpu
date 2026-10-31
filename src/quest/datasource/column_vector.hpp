@@ -4,12 +4,12 @@
 #pragma once
 
 #include <bit>
+#include <cassert>
 #include <cstdint>
 #include <cstring>
 #include <memory>
 #include <optional>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <variant>
 #include <vector>
@@ -76,9 +76,7 @@ class TypedColumnVector : public  ColumnVector {
   }
 
   T GetTypedValue(size_t index) const {
-    if (index >= size_) {
-      throw std::out_of_range("Index out of range");
-    }
+    assert(index < size_ && "index out of range");
     return values_[index];
   }
 

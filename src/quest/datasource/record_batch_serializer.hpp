@@ -6,13 +6,13 @@
 #include <cstring>
 #include <fstream>
 #include <memory>
-#include <stdexcept>
 #include <vector>
 
 #include "column_vector.hpp"
 #include "record_batch.hpp"
 #include "schema.hpp"
 #include "types.hpp"
+#include "quest/result.hpp"
 
 namespace quest::datasource {
 
@@ -37,7 +37,7 @@ namespace quest::datasource {
 
 class RecordBatchSerializer {
  public:
-  static std::vector<uint8_t> Serialize(const RecordBatch& batch) {
+  [[nodiscard]] static Result<std::vector<uint8_t>> Serialize(const RecordBatch& batch) {
     std::vector<uint8_t> buffer;
 
     const char magic[4] = {'Q', 'R', 'B', 'T'};
@@ -67,71 +67,84 @@ class RecordBatchSerializer {
 
     for (size_t i = 0; i < num_columns; ++i) {
       const ColumnVector& column = batch.column(i);
-      WriteColumn(buffer, column, num_rows);
+      if (auto status = WriteColumn(buffer, column, num_rows); !status) {
+        return std::unexpected(status.error());
+      }
     }
 
     return buffer;
   }
 
-  static RecordBatch Deserialize(const std::vector<uint8_t>& buffer) {
+  [[nodiscard]] static Result<RecordBatch> Deserialize(const std::vector<uint8_t>& buffer) {
     size_t offset = 0;
 
     if (buffer.size() < 4 ||
         buffer[0] != 'Q' || buffer[1] != 'R' ||
         buffer[2] != 'B' || buffer[3] != 'T') {
-      throw std::runtime_error("Invalid magic number");
+      return Error::Invalid("Invalid magic number");
     }
     offset += 4;
 
-    uint32_t version = ReadValue<uint32_t>(buffer, offset);
-    if (version != 1) {
-      throw std::runtime_error("Unsupported version");
+    auto version = ReadValue<uint32_t>(buffer, offset);
+    if (!version) return std::unexpected(version.error());
+    if (*version != 1) {
+      return Error::Invalid("Unsupported version");
     }
 
-    uint64_t num_rows = ReadValue<uint64_t>(buffer, offset);
-    uint32_t num_columns = ReadValue<uint32_t>(buffer, offset);
+    auto num_rows = ReadValue<uint64_t>(buffer, offset);
+    if (!num_rows) return std::unexpected(num_rows.error());
+    auto num_columns = ReadValue<uint32_t>(buffer, offset);
+    if (!num_columns) return std::unexpected(num_columns.error());
 
     std::vector<Field> fields;
-    fields.reserve(num_columns);
+    fields.reserve(*num_columns);
 
-    for (uint32_t i = 0; i < num_columns; ++i) {
-      uint32_t name_len = ReadValue<uint32_t>(buffer, offset);
-      std::string name(buffer.begin() + offset, buffer.begin() + offset + name_len);
-      offset += name_len;
+    for (uint32_t i = 0; i < *num_columns; ++i) {
+      auto name_len = ReadValue<uint32_t>(buffer, offset);
+      if (!name_len) return std::unexpected(name_len.error());
+      std::string name(buffer.begin() + offset, buffer.begin() + offset + *name_len);
+      offset += *name_len;
 
-      DataType data_type = ReadDataType(buffer, offset);
+      auto data_type = ReadDataType(buffer, offset);
+      if (!data_type) return std::unexpected(data_type.error());
 
-      uint8_t rep = ReadValue<uint8_t>(buffer, offset);
-      Repetition repetition = static_cast<Repetition>(rep);
+      auto rep = ReadValue<uint8_t>(buffer, offset);
+      if (!rep) return std::unexpected(rep.error());
+      Repetition repetition = static_cast<Repetition>(*rep);
 
-      fields.emplace_back(std::move(name), std::move(data_type), repetition);
+      fields.emplace_back(std::move(name), std::move(*data_type), repetition);
     }
 
     Schema schema(std::move(fields));
 
     std::vector<std::shared_ptr<ColumnVector>> columns;
-    columns.reserve(num_columns);
+    columns.reserve(*num_columns);
 
-    for (uint32_t i = 0; i < num_columns; ++i) {
-      columns.push_back(ReadColumn(buffer, offset, schema.field(i).data_type, num_rows));
+    for (uint32_t i = 0; i < *num_columns; ++i) {
+      auto column = ReadColumn(buffer, offset, schema.field(i).data_type, *num_rows);
+      if (!column) return std::unexpected(column.error());
+      columns.push_back(std::move(*column));
     }
 
     return RecordBatch(std::move(schema), std::move(columns));
   }
 
-  static void SerializeToFile(const RecordBatch& batch, const std::string& filename) {
-    std::vector<uint8_t> data = Serialize(batch);
+  [[nodiscard]] static Status SerializeToFile(const RecordBatch& batch,
+                                              const std::string& filename) {
+    auto data = Serialize(batch);
+    if (!data) return std::unexpected(data.error());
     std::ofstream file(filename, std::ios::binary);
     if (!file) {
-      throw std::runtime_error("Failed to open file for writing: " + filename);
+      return Error::IOError("Failed to open file for writing: " + filename);
     }
-    file.write(reinterpret_cast<const char*>(data.data()), data.size());
+    file.write(reinterpret_cast<const char*>(data->data()), data->size());
+    return {};
   }
 
-  static RecordBatch DeserializeFromFile(const std::string& filename) {
+  [[nodiscard]] static Result<RecordBatch> DeserializeFromFile(const std::string& filename) {
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
     if (!file) {
-      throw std::runtime_error("Failed to open file for reading: " + filename);
+      return Error::IOError("Failed to open file for reading: " + filename);
     }
 
     std::streamsize size = file.tellg();
@@ -139,7 +152,7 @@ class RecordBatchSerializer {
 
     std::vector<uint8_t> buffer(size);
     if (!file.read(reinterpret_cast<char*>(buffer.data()), size)) {
-      throw std::runtime_error("Failed to read file: " + filename);
+      return Error::IOError("Failed to read file: " + filename);
     }
 
     return Deserialize(buffer);
@@ -153,9 +166,9 @@ class RecordBatchSerializer {
   }
 
   template <typename T>
-  static T ReadValue(const std::vector<uint8_t>& buffer, size_t& offset) {
+  static Result<T> ReadValue(const std::vector<uint8_t>& buffer, size_t& offset) {
     if (offset + sizeof(T) > buffer.size()) {
-      throw std::runtime_error("Buffer overflow during deserialization");
+      return Error::Invalid("Buffer overflow during deserialization");
     }
     T value;
     std::memcpy(&value, buffer.data() + offset, sizeof(T));
@@ -174,10 +187,11 @@ class RecordBatchSerializer {
     }
   }
 
-  static DataType ReadDataType(const std::vector<uint8_t>& buffer, size_t& offset) {
-    uint8_t type_index = ReadValue<uint8_t>(buffer, offset);
+  static Result<DataType> ReadDataType(const std::vector<uint8_t>& buffer, size_t& offset) {
+    auto type_index = ReadValue<uint8_t>(buffer, offset);
+    if (!type_index) return std::unexpected(type_index.error());
 
-    switch (type_index) {
+    switch (*type_index) {
       case 0: return BoolType{};
       case 1: return Int8Type{};
       case 2: return Int16Type{};
@@ -189,15 +203,16 @@ class RecordBatchSerializer {
       case 8: return BinaryType{};
       case 9: return Int96Type{};
       case 10: {
-        int32_t byte_width = ReadValue<int32_t>(buffer, offset);
-        return FixedLenByteArrayType{byte_width};
+        auto byte_width = ReadValue<int32_t>(buffer, offset);
+        if (!byte_width) return std::unexpected(byte_width.error());
+        return FixedLenByteArrayType{*byte_width};
       }
       default:
-        throw std::runtime_error("Unknown type index");
+        return Error::Invalid("Unknown type index");
     }
   }
 
-  static void WriteColumn(std::vector<uint8_t>& buffer, const ColumnVector& column, size_t num_rows) {
+  static Status WriteColumn(std::vector<uint8_t>& buffer, const ColumnVector& column, size_t num_rows) {
     size_t bitmap_bytes = (num_rows + 7) / 8;
     uint32_t bitmap_size = static_cast<uint32_t>(bitmap_bytes);
     WriteValue(buffer, bitmap_size);
@@ -212,13 +227,13 @@ class RecordBatchSerializer {
     }
     buffer.insert(buffer.end(), null_bitmap.begin(), null_bitmap.end());
 
-    WriteColumnValues(buffer, column, num_rows);
+    return WriteColumnValues(buffer, column, num_rows);
   }
 
-  static void WriteColumnValues(std::vector<uint8_t>& buffer, const ColumnVector& column, size_t num_rows) {
+  static Status WriteColumnValues(std::vector<uint8_t>& buffer, const ColumnVector& column, size_t num_rows) {
     const DataType& type = column.GetType();
 
-    std::visit([&](const auto& t) {
+    return std::visit([&](const auto& t) -> Status {
       using T = std::decay_t<decltype(t)>;
 
       if constexpr (std::is_same_v<T, BoolType>) {
@@ -267,33 +282,38 @@ class RecordBatchSerializer {
           buffer.insert(buffer.end(), val.begin(), val.end());
         }
       } else {
-        throw std::runtime_error("Unsupported type for serialization");
+        return Error::TypeError("Unsupported type for serialization");
       }
+      return {};
     }, type);
   }
 
-  static std::shared_ptr<ColumnVector> ReadColumn(const std::vector<uint8_t>& buffer,
-                                                   size_t& offset,
-                                                   const DataType& type,
-                                                   size_t num_rows) {
-    uint32_t bitmap_size = ReadValue<uint32_t>(buffer, offset);
+  static Result<std::shared_ptr<ColumnVector>> ReadColumn(const std::vector<uint8_t>& buffer,
+                                                           size_t& offset,
+                                                           const DataType& type,
+                                                           size_t num_rows) {
+    auto bitmap_size = ReadValue<uint32_t>(buffer, offset);
+    if (!bitmap_size) return std::unexpected(bitmap_size.error());
     std::vector<uint8_t> null_bitmap(buffer.begin() + offset,
-                                     buffer.begin() + offset + bitmap_size);
-    offset += bitmap_size;
+                                     buffer.begin() + offset + *bitmap_size);
+    offset += *bitmap_size;
 
-    auto column = CreateColumnVector(type, num_rows);
-    ReadColumnValues(buffer, offset, *column, type, num_rows, null_bitmap);
+    std::shared_ptr<ColumnVector> column = CreateColumnVector(type, num_rows);
+    if (auto status = ReadColumnValues(buffer, offset, *column, type, num_rows, null_bitmap);
+        !status) {
+      return std::unexpected(status.error());
+    }
 
     return column;
   }
 
-  static void ReadColumnValues(const std::vector<uint8_t>& buffer,
+  static Status ReadColumnValues(const std::vector<uint8_t>& buffer,
                                 size_t& offset,
                                 ColumnVector& column,
                                 const DataType& type,
                                 size_t num_rows,
                                 const std::vector<uint8_t>& null_bitmap) {
-    std::visit([&](const auto& t) {
+    return std::visit([&](const auto& t) -> Status {
       using T = std::decay_t<decltype(t)>;
 
       auto is_null = [&](size_t i) {
@@ -305,79 +325,87 @@ class RecordBatchSerializer {
       if constexpr (std::is_same_v<T, BoolType>) {
         auto* typed_col = dynamic_cast<TypedColumnVector<bool>*>(&column);
         for (size_t i = 0; i < num_rows; ++i) {
-          bool val = ReadValue<bool>(buffer, offset);
+          auto val = ReadValue<bool>(buffer, offset);
+          if (!val) return std::unexpected(val.error());
           if (is_null(i)) {
             typed_col->AppendNull();
           } else {
-            typed_col->Append(val);
+            typed_col->Append(*val);
           }
         }
       } else if constexpr (std::is_same_v<T, Int8Type>) {
         auto* typed_col = dynamic_cast<TypedColumnVector<int8_t>*>(&column);
         for (size_t i = 0; i < num_rows; ++i) {
-          int8_t val = ReadValue<int8_t>(buffer, offset);
+          auto val = ReadValue<int8_t>(buffer, offset);
+          if (!val) return std::unexpected(val.error());
           if (is_null(i)) {
             typed_col->AppendNull();
           } else {
-            typed_col->Append(val);
+            typed_col->Append(*val);
           }
         }
       } else if constexpr (std::is_same_v<T, Int16Type>) {
         auto* typed_col = dynamic_cast<TypedColumnVector<int16_t>*>(&column);
         for (size_t i = 0; i < num_rows; ++i) {
-          int16_t val = ReadValue<int16_t>(buffer, offset);
+          auto val = ReadValue<int16_t>(buffer, offset);
+          if (!val) return std::unexpected(val.error());
           if (is_null(i)) {
             typed_col->AppendNull();
           } else {
-            typed_col->Append(val);
+            typed_col->Append(*val);
           }
         }
       } else if constexpr (std::is_same_v<T, Int32Type>) {
         auto* typed_col = dynamic_cast<TypedColumnVector<int32_t>*>(&column);
         for (size_t i = 0; i < num_rows; ++i) {
-          int32_t val = ReadValue<int32_t>(buffer, offset);
+          auto val = ReadValue<int32_t>(buffer, offset);
+          if (!val) return std::unexpected(val.error());
           if (is_null(i)) {
             typed_col->AppendNull();
           } else {
-            typed_col->Append(val);
+            typed_col->Append(*val);
           }
         }
       } else if constexpr (std::is_same_v<T, Int64Type>) {
         auto* typed_col = dynamic_cast<TypedColumnVector<int64_t>*>(&column);
         for (size_t i = 0; i < num_rows; ++i) {
-          int64_t val = ReadValue<int64_t>(buffer, offset);
+          auto val = ReadValue<int64_t>(buffer, offset);
+          if (!val) return std::unexpected(val.error());
           if (is_null(i)) {
             typed_col->AppendNull();
           } else {
-            typed_col->Append(val);
+            typed_col->Append(*val);
           }
         }
       } else if constexpr (std::is_same_v<T, FloatType>) {
         auto* typed_col = dynamic_cast<TypedColumnVector<float>*>(&column);
         for (size_t i = 0; i < num_rows; ++i) {
-          float val = ReadValue<float>(buffer, offset);
+          auto val = ReadValue<float>(buffer, offset);
+          if (!val) return std::unexpected(val.error());
           if (is_null(i)) {
             typed_col->AppendNull();
           } else {
-            typed_col->Append(val);
+            typed_col->Append(*val);
           }
         }
       } else if constexpr (std::is_same_v<T, DoubleType>) {
         auto* typed_col = dynamic_cast<TypedColumnVector<double>*>(&column);
         for (size_t i = 0; i < num_rows; ++i) {
-          double val = ReadValue<double>(buffer, offset);
+          auto val = ReadValue<double>(buffer, offset);
+          if (!val) return std::unexpected(val.error());
           if (is_null(i)) {
             typed_col->AppendNull();
           } else {
-            typed_col->Append(val);
+            typed_col->Append(*val);
           }
         }
       } else if constexpr (std::is_same_v<T, StringType> || std::is_same_v<T, BinaryType>) {
         auto* typed_col = dynamic_cast<StringColumnVector*>(&column);
         for (size_t i = 0; i < num_rows; ++i) {
-          uint32_t len = ReadValue<uint32_t>(buffer, offset);
-          std::string val(buffer.begin() + offset, buffer.begin() + offset + len);
-          offset += len;
+          auto len = ReadValue<uint32_t>(buffer, offset);
+          if (!len) return std::unexpected(len.error());
+          std::string val(buffer.begin() + offset, buffer.begin() + offset + *len);
+          offset += *len;
           if (is_null(i)) {
             typed_col->AppendNull();
           } else {
@@ -385,8 +413,9 @@ class RecordBatchSerializer {
           }
         }
       } else {
-        throw std::runtime_error("Unsupported type for deserialization");
+        return Error::TypeError("Unsupported type for deserialization");
       }
+      return {};
     }, type);
   }
 };

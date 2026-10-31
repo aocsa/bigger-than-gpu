@@ -349,18 +349,11 @@ Operator* Graph::GetNode(std::size_t operator_id) const {
   return iterator != operator_lookup_table_.end() ? iterator->second : nullptr;
 }
 
-Operator& Graph::GetLastOperator() {
+Result<Operator*> Graph::GetLastOperator() const {
   if (registered_operators_.empty()) {
-    throw std::runtime_error("Graph has no operators");
+    return Error::Invalid("Graph has no operators");
   }
-  return *registered_operators_.back();
-}
-
-const Operator& Graph::GetLastOperator() const {
-  if (registered_operators_.empty()) {
-    throw std::runtime_error("Graph has no operators");
-  }
-  return *registered_operators_.back();
+  return registered_operators_.back();
 }
 
 std::set<Edge> Graph::GetOutgoingEdges(Operator* from_operator) const {

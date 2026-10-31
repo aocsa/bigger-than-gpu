@@ -144,7 +144,8 @@ TEST(GraphConstructionTest, SingleNode) {
   EXPECT_EQ(node_id, 0);
   EXPECT_EQ(graph->GetNodeCount(), 1);
   EXPECT_EQ(graph->GetNode(0), &single_operator);
-  EXPECT_EQ(&graph->GetLastOperator(), &single_operator);
+  ASSERT_OK_AND_ASSIGN(Operator* last, graph->GetLastOperator());
+  EXPECT_EQ(last, &single_operator);
 }
 
 TEST(GraphConstructionTest, SimpleEdge) {
@@ -338,13 +339,14 @@ TEST(GraphQueryTest, GetLastOperator) {
   gb.Chain(op1, op2, op3);
   ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
-  EXPECT_EQ(&graph->GetLastOperator(), &op3);
+  ASSERT_OK_AND_ASSIGN(Operator* last, graph->GetLastOperator());
+  EXPECT_EQ(last, &op3);
 }
 
-TEST(GraphQueryTest, GetLastOperatorThrowsWhenEmpty) {
+TEST(GraphQueryTest, GetLastOperatorFailsWhenEmpty) {
   auto graph = std::make_shared<Graph>();
 
-  EXPECT_THROW(graph->GetLastOperator(), std::runtime_error);
+  EXPECT_FALSE(graph->GetLastOperator().has_value());
 }
 
 TEST(GraphQueryTest, GetNonexistentNode) {

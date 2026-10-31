@@ -310,12 +310,15 @@ Result<std::optional<cache::DataBlockPtr>> PipelineExecutor::ClaimNextBatch(
 
   auto holder = source_op.InputCache();
   if (!holder) {
+    return std::unexpected(holder.error());
+  }
+  if (!*holder) {
     return Err(ErrorCode::Invalid,
                "PipelineExecutor: pipeline source's default input port "
                "has no batch holder");
   }
 
-  return PullFromHolder(*holder);
+  return PullFromHolder(**holder);
 }
 
 }  // namespace quest::taskflow

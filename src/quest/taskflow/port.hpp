@@ -72,11 +72,8 @@ class Port {
   // ===========================================================================
 
   /// @brief Returns the holder for the named port; empty string resolves to the operator-ID port.
-  /// @throws std::runtime_error if the port doesn't exist.
-  [[nodiscard]] std::shared_ptr<cache::IBatchHolder>& get(
-      const std::string& port_name = "");
-
-  [[nodiscard]] const std::shared_ptr<cache::IBatchHolder>& get(
+  /// @return NotFound if the port doesn't exist.
+  [[nodiscard]] Result<std::shared_ptr<cache::IBatchHolder>> get(
       const std::string& port_name = "") const;
 
   /// @brief Unlike get(), inserts a new entry if the port doesn't exist.
@@ -124,8 +121,6 @@ class Port {
 
   [[nodiscard]] std::string default_port_name() const;
   [[nodiscard]] std::string resolve_port_name(const std::string& port_name) const;
-  [[nodiscard]] RegistryMap::iterator find_port_or_throw(const std::string& port_name);
-  [[nodiscard]] RegistryMap::const_iterator find_port_or_throw(const std::string& port_name) const;
   [[nodiscard]] RegistryMap::const_iterator find_port(const std::string& port_name) const;
 
   Operator* owner_operator_;

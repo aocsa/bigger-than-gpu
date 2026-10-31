@@ -10,6 +10,7 @@
 #include "quest/datasource/record_batch.hpp"
 #include "quest/datasource/schema.hpp"
 #include "quest/datasource/types.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest::datasource;
 
@@ -144,8 +145,6 @@ TEST(SchemaTest, FieldAccess) {
   EXPECT_EQ(schema.field(0).name, "id");
   EXPECT_EQ(schema.field(1).name, "name");
   EXPECT_EQ(schema.field(2).name, "score");
-
-  EXPECT_THROW(schema.field(3), std::out_of_range);
 }
 
 TEST(SchemaTest, GetFieldIndex) {
@@ -189,12 +188,14 @@ TEST(SchemaTest, Project) {
       Field("d", StringType{})};
   Schema schema(fields);
 
-  Schema projected = schema.Project({1, 3});
+  ASSERT_OK_AND_ASSIGN(Schema projected, schema.Project({1, 3}));
   EXPECT_EQ(projected.num_fields(), 2);
   EXPECT_EQ(projected.field(0).name, "b");
   EXPECT_EQ(projected.field(1).name, "d");
 
-  EXPECT_THROW(schema.Project({5}), std::out_of_range);
+  auto out_of_range = schema.Project({5});
+  ASSERT_FALSE(out_of_range.has_value());
+  EXPECT_EQ(out_of_range.error().code(), quest::ErrorCode::OutOfRange);
 }
 
 TEST(SchemaTest, Select) {
@@ -204,12 +205,14 @@ TEST(SchemaTest, Select) {
       Field("c", DoubleType{})};
   Schema schema(fields);
 
-  Schema selected = schema.Select({"c", "a"});
+  ASSERT_OK_AND_ASSIGN(Schema selected, schema.Select({"c", "a"}));
   EXPECT_EQ(selected.num_fields(), 2);
   EXPECT_EQ(selected.field(0).name, "c");
   EXPECT_EQ(selected.field(1).name, "a");
 
-  EXPECT_THROW(schema.Select({"nonexistent"}), std::invalid_argument);
+  auto missing = schema.Select({"nonexistent"});
+  ASSERT_FALSE(missing.has_value());
+  EXPECT_EQ(missing.error().code(), quest::ErrorCode::SchemaError);
 }
 
 TEST(SchemaTest, ToString) {
@@ -335,13 +338,6 @@ TEST(TypedColumnVectorTest, Spans) {
   auto mutable_values = col.GetMutableValues();
   mutable_values[0] = 100;
   EXPECT_EQ(col.GetTypedValue(0), 100);
-}
-
-TEST(TypedColumnVectorTest, OutOfRange) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 5);
-  col.Append(1);
-
-  EXPECT_THROW(col.GetTypedValue(5), std::out_of_range);
 }
 
 // =============================================================================
@@ -521,9 +517,6 @@ TEST(RecordBatchTest, ColumnAccess) {
 
   auto col_ptr = batch.column_ptr(1);
   EXPECT_EQ(col_ptr->size(), 2);
-
-  EXPECT_THROW(batch.column(5), std::out_of_range);
-  EXPECT_THROW(batch.column_ptr(5), std::out_of_range);
 }
 
 TEST(RecordBatchTest, ColumnByName) {
@@ -569,18 +562,6 @@ TEST(RecordBatchTest, Empty) {
 
   EXPECT_EQ(batch.num_rows(), 0);
   EXPECT_EQ(batch.num_columns(), 0);
-}
-
-TEST(RecordBatchTest, SchemaMismatch) {
-  std::vector<Field> fields = {
-      Field("a", Int32Type{}),
-      Field("b", Int32Type{})};
-  Schema schema(fields);
-
-  auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 5);
-  col->Append(1);
-
-  EXPECT_THROW(RecordBatch(schema, {col}), std::invalid_argument);
 }
 
 TEST(RecordBatchTest, ToCSV) {
