@@ -83,6 +83,52 @@ enum class ErrorCode : uint8_t {
   SchemaError
 };
 
+[[nodiscard]] constexpr std::string_view ErrorCodeName(ErrorCode code) noexcept {
+  switch (code) {
+    case ErrorCode::None:
+      return "None";
+    case ErrorCode::Invalid:
+      return "Invalid";
+    case ErrorCode::IOError:
+      return "IOError";
+    case ErrorCode::OutOfMemory:
+      return "OutOfMemory";
+    case ErrorCode::NotFound:
+      return "NotFound";
+    case ErrorCode::AlreadyExists:
+      return "AlreadyExists";
+    case ErrorCode::Cancelled:
+      return "Cancelled";
+    case ErrorCode::Unknown:
+      return "Unknown";
+    case ErrorCode::ParquetFormatError:
+      return "ParquetFormatError";
+    case ErrorCode::UnsupportedEncoding:
+      return "UnsupportedEncoding";
+    case ErrorCode::ThriftDecodeError:
+      return "ThriftDecodeError";
+    case ErrorCode::PageDecodeError:
+      return "PageDecodeError";
+    case ErrorCode::ColumnDecodeError:
+      return "ColumnDecodeError";
+    case ErrorCode::TypeError:
+      return "TypeError";
+    case ErrorCode::OutOfRange:
+      return "OutOfRange";
+    case ErrorCode::EndOfData:
+      return "EndOfData";
+    case ErrorCode::LogicalPlanError:
+      return "LogicalPlanError";
+    case ErrorCode::PhysicalPlanError:
+      return "PhysicalPlanError";
+    case ErrorCode::ExpressionError:
+      return "ExpressionError";
+    case ErrorCode::SchemaError:
+      return "SchemaError";
+  }
+  return "Unknown";
+}
+
 // source_location captures call-site automatically — no manual __FILE__/__LINE__ needed.
 struct Error {
   ErrorCode code_;
@@ -112,8 +158,8 @@ struct Error {
   [[nodiscard]] const std::source_location& location() const noexcept { return loc_; }
 
   [[nodiscard]] std::string ToString() const {
-    return std::format("[{}:{}] Error {}: {}", loc_.file_name(), loc_.line(),
-                       static_cast<int>(code_), message_);
+    return std::format("[{}:{}] {}: {}", loc_.file_name(), loc_.line(), ErrorCodeName(code_),
+                       message_);
   }
 
   friend std::ostream& operator<<(std::ostream& out, const Error& error) {
@@ -141,61 +187,79 @@ class Status : public std::expected<void, Error> {
 
   [[nodiscard]] static Status OK() noexcept { return {}; }
 
-  [[nodiscard]] static std::unexpected<Error>  Invalid(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::Invalid, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> Invalid(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::Invalid, std::move(message), loc)};
   }
 
-  [[nodiscard]] static std::unexpected<Error>  IOError(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::IOError, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> IOError(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::IOError, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  OutOfMemory(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::OutOfMemory, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> OutOfMemory(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::OutOfMemory, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  NotFound(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::NotFound, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> NotFound(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::NotFound, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  AlreadyExists(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::AlreadyExists, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> AlreadyExists(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::AlreadyExists, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  Cancelled(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::Cancelled, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> Cancelled(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::Cancelled, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  ParquetFormatError(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::ParquetFormatError, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> ParquetFormatError(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::ParquetFormatError, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  UnsupportedEncoding(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::UnsupportedEncoding, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> UnsupportedEncoding(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::UnsupportedEncoding, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  ThriftDecodeError(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::ThriftDecodeError, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> ThriftDecodeError(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::ThriftDecodeError, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  PageDecodeError(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::PageDecodeError, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> PageDecodeError(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::PageDecodeError, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  ColumnDecodeError(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::ColumnDecodeError, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> ColumnDecodeError(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::ColumnDecodeError, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  TypeError(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::TypeError, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> TypeError(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::TypeError, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  OutOfRange(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::OutOfRange, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> OutOfRange(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::OutOfRange, std::move(message), loc)};
   }
   /// @brief Sentinel used internally by iterators to signal end of sequence.
-  [[nodiscard]] static std::unexpected<Error>  EndOfData() {
-    return std::unexpected<Error>{Error(ErrorCode::EndOfData, {})};
+  [[nodiscard]] static std::unexpected<Error> EndOfData(
+      std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::EndOfData, std::string{}, loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  LogicalPlanError(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::LogicalPlanError, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> LogicalPlanError(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::LogicalPlanError, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  PhysicalPlanError(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::PhysicalPlanError, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> PhysicalPlanError(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::PhysicalPlanError, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  ExpressionError(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::ExpressionError, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> ExpressionError(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::ExpressionError, std::move(message), loc)};
   }
-  [[nodiscard]] static std::unexpected<Error>  SchemaError(std::string message) {
-    return std::unexpected<Error>{Error(ErrorCode::SchemaError, std::move(message))};
+  [[nodiscard]] static std::unexpected<Error> SchemaError(
+      std::string message, std::source_location loc = std::source_location::current()) {
+    return std::unexpected<Error>{Error(ErrorCode::SchemaError, std::move(message), loc)};
   }
 
   [[nodiscard]] bool ok() const noexcept { return this->has_value(); }
@@ -217,53 +281,6 @@ class Status : public std::expected<void, Error> {
     return error().ToString();
   }
 
- private:
-
-  [[nodiscard]] static std::string_view code_to_string(ErrorCode code) noexcept {
-    switch (code) {
-      case ErrorCode::None:
-        return "None";
-      case ErrorCode::Invalid:
-        return "Invalid";
-      case ErrorCode::IOError:
-        return "IOError";
-      case ErrorCode::OutOfMemory:
-        return "OutOfMemory";
-      case ErrorCode::NotFound:
-        return "NotFound";
-      case ErrorCode::AlreadyExists:
-        return "AlreadyExists";
-      case ErrorCode::Cancelled:
-        return "Cancelled";
-      case ErrorCode::Unknown:
-        return "Unknown";
-      case ErrorCode::ParquetFormatError:
-        return "ParquetFormatError";
-      case ErrorCode::UnsupportedEncoding:
-        return "UnsupportedEncoding";
-      case ErrorCode::ThriftDecodeError:
-        return "ThriftDecodeError";
-      case ErrorCode::PageDecodeError:
-        return "PageDecodeError";
-      case ErrorCode::ColumnDecodeError:
-        return "ColumnDecodeError";
-      case ErrorCode::TypeError:
-        return "TypeError";
-      case ErrorCode::OutOfRange:
-        return "OutOfRange";
-      case ErrorCode::EndOfData:
-        return "EndOfData";
-      case ErrorCode::LogicalPlanError:
-        return "LogicalPlanError";
-      case ErrorCode::PhysicalPlanError:
-        return "PhysicalPlanError";
-      case ErrorCode::ExpressionError:
-        return "ExpressionError";
-      case ErrorCode::SchemaError:
-        return "SchemaError";
-    }
-    return "Unknown";
-  }
 };
 
 // =============================================================================
@@ -289,8 +306,10 @@ template <typename T>
   return Result<T>{std::in_place, std::move(value)};
 }
 
-[[nodiscard]] inline std::unexpected<Error> Err(const ErrorCode& code, std::string message) {
-  return std::unexpected<Error>{Error{code, std::move(message)}};
+[[nodiscard]] inline std::unexpected<Error> Err(
+    ErrorCode code, std::string message,
+    std::source_location loc = std::source_location::current()) {
+  return std::unexpected<Error>{Error{code, std::move(message), loc}};
 }
 
 [[nodiscard]] inline std::unexpected<Error> Err(const Error& error) {

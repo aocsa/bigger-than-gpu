@@ -102,11 +102,18 @@ TEST(ErrorTest, SourceLocation) {
               std::string_view::npos);
 }
 
+TEST(ErrorTest, FactoryRecordsCallerLocation) {
+    Status status = Status::Invalid("bad");
+    EXPECT_NE(std::string_view(status.error().location().file_name()).find("result_test.cpp"),
+              std::string_view::npos);
+}
+
 TEST(ErrorTest, ToString) {
     Error error(ErrorCode::IOError, "File not found");
     std::string str = error.ToString();
 
     EXPECT_TRUE(str.find("File not found") != std::string::npos);
+    EXPECT_TRUE(str.find("IOError") != std::string::npos);
 }
 
 TEST(ErrorTest, ComparisonWithErrorCode) {
