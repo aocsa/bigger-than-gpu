@@ -27,11 +27,6 @@ TEST(BarrierConfigTest, DefaultEdgeConfigIsPipelineBarrier) {
   EXPECT_EQ(config.type, cache::BatchHolderType::kSimple);
 }
 
-TEST(BarrierConfigTest, SimpleFactoryIsPipelineBarrier) {
-  const auto config = EdgeConfig::Simple();
-  EXPECT_EQ(config.barrier, BarrierType::Pipeline);
-}
-
 TEST(BarrierConfigTest, ConcatenatingFactoryImpliesFullBarrier) {
   const auto config = EdgeConfig::Concatenating();
   EXPECT_EQ(config.type, cache::BatchHolderType::kConcatenating);
@@ -45,11 +40,11 @@ TEST(BarrierConfigTest, PartitionedFactoryIsPipelineBarrier) {
 }
 
 TEST(BarrierConfigTest, WithBarrierChainsLikeWithFlowControl) {
-  auto config = EdgeConfig::Simple().with_barrier(BarrierType::Full);
+  auto config = EdgeConfig{}.with_barrier(BarrierType::Full);
   EXPECT_EQ(config.barrier, BarrierType::Full);
 
   // Chaining order must not matter.
-  auto chained = EdgeConfig::Simple().with_barrier(BarrierType::Full).with_flow_control(8);
+  auto chained = EdgeConfig{}.with_barrier(BarrierType::Full).with_flow_control(8);
   EXPECT_EQ(chained.barrier, BarrierType::Full);
   EXPECT_EQ(chained.flow_control_batches_threshold, 8U);
 }

@@ -39,8 +39,6 @@ concept HasId = requires(const T& msg) {
 
 struct QueueConfig {
   std::chrono::milliseconds timeout{0};  // 0 means no timeout (wait forever)
-  std::size_t max_bytes{0};              // 0 means unlimited
-  std::size_t max_batches{0};            // 0 means unlimited
 };
 
 // =============================================================================
@@ -127,24 +125,6 @@ class BlockingQueue {
     return PopFront();
   }
 
-  [[nodiscard]] Result<T> PopWithTimeout(std::chrono::milliseconds timeout) {
-    std::unique_lock lock(mutex_);
-
-    auto deadline = std::chrono::steady_clock::now() + timeout;
-    if (!not_empty_.wait_until(
-            lock, deadline,
-            [this] { return !queue_.empty() || finished_; })) {
-      return Status::IOError(
-          std::format("Pop timed out after {}ms", timeout.count()));
-    }
-
-    if (queue_.empty()) {
-      return Status::Invalid("Queue finished and empty");
-    }
-
-    return PopFront();
-  }
-
   [[nodiscard]] Result<std::vector<T>> PopAll() {
     std::unique_lock lock(mutex_);
 
@@ -215,20 +195,6 @@ class BlockingQueue {
     return !queue_.empty();
   }
 
-  [[nodiscard]] Status WaitForNext() {
-    std::unique_lock lock(mutex_);
-
-    if (!WaitFor(lock, [this] { return !queue_.empty() || finished_; })) {
-      return Status::IOError("WaitForNext timed out");
-    }
-
-    if (queue_.empty() && finished_) {
-      return Status::Invalid("Queue finished and empty");
-    }
-
-    return Status::OK();
-  }
-
   [[nodiscard]] Status WaitUntilFinished() {
     std::unique_lock lock(mutex_);
 
@@ -277,13 +243,6 @@ class BlockingQueue {
   std::size_t batches_count_{0};
   QueueConfig config_;
 };
-
-// =============================================================================
-// Type Alias
-// =============================================================================
-
-template <typename T>
-using FifoQueue = BlockingQueue<T>;
 
 }  // namespace quest::cache
 

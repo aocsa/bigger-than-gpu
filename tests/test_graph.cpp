@@ -361,8 +361,8 @@ TEST(GraphQueryTest, GetNonexistentNode) {
 // EdgeConfig Tests
 // =============================================================================
 
-TEST(EdgeConfigTest, Simple) {
-  auto config = EdgeConfig::Simple();
+TEST(EdgeConfigTest, Default) {
+  auto config = EdgeConfig{};
 
   EXPECT_EQ(config.type, BatchHolderType::kSimple);
   EXPECT_EQ(config.num_partitions, 1);
@@ -383,7 +383,7 @@ TEST(EdgeConfigTest, Partitioned) {
 }
 
 TEST(EdgeConfigTest, FlowControl) {
-  auto config = EdgeConfig::Simple().with_flow_control(10, 1024);
+  auto config = EdgeConfig{}.with_flow_control(10, 1024);
 
   EXPECT_EQ(config.flow_control_batches_threshold, 10);
   EXPECT_EQ(config.flow_control_bytes_threshold, 1024);

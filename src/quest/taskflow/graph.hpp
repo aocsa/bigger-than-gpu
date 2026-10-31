@@ -167,15 +167,6 @@ class Graph : public std::enable_shared_from_this<Graph> {
 
   [[nodiscard]] std::vector<Operator*> GetTerminalOperators() const;
 
-  [[nodiscard]] std::pair<bool, std::uint64_t> EstimateInputRowCount(
-      std::int32_t operator_id) const;
-
-  [[nodiscard]] std::pair<bool, std::uint64_t> EstimateInputRowCountForPort(
-      std::int32_t operator_id, const std::string& port_name) const;
-
-  void PrintStructure() const;
-  void PrintBackwardsFrom(std::int32_t operator_id) const;
-
   [[nodiscard]] std::shared_ptr<memory::MemoryResourceManager> GetMemoryManager() const {
     return memory_resource_manager_;
   }

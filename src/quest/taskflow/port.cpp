@@ -46,24 +46,6 @@ void Port::Finish() {
   }
 }
 
-bool Port::AllFinished() const {
-  for (const auto& [port_name, batch_holder] : batch_holder_registry_) {
-    if (batch_holder && !batch_holder->IsFinished()) {
-      return false;
-    }
-  }
-  return true;
-}
-
-bool Port::IsFinished(const std::string& port_name) const {
-  auto iterator = find_port(port_name);
-  if (iterator == batch_holder_registry_.end() || !iterator->second) {
-    // Non-existent or empty ports are considered finished.
-    return true;
-  }
-  return iterator->second->IsFinished();
-}
-
 // =============================================================================
 // Statistics
 // =============================================================================
@@ -77,25 +59,6 @@ std::size_t Port::TotalBytesAdded() const {
   }
 
   return total_bytes;
-}
-
-std::size_t Port::TotalRowsAdded() const {
-  std::size_t total_rows = 0;
-  for (const auto& [port_name, batch_holder] : batch_holder_registry_) {
-    if (batch_holder) {
-      total_rows += batch_holder->rows_added();
-    }
-  }
-
-  return total_rows;
-}
-
-std::size_t Port::RowsAdded(const std::string& port_name) const {
-  auto iterator = find_port(port_name);
-  if (iterator == batch_holder_registry_.end() || !iterator->second) {
-    return 0;
-  }
-  return iterator->second->rows_added();
 }
 
 // =============================================================================

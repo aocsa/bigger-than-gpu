@@ -1,8 +1,6 @@
 #include "quest/taskflow/graph.hpp"
 
-#include <deque>
 #include <format>
-#include <print>
 #include <utility>
 
 #include "quest/taskflow/meta_pipeline.hpp"
@@ -403,120 +401,6 @@ std::vector<Operator*> Graph::GetTerminalOperators() const {
     }
   }
   return terminals;
-}
-
-std::pair<bool, std::uint64_t> Graph::EstimateInputRowCount(std::int32_t operator_id) const {
-  auto* target_operator = GetNode(operator_id);
-  if (target_operator == nullptr) {
-    return {false, 0};
-  }
-  if (target_operator->InputAllFinished()) {
-    return {true, target_operator->TotalInputRowsAdded()};
-  }
-  auto upstream_edges = GetIncomingEdges(operator_id);
-  if (upstream_edges.size() == 1) {
-    auto* source_operator = GetNode(upstream_edges.begin()->source_operator_id);
-    if (source_operator != nullptr) {
-      return source_operator->GetEstimatedOutputNumRows();
-    }
-  }
-  return {false, 0};
-}
-
-std::pair<bool, std::uint64_t> Graph::EstimateInputRowCountForPort(
-    std::int32_t operator_id, const std::string& port_name) const {
-  auto* target_operator = GetNode(operator_id);
-  if (target_operator == nullptr) {
-    return {false, 0};
-  }
-  if (target_operator->InputCacheFinished(port_name)) {
-    return {true, target_operator->InputCacheNumRowsAdded(port_name)};
-  }
-  auto upstream_edges = GetIncomingEdges(operator_id);
-  for (const auto& edge : upstream_edges) {
-    if (edge.target_port_name == port_name) {
-      auto* source_operator = GetNode(edge.source_operator_id);
-      if (source_operator != nullptr) {
-        return source_operator->GetEstimatedOutputNumRows();
-      }
-    }
-  }
-  return {false, 0};
-}
-
-// =============================================================================
-// Debug and Visualization
-// =============================================================================
-
-void Graph::PrintStructure() const {
-  std::println("=== Execution Graph ===");
-  std::println("Operators (id -> type):");
-
-  for (const auto* current_operator : registered_operators_) {
-    std::println("  {} -> {}", current_operator->id(), to_string(current_operator->type()));
-  }
-
-  std::println("\nEdges:");
-
-  std::set<std::pair<std::size_t, std::size_t>> visited_edges;
-  std::deque<std::size_t> traversal_queue;
-
-  for (const auto& edge : GetOutgoingEdges(kGraphEntryPointId)) {
-    traversal_queue.push_back(edge.target_operator_id);
-  }
-
-  while (!traversal_queue.empty()) {
-    auto current_id = traversal_queue.front();
-    traversal_queue.pop_front();
-
-    for (const auto& edge : GetOutgoingEdges(static_cast<std::int32_t>(current_id))) {
-      auto edge_key = std::make_pair(current_id, static_cast<std::size_t>(edge.target_operator_id));
-
-      if (visited_edges.contains(edge_key)) {
-        continue;
-      }
-
-      visited_edges.insert(edge_key);
-      std::println("  {} -> {}", current_id, edge.target_operator_id);
-
-      if (edge.target_operator_id >= 0) {
-        traversal_queue.push_back(edge.target_operator_id);
-      }
-    }
-  }
-
-  std::println("=======================");
-}
-
-void Graph::PrintBackwardsFrom(std::int32_t operator_id) const {
-  std::println("=== Graph from operator {} (backwards) ===", operator_id);
-
-  std::set<std::pair<std::size_t, std::size_t>> visited_edges;
-  std::deque<std::size_t> traversal_queue;
-
-  for (const auto& edge : GetIncomingEdges(operator_id)) {
-    traversal_queue.push_back(edge.source_operator_id);
-  }
-
-  while (!traversal_queue.empty()) {
-    auto current_id = traversal_queue.front();
-    traversal_queue.pop_front();
-
-    for (const auto& edge : GetIncomingEdges(static_cast<std::int32_t>(current_id))) {
-      auto edge_key = std::make_pair(static_cast<std::size_t>(edge.source_operator_id), current_id);
-
-      if (visited_edges.contains(edge_key)) {
-        continue;
-      }
-
-      visited_edges.insert(edge_key);
-      std::println("  {} <- {}", current_id, edge.source_operator_id);
-
-      traversal_queue.push_back(edge.source_operator_id);
-    }
-  }
-
-  std::println("=========================================");
 }
 
 }  // namespace quest::taskflow

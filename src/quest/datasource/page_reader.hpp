@@ -349,13 +349,7 @@ class PageHeaderParser {
 /// Iterates through pages in a column chunk, parsing headers and exposing page data.
 class PageReader {
  public:
-  PageReader(std::span<const uint8_t> data, PhysicalType type,
-             int max_definition_level, int max_repetition_level)
-      : data_(data),
-        pos_(0),
-        physical_type_(type),
-        max_definition_level_(max_definition_level),
-        max_repetition_level_(max_repetition_level) {}
+  explicit PageReader(std::span<const uint8_t> data) : data_(data), pos_(0) {}
 
   [[nodiscard]] bool HasNextPage() const noexcept { return pos_ < data_.size(); }
 
@@ -388,44 +382,8 @@ class PageReader {
  private:
   std::span<const uint8_t> data_;
   size_t pos_;
-  PhysicalType physical_type_;
-  int max_definition_level_;
-  int max_repetition_level_;
   PageHeader current_header_;
 };
-
-// =============================================================================
-// Definition Level Decoding
-// =============================================================================
-
-[[nodiscard]] inline Result<std::vector<int32_t>> DecodeDefinitionLevels(
-    std::span<const uint8_t> data, int max_level, size_t num_values) {
-  std::vector<int32_t> levels(num_values);
-
-  if (max_level == 0) {
-    // All values are required, no nulls possible.
-    std::fill(levels.begin(), levels.end(), 0);
-    return levels;
-  }
-
-  // First 4 bytes contain the length of the RLE data.
-  if (data.size() < 4) {
-    return std::unexpected(
-        Status::PageDecodeError("Not enough data for definition levels"));
-  }
-  uint32_t rle_length;
-  std::memcpy(&rle_length, data.data(), 4);
-
-  int bit_width = ComputeBitWidth(max_level);
-  RleBitPackingDecoder decoder(bit_width);
-  decoder.SetData(data.subspan(4, rle_length), num_values);
-  auto status = decoder.ReadBatch(levels);
-  if (!status.ok()) {
-    return std::unexpected(status.error());
-  }
-
-  return levels;
-}
 
 }  // namespace quest::datasource
 

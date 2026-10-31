@@ -58,8 +58,6 @@ class ThriftDecoder {
     return data_.size() - pos_;
   }
 
-  [[nodiscard]] bool HasMore() const noexcept { return pos_ < data_.size(); }
-
   // ===========================================================================
   // Basic Read Operations
   // ===========================================================================
@@ -174,23 +172,6 @@ class ThriftDecoder {
   [[nodiscard]] Result<int32_t> ReadI32() noexcept { return ReadVarint32(); }
 
   [[nodiscard]] Result<int64_t> ReadI64() noexcept { return ReadVarint64(); }
-
-  // ===========================================================================
-  // Floating-Point Read Operations
-  // ===========================================================================
-
-  [[nodiscard]] Result<double> ReadDouble() noexcept {
-    if (pos_ + 8 > data_.size()) {
-      return std::unexpected(
-          Status::ThriftDecodeError("Unexpected end of data reading double"));
-    }
-
-    uint64_t bits;
-    std::memcpy(&bits, &data_[pos_], 8);
-    pos_ += 8;
-
-    return std::bit_cast<double>(bits);
-  }
 
   // ===========================================================================
   // String and Binary Read Operations

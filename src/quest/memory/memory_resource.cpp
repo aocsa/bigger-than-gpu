@@ -31,7 +31,7 @@ namespace {
 }
 
 /// @brief Get available disk space for a path
-[[nodiscard]] std::size_t get_available_disk_space(const std::filesystem::path& path) {
+[[nodiscard]] std::size_t get_available_disk_space([[maybe_unused]] const std::filesystem::path& path) {
 #ifdef __linux__
     struct statvfs stat;
     if (statvfs(path.c_str(), &stat) == 0) {

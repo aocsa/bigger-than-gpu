@@ -117,10 +117,6 @@ struct EdgeConfig {
 
   // ---- Factory helpers -------------------------------------------------------
 
-  [[nodiscard]] static EdgeConfig Simple() {
-    return EdgeConfig{.type = cache::BatchHolderType::kSimple};
-  }
-
   /// @brief Implies Full barrier: merging requires the producer to finish first.
   [[nodiscard]] static EdgeConfig Concatenating() {
     return EdgeConfig{.type = cache::BatchHolderType::kConcatenating,

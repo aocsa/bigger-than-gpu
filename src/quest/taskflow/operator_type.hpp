@@ -78,20 +78,6 @@ enum class OperatorType : std::uint8_t {
            type == OperatorType::Generate;
 }
 
-/// @brief Check if operator is a terminal (produces final output)
-[[nodiscard]] constexpr bool is_terminal_operator(OperatorType type) noexcept {
-    return type == OperatorType::Output ||
-           type == OperatorType::Print;
-}
-
-/// @brief Check if operator requires multiple inputs (e.g., joins)
-[[nodiscard]] constexpr bool is_multi_input_operator(OperatorType type) noexcept {
-    return type == OperatorType::PartwiseJoin ||
-           type == OperatorType::JoinPartition ||
-           type == OperatorType::Union ||
-           type == OperatorType::MergeStream;
-}
-
 /// @brief A blocking operator must consume (part of) its input before producing output.
 ///
 /// Becomes the sink of the producer pipeline and the source of the consumer pipeline.

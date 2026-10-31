@@ -27,7 +27,6 @@ using parquet::ComputeBitWidth;
 using parquet::PlainDecoder;
 using parquet::PlainBinaryDecoder;
 using parquet::RleBitPackingDecoder;
-using parquet::DictionaryDecoder;
 
 class ParquetFileReader;
 
@@ -45,9 +44,7 @@ class ColumnReader {
       : field_(field),
         column_meta_(column_meta),
         data_(data),
-        page_reader_(data, column_meta.type,
-                     field.IsNullable() ? 1 : 0,  // max def level
-                     0),                          // max rep level for flat schema
+        page_reader_(data),
         codec_(std::move(codec)) {}
 
   [[nodiscard]] Result<std::shared_ptr<ColumnVector>> ReadAll() {

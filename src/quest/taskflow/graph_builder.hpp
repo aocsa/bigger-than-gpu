@@ -252,9 +252,6 @@ class EdgeBuilder {
   EdgeBuilder ThenTo(Operator& next);
   EdgeBuilder ThenTo(OperatorPortPair next);
 
-  /// @brief Explicit return to the parent GraphBuilder (optional sugar).
-  GraphBuilder& Done() noexcept { return *builder_; }
-
  protected:
   GraphBuilder* builder_;
   GraphBuilder::EdgeSpec* spec_;

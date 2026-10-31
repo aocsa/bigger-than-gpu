@@ -316,53 +316,6 @@ class RleBitPackingDecoder {
 };
 
 // =============================================================================
-// Dictionary Decoder
-// =============================================================================
-
-/// @brief Dictionary decoder: unique values stored once, RLE/bit-packed indices reference them.
-/// @tparam T The dictionary value type.
-template <typename T>
-class DictionaryDecoder {
- public:
-  void SetDictionary(std::vector<T> dictionary) {
-    dictionary_ = std::move(dictionary);
-  }
-
-  void SetIndices(std::span<const uint8_t> data, int bit_width,
-                  size_t num_values) {
-    index_decoder_ = std::make_unique<RleBitPackingDecoder>(bit_width);
-    index_decoder_->SetData(data, num_values);
-  }
-
-  [[nodiscard]] size_t ValuesRemaining() const {
-    return index_decoder_ ? index_decoder_->ValuesRemaining() : 0;
-  }
-
-  [[nodiscard]] Result<T> ReadValue() {
-    if (!index_decoder_) {
-      return std::unexpected(
-          Status::ColumnDecodeError("Dictionary indices not set"));
-    }
-    auto index_result = index_decoder_->ReadValue();
-    if (!index_result.has_value()) {
-      return std::unexpected(index_result.error());
-    }
-    int32_t index = index_result.value();
-    if (index < 0 || static_cast<size_t>(index) >= dictionary_.size()) {
-      return std::unexpected(
-          Status::OutOfRange("Dictionary index out of range"));
-    }
-    return dictionary_[index];
-  }
-
-  [[nodiscard]] const std::vector<T>& dictionary() const { return dictionary_; }
-
- private:
-  std::vector<T> dictionary_;
-  std::unique_ptr<RleBitPackingDecoder> index_decoder_;
-};
-
-// =============================================================================
 // Utility Functions
 // =============================================================================
 

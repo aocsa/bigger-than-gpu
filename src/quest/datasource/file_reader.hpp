@@ -226,59 +226,6 @@ class ParquetFileReader {
     return RecordBatch(std::move(projected_schema), std::move(column_vectors));
   }
 
-  // ===========================================================================
-  // Row Group Iteration
-  // ===========================================================================
-
-  class RowGroupIterator {
-   public:
-    RowGroupIterator(ParquetFileReader* reader,
-                     std::vector<std::string> columns, size_t index)
-        : reader_(reader), columns_(std::move(columns)), index_(index) {}
-
-    bool operator!=(const RowGroupIterator& other) const {
-      return index_ != other.index_;
-    }
-
-    RowGroupIterator& operator++() {
-      ++index_;
-      return *this;
-    }
-
-    Result<RecordBatch> operator*() {
-      return reader_->ReadRowGroup(index_, columns_);
-    }
-
-   private:
-    ParquetFileReader* reader_;
-    std::vector<std::string> columns_;
-    size_t index_;
-  };
-
-  class RowGroupRange {
-   public:
-    RowGroupRange(ParquetFileReader* reader, std::vector<std::string> columns)
-        : reader_(reader), columns_(std::move(columns)) {}
-
-    RowGroupIterator begin() {
-      return RowGroupIterator(reader_, columns_, 0);
-    }
-
-    RowGroupIterator end() {
-      return RowGroupIterator(reader_, columns_, reader_->num_row_groups());
-    }
-
-   private:
-    ParquetFileReader* reader_;
-    std::vector<std::string> columns_;
-  };
-
-  /// @param columns Column names to read; empty reads all.
-  [[nodiscard]] RowGroupRange ScanRowGroups(
-      const std::vector<std::string>& columns = {}) {
-    return RowGroupRange(this, columns);
-  }
-
  private:
   // ===========================================================================
   // Private Methods

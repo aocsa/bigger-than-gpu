@@ -66,9 +66,6 @@ class Operator {
   /// contradictions without .Config() are a Build() error.
   [[nodiscard]] virtual EdgeConfig InputEdgeContract(std::string_view /*port*/) const { return {}; }
 
-  /// @brief Estimates output row count. Default assumes 1:1 ratio with input.
-  [[nodiscard]] virtual std::pair<bool, std::uint64_t> GetEstimatedOutputNumRows() const;
-
   /// @brief Indicates whether this operator is a pipeline breaker.
   ///
   /// A blocking operator must consume (part of) its input before producing
@@ -139,9 +136,6 @@ class Operator {
 
   [[nodiscard]] std::string_view expression() const noexcept { return expression_string_; }
 
-  /// @brief Unique log/debug identifier: "{operator_type}_{operator_id}".
-  [[nodiscard]] std::string MessageId() const;
-
   // ===========================================================================
   // Port Access
   // ===========================================================================
@@ -164,22 +158,6 @@ class Operator {
 
   [[nodiscard]] Status AddToOutput(std::shared_ptr<cache::DataBlock> data,
                                    const std::string& cache_id = "");
-
-  // ===========================================================================
-  // Input Status
-  // ===========================================================================
-
-  [[nodiscard]] bool InputAllFinished() const { return input_port_.AllFinished(); }
-
-  [[nodiscard]] std::size_t TotalInputRowsAdded() const { return input_port_.TotalRowsAdded(); }
-
-  [[nodiscard]] bool InputCacheFinished(const std::string& port_name) const {
-    return input_port_.IsFinished(port_name);
-  }
-
-  [[nodiscard]] std::size_t InputCacheNumRowsAdded(const std::string& port_name) const {
-    return input_port_.RowsAdded(port_name);
-  }
 
   // ===========================================================================
   // Graph Relationship

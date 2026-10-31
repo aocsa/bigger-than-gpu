@@ -98,8 +98,6 @@ class Port {
     return batch_holder_registry_.contains(port_name);
   }
 
-  [[nodiscard]] Operator* owner() const noexcept { return owner_operator_; }
-
   // ===========================================================================
   // Lifecycle Management
   // ===========================================================================
@@ -107,17 +105,11 @@ class Port {
   /// @brief Signals all batch holders that no more data will arrive.
   void Finish();
 
-  [[nodiscard]] bool AllFinished() const;
-
-  [[nodiscard]] bool IsFinished(const std::string& port_name = "") const;
-
   // ===========================================================================
   // Statistics
   // ===========================================================================
 
   [[nodiscard]] std::size_t TotalBytesAdded() const;
-  [[nodiscard]] std::size_t TotalRowsAdded() const;
-  [[nodiscard]] std::size_t RowsAdded(const std::string& port_name = "") const;
 
   // ===========================================================================
   // Iteration Support

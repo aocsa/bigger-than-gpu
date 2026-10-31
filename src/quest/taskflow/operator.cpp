@@ -16,21 +16,6 @@ Operator::Operator(std::uint32_t operator_id, std::string expression_string,
       expression_string_(std::move(expression_string)),
       operator_type_(operator_type) {}
 
-std::string Operator::MessageId() const {
-  return std::format("{}_{}", static_cast<int>(operator_type_), operator_id_);
-}
-
-std::pair<bool, std::uint64_t> Operator::GetEstimatedOutputNumRows() const {
-  // Default: assume 1:1 row ratio (output = input).
-  if (InputAllFinished()) {
-    return {true, TotalInputRowsAdded()};
-  }
-  if (auto owning_graph = owning_graph_.lock()) {
-    return owning_graph->EstimateInputRowCount(static_cast<std::int32_t>(operator_id_));
-  }
-  return {false, 0};
-}
-
 // =============================================================================
 // Pipeline Role Defaults
 // =============================================================================

@@ -105,28 +105,6 @@ class SnappyCodec : public CompressionCodec {
       Status::UnsupportedEncoding("Unknown compression type"));
 }
 
-[[nodiscard]] inline std::string CompressionTypeName(CompressionType type) {
-  switch (type) {
-    case CompressionType::kUncompressed:
-      return "UNCOMPRESSED";
-    case CompressionType::kSnappy:
-      return "SNAPPY";
-    case CompressionType::kGzip:
-      return "GZIP";
-    case CompressionType::kLzo:
-      return "LZO";
-    case CompressionType::kBrotli:
-      return "BROTLI";
-    case CompressionType::kLz4:
-      return "LZ4";
-    case CompressionType::kZstd:
-      return "ZSTD";
-    case CompressionType::kLz4Raw:
-      return "LZ4_RAW";
-  }
-  return "UNKNOWN";
-}
-
 }  // namespace quest::datasource::parquet
 
 #endif  // PARQUET_READER_COMPRESSION_HPP
