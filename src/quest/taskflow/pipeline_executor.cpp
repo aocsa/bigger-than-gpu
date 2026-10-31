@@ -272,22 +272,7 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
 
 Result<std::optional<cache::DataBlockPtr>> PipelineExecutor::PullFromHolder(
     cache::IBatchHolder& holder) {
-  auto pulled = holder.Pull();  // Blocks until data arrives or the producer finishes.
-  if (!pulled.has_value()) {
-    // Pull() signals "finished and empty" with ErrorCode::Invalid — but
-    // Invalid is also the codebase's general-purpose error code, so the
-    // holder's actual state must corroborate before an error is treated
-    // as clean end-of-stream. Otherwise a genuine Invalid failure would
-    // silently truncate the stream with a green status. (The honest
-    // Closed state replacing this error-as-EOS protocol is planned for
-    // the streaming phase — replication plan phase 8.)
-    if (pulled.error().code() == ErrorCode::Invalid && holder.IsFinished() &&
-        !holder.HasNext()) {
-      return std::optional<cache::DataBlockPtr>{std::nullopt};  // EOS
-    }
-    return std::unexpected(pulled.error());
-  }
-  return std::optional<cache::DataBlockPtr>{std::move(pulled.value())};
+  return holder.Pull();  // Blocks until data arrives or the producer finishes.
 }
 
 Result<std::optional<cache::DataBlockPtr>> PipelineExecutor::ClaimNextBatch(

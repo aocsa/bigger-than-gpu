@@ -11,6 +11,7 @@
 #include <deque>
 #include <format>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -98,7 +99,10 @@ class BlockingQueue {
   // Consumer Operations
   // ===========================================================================
 
-  [[nodiscard]] Result<T> Pop() {
+  /// @brief Blocks until an item is available or the queue is finished.
+  /// @return The front item, or std::nullopt once the queue is finished and
+  ///         empty. Timeouts are errors.
+  [[nodiscard]] Result<std::optional<T>> Pop() {
     std::unique_lock lock(mutex_);
 
     if (!WaitFor(lock, [this] { return !queue_.empty() || finished_; })) {
@@ -106,20 +110,20 @@ class BlockingQueue {
     }
 
     if (queue_.empty()) {
-      return Status::Invalid("Queue finished and empty");
+      return std::nullopt;
     }
 
     return PopFront();
   }
 
-  [[nodiscard]] Result<T> TryPop() {
+  /// @brief Non-blocking pop.
+  /// @return The front item, or std::nullopt if the queue is currently empty
+  ///         (finished or not; use IsFinished() to tell them apart).
+  [[nodiscard]] Result<std::optional<T>> TryPop() {
     std::lock_guard lock(mutex_);
 
     if (queue_.empty()) {
-      if (finished_) {
-        return Status::Invalid("Queue finished");
-      }
-      return Status::Invalid("Queue empty");
+      return std::nullopt;
     }
 
     return PopFront();

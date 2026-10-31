@@ -88,19 +88,19 @@ Status BatchHolder::Add(DataBlockPtr data) {
   return status;
 }
 
-Result<DataBlockPtr> BatchHolder::Pull() {
+Result<std::optional<DataBlockPtr>> BatchHolder::Pull() {
   auto result = queue_.Pop();
-  if (result) {
-    current_bytes_.fetch_sub((*result)->size_in_bytes());
+  if (result && *result) {
+    current_bytes_.fetch_sub((**result)->size_in_bytes());
     NotifySaturationWaiters();
   }
   return result;
 }
 
-Result<DataBlockPtr> BatchHolder::TryPull() {
+Result<std::optional<DataBlockPtr>> BatchHolder::TryPull() {
   auto result = queue_.TryPop();
-  if (result) {
-    current_bytes_.fetch_sub((*result)->size_in_bytes());
+  if (result && *result) {
+    current_bytes_.fetch_sub((**result)->size_in_bytes());
     NotifySaturationWaiters();
   }
   return result;
@@ -176,7 +176,7 @@ Status ConcatenatingBatchHolder::Add(DataBlockPtr data) {
   return status;
 }
 
-Result<DataBlockPtr> ConcatenatingBatchHolder::Pull() {
+Result<std::optional<DataBlockPtr>> ConcatenatingBatchHolder::Pull() {
   auto status = queue_.WaitUntilFinished();
   if (!status.ok() && !queue_.HasNext()) {
     return std::unexpected(status.error());
@@ -190,9 +190,9 @@ Result<DataBlockPtr> ConcatenatingBatchHolder::Pull() {
   return ConcatenateAll();
 }
 
-Result<DataBlockPtr> ConcatenatingBatchHolder::TryPull() {
+Result<std::optional<DataBlockPtr>> ConcatenatingBatchHolder::TryPull() {
   if (!queue_.IsFinished()) {
-    return Status::Invalid("Queue not finished yet");
+    return std::nullopt;
   }
 
   if (config_.concat_bytes_threshold > 0) {
@@ -222,7 +222,7 @@ bool ConcatenatingBatchHolder::IsFinished() const {
   return queue_.IsFinished() && queue_.Empty();
 }
 
-Result<DataBlockPtr> ConcatenatingBatchHolder::NextChunk() {
+Result<std::optional<DataBlockPtr>> ConcatenatingBatchHolder::NextChunk() {
   std::lock_guard lock(pending_mutex_);
 
   // Drain the (finished) queue into pending_ exactly once.
@@ -237,8 +237,7 @@ Result<DataBlockPtr> ConcatenatingBatchHolder::NextChunk() {
   }
 
   if (pending_.empty()) {
-    // Same EOS protocol as the simple holder: Invalid + IsFinished + !HasNext.
-    return Status::Invalid("ConcatenatingBatchHolder: finished and empty");
+    return std::nullopt;
   }
 
   // Greedy: take blocks while under the cap — but always at least one, so a
@@ -273,13 +272,16 @@ void ConcatenatingBatchHolder::WaitIfSaturated() {
   });
 }
 
-Result<DataBlockPtr> ConcatenatingBatchHolder::ConcatenateAll() {
+Result<std::optional<DataBlockPtr>> ConcatenatingBatchHolder::ConcatenateAll() {
   auto all_blocks = queue_.PopAll();
   if (!all_blocks) {
     return std::unexpected(all_blocks.error());
   }
 
   auto& blocks = *all_blocks;
+  if (blocks.empty()) {
+    return std::nullopt;
+  }
   return execution::ConcatenateHostBlocks(std::move(blocks));
 }
 
@@ -307,16 +309,12 @@ Status NonWaitingBatchHolder::Add(DataBlockPtr data) {
   return status;
 }
 
-Result<DataBlockPtr> NonWaitingBatchHolder::Pull() {
+Result<std::optional<DataBlockPtr>> NonWaitingBatchHolder::Pull() {
   // Non-blocking by contract: the data is pre-filled or it isn't coming.
-  auto result = queue_.TryPop();
-  if (!result.has_value()) {
-    return Status::Invalid("NonWaitingBatchHolder: empty (drained)");
-  }
-  return std::move(result.value());
+  return queue_.TryPop();
 }
 
-Result<DataBlockPtr> NonWaitingBatchHolder::TryPull() { return Pull(); }
+Result<std::optional<DataBlockPtr>> NonWaitingBatchHolder::TryPull() { return Pull(); }
 
 bool NonWaitingBatchHolder::HasNext() const { return queue_.HasNext(); }
 

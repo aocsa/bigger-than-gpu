@@ -163,5 +163,6 @@ TEST(ConcatenatingBatchHolderTest, MultipleBlocksConcatenate) {
   holder.Finish();
 
   ASSERT_OK_AND_ASSIGN(auto merged, holder.Pull());
-  EXPECT_EQ(merged->num_rows(), 5U);
+  ASSERT_TRUE(merged.has_value());
+  EXPECT_EQ((*merged)->num_rows(), 5U);
 }

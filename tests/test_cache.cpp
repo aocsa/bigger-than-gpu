@@ -181,7 +181,8 @@ TEST(BatchHolderTest, AddAndPull) {
   holder.Finish();  // Must finish to allow blocking pop to return
   auto result = holder.Pull();
   ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result.value()->id(), "data1");
+  ASSERT_TRUE(result->has_value());
+  EXPECT_EQ(result->value()->id(), "data1");
   EXPECT_EQ(holder.batch_count(), 0U);
 }
 
@@ -189,7 +190,8 @@ TEST(BatchHolderTest, TryPull) {
   BatchHolder holder(3);
 
   auto empty_result = holder.TryPull();
-  EXPECT_FALSE(empty_result.has_value());
+  ASSERT_TRUE(empty_result.has_value());
+  EXPECT_FALSE(empty_result->has_value());
 
   auto batch = quest::testing::MakeTestRecordBatch(50, 1);
   auto cache_data =
@@ -198,7 +200,8 @@ TEST(BatchHolderTest, TryPull) {
 
   auto result = holder.TryPull();
   ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result.value()->id(), "data2");
+  ASSERT_TRUE(result->has_value());
+  EXPECT_EQ(result->value()->id(), "data2");
 }
 
 TEST(BatchHolderTest, Finish) {
@@ -222,6 +225,7 @@ TEST(BatchHolderTest, Finish) {
   for (int i = 0; i < 3; ++i) {
     auto result = holder.Pull();
     ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result->has_value());
   }
 
   EXPECT_TRUE(holder.IsFinished());
@@ -253,8 +257,9 @@ TEST(BatchHolderTest, MultipleBatches) {
   for (int i = 0; i < 5; ++i) {
     auto result = holder.Pull();
     ASSERT_TRUE(result.has_value());
+    ASSERT_TRUE(result->has_value());
     std::string expected = "batch" + std::to_string(i);
-    EXPECT_EQ(result.value()->id(), expected);
+    EXPECT_EQ(result->value()->id(), expected);
   }
 }
 
@@ -282,7 +287,8 @@ TEST(ConcatenatingBatchHolderTest, SingleMessage) {
 
   auto result = holder.Pull();
   ASSERT_TRUE(result.has_value());
-  EXPECT_GT(result.value()->size_in_bytes(), 0U);
+  ASSERT_TRUE(result->has_value());
+  EXPECT_GT(result->value()->size_in_bytes(), 0U);
 }
 
 TEST(ConcatenatingBatchHolderTest, SingleMessagePull) {
@@ -301,7 +307,8 @@ TEST(ConcatenatingBatchHolderTest, SingleMessagePull) {
 
   auto result = holder.Pull();
   ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result.value()->num_rows(), original_size);
+  ASSERT_TRUE(result->has_value());
+  EXPECT_EQ(result->value()->num_rows(), original_size);
 
   EXPECT_EQ(holder.batch_count(), 0U);
   EXPECT_TRUE(holder.IsFinished());
@@ -316,12 +323,14 @@ TEST(ConcatenatingBatchHolderTest, TryPullNotFinished) {
   (void)holder.Add(cache_data);
 
   auto result = holder.TryPull();
-  EXPECT_FALSE(result.has_value());
+  ASSERT_TRUE(result.has_value());
+  EXPECT_FALSE(result->has_value());
 
   holder.Finish();
 
   result = holder.TryPull();
-  EXPECT_TRUE(result.has_value());
+  ASSERT_TRUE(result.has_value());
+  EXPECT_TRUE(result->has_value());
 }
 
 // =============================================================================
@@ -378,7 +387,7 @@ TEST(BatchHolderThreadSafetyTest, ProducerConsumer) {
     int count = 0;
     while (!holder.IsFinished() || holder.HasNext()) {
       auto result = holder.TryPull();
-      if (result.has_value()) {
+      if (result.has_value() && result->has_value()) {
         ++count;
       } else {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -423,7 +432,7 @@ TEST(BatchHolderThreadSafetyTest, ConcurrentAdds) {
   int count = 0;
   while (holder.HasNext()) {
     auto result = holder.TryPull();
-    if (result.has_value()) {
+    if (result.has_value() && result->has_value()) {
       ++count;
     }
   }

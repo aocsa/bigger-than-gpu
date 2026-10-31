@@ -14,6 +14,7 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -62,11 +63,11 @@ class IBatchHolder {
   [[nodiscard]] virtual BatchHolderType type() const noexcept = 0;
   [[nodiscard]] virtual Status Add(DataBlockPtr data) = 0;
 
-  /// Blocks until data is available.
-  [[nodiscard]] virtual Result<DataBlockPtr> Pull() = 0;
+  /// Blocks until data is available; std::nullopt once finished and empty.
+  [[nodiscard]] virtual Result<std::optional<DataBlockPtr>> Pull() = 0;
 
-  /// Non-blocking pull; returns error if empty.
-  [[nodiscard]] virtual Result<DataBlockPtr> TryPull() = 0;
+  /// Non-blocking pull; std::nullopt if nothing is available right now.
+  [[nodiscard]] virtual Result<std::optional<DataBlockPtr>> TryPull() = 0;
 
   virtual void Finish() = 0;
 
@@ -186,8 +187,8 @@ class BatchHolder final : public BatchHolderBase {
   }
 
   [[nodiscard]] Status Add(DataBlockPtr data) override;
-  [[nodiscard]] Result<DataBlockPtr> Pull() override;
-  [[nodiscard]] Result<DataBlockPtr> TryPull() override;
+  [[nodiscard]] Result<std::optional<DataBlockPtr>> Pull() override;
+  [[nodiscard]] Result<std::optional<DataBlockPtr>> TryPull() override;
   [[nodiscard]] bool HasNext() const override;
   void WaitIfSaturated() override;
 
@@ -216,20 +217,20 @@ class ConcatenatingBatchHolder final : public BatchHolderBase {
   }
 
   [[nodiscard]] Status Add(DataBlockPtr data) override;
-  [[nodiscard]] Result<DataBlockPtr> Pull() override;
-  [[nodiscard]] Result<DataBlockPtr> TryPull() override;
+  [[nodiscard]] Result<std::optional<DataBlockPtr>> Pull() override;
+  [[nodiscard]] Result<std::optional<DataBlockPtr>> TryPull() override;
   [[nodiscard]] bool HasNext() const override;
   [[nodiscard]] bool IsFinished() const override;
   void WaitIfSaturated() override;
 
  private:
-  [[nodiscard]] Result<DataBlockPtr> ConcatenateAll();
+  [[nodiscard]] Result<std::optional<DataBlockPtr>> ConcatenateAll();
 
   /// @brief Chunked mode (concat_bytes_threshold > 0): drain the queue into
   /// pending_ once, then serve merged chunks of up to the byte cap per Pull.
   /// Always includes at least one block per chunk (an oversized single block
   /// still flows — the BlazingSQL/Sirius oversized-batch rule).
-  [[nodiscard]] Result<DataBlockPtr> NextChunk();
+  [[nodiscard]] Result<std::optional<DataBlockPtr>> NextChunk();
 
   mutable std::mutex pending_mutex_;
   std::deque<DataBlockPtr> pending_;  ///< Drained blocks awaiting chunked delivery.
@@ -245,7 +246,7 @@ class ConcatenatingBatchHolder final : public BatchHolderBase {
 /// BlazingSQL heritage: `NonWaitingCacheMachine` — "non-blocking pop, assumes
 /// data is already there" (the direct-execution path pre-loads a source cache,
 /// then runs the kernel). Semantics in QUEST:
-/// - `Pull()` never blocks: returns the next block, or Invalid when empty.
+/// - `Pull()` never blocks: returns the next block, or std::nullopt when empty.
 /// - **Empty means drained**: `IsFinished()` is true whenever the queue is
 ///   empty (no finished-latch required). Consumers therefore see clean EOS
 ///   the moment the pre-filled data runs out.
@@ -265,11 +266,11 @@ class NonWaitingBatchHolder final : public BatchHolderBase {
   }
 
   [[nodiscard]] Status Add(DataBlockPtr data) override;
-  [[nodiscard]] Result<DataBlockPtr> Pull() override;      // non-blocking
-  [[nodiscard]] Result<DataBlockPtr> TryPull() override;   // same as Pull
+  [[nodiscard]] Result<std::optional<DataBlockPtr>> Pull() override;     // non-blocking
+  [[nodiscard]] Result<std::optional<DataBlockPtr>> TryPull() override;  // same as Pull
   [[nodiscard]] bool HasNext() const override;
-  [[nodiscard]] bool IsFinished() const override;          // empty == drained
-  void WaitIfSaturated() override {}                       // never throttles
+  [[nodiscard]] bool IsFinished() const override;                        // empty == drained
+  void WaitIfSaturated() override {}                                     // never throttles
 };
 
 // =============================================================================

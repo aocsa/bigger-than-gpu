@@ -34,15 +34,17 @@ TEST_F(BlockingQueueTest, BasicPutPop) {
 
   auto result = queue_.Pop();
   ASSERT_TRUE(result.has_value());
-  EXPECT_EQ(result.value()->id_, "test_1");
-  EXPECT_EQ(result.value()->value, 42);
+  ASSERT_TRUE(result->has_value());
+  EXPECT_EQ((*result).value()->id_, "test_1");
+  EXPECT_EQ((*result).value()->value, 42);
   EXPECT_TRUE(queue_.Empty());
 }
 
 TEST_F(BlockingQueueTest, TryPopEmpty) {
   auto result = queue_.TryPop();
-  ASSERT_FALSE(result.has_value());
-  EXPECT_EQ(result.error().code(), ErrorCode::Invalid);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_FALSE(result->has_value());
+  EXPECT_FALSE(queue_.IsFinished());
 }
 
 TEST_F(BlockingQueueTest, Finish) {
@@ -52,13 +54,27 @@ TEST_F(BlockingQueueTest, Finish) {
   // Can still pop existing items
   auto result = queue_.Pop();
   ASSERT_TRUE(result.has_value());
+  ASSERT_TRUE(result->has_value());
 
   result = queue_.Pop();
-  ASSERT_FALSE(result.has_value());
-  EXPECT_EQ(result.error().code(), ErrorCode::Invalid);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_FALSE(result->has_value());
 
   auto status = queue_.Put(std::make_unique<TestMessage>("2", 2));
   EXPECT_FALSE(status.ok());
+}
+
+TEST_F(BlockingQueueTest, PopOnFinishedEmptyQueueIsNulloptNotError) {
+  queue_.Finish();
+
+  auto popped = queue_.Pop();
+  ASSERT_TRUE(popped.has_value());
+  EXPECT_FALSE(popped->has_value());
+
+  auto try_popped = queue_.TryPop();
+  ASSERT_TRUE(try_popped.has_value());
+  EXPECT_FALSE(try_popped->has_value());
+  EXPECT_TRUE(queue_.IsFinished());
 }
 
 TEST_F(BlockingQueueTest, PopById) {
@@ -87,7 +103,8 @@ TEST_F(BlockingQueueTest, Multithreaded) {
   std::thread consumer([this, &received]() {
     while (true) {
       auto result = queue_.Pop();
-      if (!result.has_value()) break;
+      ASSERT_TRUE(result.has_value());
+      if (!result->has_value()) break;
       ++received;
     }
   });

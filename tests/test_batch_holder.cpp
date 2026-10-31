@@ -73,12 +73,14 @@ TEST(BatchHolderTest, TryPull) {
   BatchHolder holder(1);
 
   auto empty_result = holder.TryPull();
-  EXPECT_FALSE(empty_result.has_value());
+  ASSERT_TRUE(empty_result.has_value());
+  EXPECT_FALSE(empty_result->has_value());
 
   (void)holder.Add(MakeTestData("data1", 256, 10));
 
   ASSERT_OK_AND_ASSIGN(auto data, holder.TryPull());
-  EXPECT_EQ(data->id(), "data1");
+  ASSERT_TRUE(data.has_value());
+  EXPECT_EQ((*data)->id(), "data1");
   EXPECT_EQ(holder.batch_count(), 0U);
 }
 
@@ -89,7 +91,24 @@ TEST(BatchHolderTest, PullAfterFinish) {
   holder.Finish();
 
   ASSERT_OK_AND_ASSIGN(auto data, holder.Pull());
-  EXPECT_EQ(data->id(), "data1");
+  ASSERT_TRUE(data.has_value());
+  EXPECT_EQ((*data)->id(), "data1");
+}
+
+TEST(BatchHolderTest, PullOnFinishedDrainedHolderIsNulloptNotError) {
+  BatchHolder holder(1);
+
+  (void)holder.Add(MakeTestData("data1", 256, 10));
+  holder.Finish();
+
+  ASSERT_OK_AND_ASSIGN(auto data, holder.Pull());
+  ASSERT_TRUE(data.has_value());
+  EXPECT_TRUE(holder.IsFinished());
+
+  ASSERT_OK_AND_ASSIGN(auto eos, holder.Pull());
+  EXPECT_FALSE(eos.has_value());
+  ASSERT_OK_AND_ASSIGN(auto try_eos, holder.TryPull());
+  EXPECT_FALSE(try_eos.has_value());
 }
 
 TEST(BatchHolderTest, IsFinished) {
@@ -124,7 +143,8 @@ TEST(BatchHolderTest, MultipleBatches) {
 
   for (int i = 0; i < 5; ++i) {
     ASSERT_OK_AND_ASSIGN(auto data, holder.Pull());
-    EXPECT_EQ(data->id(), "data" + std::to_string(i));
+    ASSERT_TRUE(data.has_value());
+    EXPECT_EQ((*data)->id(), "data" + std::to_string(i));
   }
 
   EXPECT_TRUE(holder.IsFinished());
@@ -149,7 +169,8 @@ TEST(ConcatenatingBatchHolderTest, SingleDataBlock) {
   holder.Finish();
 
   ASSERT_OK_AND_ASSIGN(auto data, holder.Pull());
-  EXPECT_GT(data->size_in_bytes(), 0U);  // Size depends on RecordBatch structure
+  ASSERT_TRUE(data.has_value());
+  EXPECT_GT((*data)->size_in_bytes(), 0U);  // Size depends on RecordBatch structure
 }
 
 TEST(ConcatenatingBatchHolderTest, SingleDataBlockPull) {
@@ -166,7 +187,8 @@ TEST(ConcatenatingBatchHolderTest, SingleDataBlockPull) {
 
   // Pull returns the single block
   ASSERT_OK_AND_ASSIGN(auto data, holder.Pull());
-  EXPECT_EQ(data->num_rows(), 10U);
+  ASSERT_TRUE(data.has_value());
+  EXPECT_EQ((*data)->num_rows(), 10U);
 
   EXPECT_EQ(holder.batch_count(), 0U);
   EXPECT_TRUE(holder.IsFinished());
@@ -179,14 +201,16 @@ TEST(ConcatenatingBatchHolderTest, TryPullBeforeFinish) {
 
   // Try pull before finish should fail
   auto result = holder.TryPull();
-  EXPECT_FALSE(result.has_value());
+  ASSERT_TRUE(result.has_value());
+  EXPECT_FALSE(result->has_value());
 
   holder.Finish();
 
   // Now it should work
   ASSERT_OK_AND_ASSIGN(auto data, holder.TryPull());
-  EXPECT_GT(data->size_in_bytes(), 0U);  // Size depends on RecordBatch structure
-  EXPECT_EQ(data->num_rows(), 8U);
+  ASSERT_TRUE(data.has_value());
+  EXPECT_GT((*data)->size_in_bytes(), 0U);  // Size depends on RecordBatch structure
+  EXPECT_EQ((*data)->num_rows(), 8U);
 }
 
 // =============================================================================
@@ -240,7 +264,7 @@ TEST(BatchHolderThreadTest, ProducerConsumer) {
     int count = 0;
     while (!holder.IsFinished() || holder.HasNext()) {
       auto result = holder.TryPull();
-      if (result.has_value()) {
+      if (result.has_value() && result->has_value()) {
         ++count;
       } else {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -282,7 +306,7 @@ TEST(BatchHolderThreadTest, ConcurrentAdds) {
   int count = 0;
   while (holder.HasNext()) {
     auto result = holder.TryPull();
-    if (result.has_value()) {
+    if (result.has_value() && result->has_value()) {
       ++count;
     }
   }

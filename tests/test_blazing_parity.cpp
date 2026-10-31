@@ -110,16 +110,18 @@ TEST(BlazingParityTest, NonWaitingHolderIsPreFilledSingleShot) {
   EXPECT_FALSE(holder.IsFinished());  // has data -> not drained
 
   ASSERT_OK_AND_ASSIGN(auto first, holder.Pull());
-  EXPECT_EQ(first->num_rows(), 3U);
+  ASSERT_TRUE(first.has_value());
+  EXPECT_EQ((*first)->num_rows(), 3U);
   ASSERT_OK_AND_ASSIGN(auto second, holder.Pull());
-  EXPECT_EQ(second->num_rows(), 2U);
+  ASSERT_TRUE(second.has_value());
+  EXPECT_EQ((*second)->num_rows(), 2U);
 
   // Empty == drained: no finished-latch needed, Pull never blocks.
   EXPECT_TRUE(holder.IsFinished());
   EXPECT_FALSE(holder.HasNext());
   auto eos = holder.Pull();
-  ASSERT_FALSE(eos.has_value());
-  EXPECT_EQ(eos.error().code(), ErrorCode::Invalid);
+  ASSERT_TRUE(eos.has_value());
+  EXPECT_FALSE(eos->has_value());
 }
 
 TEST(BlazingParityTest, NonWaitingEdgeRejectsFlowControlAndFull) {
@@ -180,16 +182,19 @@ TEST(BlazingParityTest, ConcatenatingUpToServesChunksUnderCap) {
   holder.Finish();
 
   ASSERT_OK_AND_ASSIGN(auto chunk1, holder.Pull());
-  EXPECT_EQ(chunk1->num_rows(), 20U);  // two 10-row blocks merged
+  ASSERT_TRUE(chunk1.has_value());
+  EXPECT_EQ((*chunk1)->num_rows(), 20U);  // two 10-row blocks merged
   EXPECT_TRUE(holder.HasNext());
 
   ASSERT_OK_AND_ASSIGN(auto chunk2, holder.Pull());
-  EXPECT_EQ(chunk2->num_rows(), 20U);
+  ASSERT_TRUE(chunk2.has_value());
+  EXPECT_EQ((*chunk2)->num_rows(), 20U);
 
   // Drained: same EOS protocol as the simple holder.
   EXPECT_TRUE(holder.IsFinished());
   auto eos = holder.Pull();
-  ASSERT_FALSE(eos.has_value());
+  ASSERT_TRUE(eos.has_value());
+  EXPECT_FALSE(eos->has_value());
 }
 
 TEST(BlazingParityTest, ConcatenatingUpToOversizedBlockStillFlows) {
@@ -202,7 +207,8 @@ TEST(BlazingParityTest, ConcatenatingUpToOversizedBlockStillFlows) {
 
   // The oversized-batch rule: a chunk always contains at least one block.
   ASSERT_OK_AND_ASSIGN(auto chunk, holder.Pull());
-  EXPECT_EQ(chunk->num_rows(), 10U);
+  ASSERT_TRUE(chunk.has_value());
+  EXPECT_EQ((*chunk)->num_rows(), 10U);
   EXPECT_TRUE(holder.IsFinished());
 }
 
@@ -214,7 +220,8 @@ TEST(BlazingParityTest, ThresholdZeroKeepsConcatAllBehavior) {
   holder.Finish();
 
   ASSERT_OK_AND_ASSIGN(auto merged, holder.Pull());
-  EXPECT_EQ(merged->num_rows(), 5U);  // everything in one block
+  ASSERT_TRUE(merged.has_value());
+  EXPECT_EQ((*merged)->num_rows(), 5U);  // everything in one block
 }
 
 TEST(BlazingParityTest, PolicySizesConcatCapFromStats) {
@@ -250,7 +257,8 @@ TEST(BlazingParityTest, PolicySizesConcatCapFromStats) {
   }
   holders[0]->Finish();
   ASSERT_OK_AND_ASSIGN(auto chunk, holders[0]->Pull());
-  EXPECT_EQ(chunk->num_rows(), 20U);  // 2 blocks per 160-byte chunk
+  ASSERT_TRUE(chunk.has_value());
+  EXPECT_EQ((*chunk)->num_rows(), 20U);  // 2 blocks per 160-byte chunk
 }
 
 // =============================================================================

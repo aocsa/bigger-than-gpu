@@ -98,8 +98,8 @@ class PipelineExecutor {
   /// pipeline stops producing.
   [[nodiscard]] Status DrainPipeline(Pipeline& pipeline);
 
-  /// @brief Pulls one batch from a holder, translating corroborated
-  /// "finished and empty" into end-of-stream (engaged nullopt).
+  /// @brief Pulls one batch from a holder; `std::nullopt` once it is
+  /// finished and empty.
   [[nodiscard]] static Result<std::optional<cache::DataBlockPtr>> PullFromHolder(
       cache::IBatchHolder& holder);
 
@@ -115,10 +115,6 @@ class PipelineExecutor {
   ///    named ports (Union's `input_a`, `input_b` — Phase 2.7 F2), giving
   ///    deterministic UNION ALL concatenation.
   /// 3. Otherwise — blocking `Pull()` on `source_op`'s default input holder.
-  ///
-  /// `Pull()`'s `ErrorCode::Invalid` (queue finished and empty) is
-  /// translated to end-of-stream, corroborated against holder state — a
-  /// queue-shaped error becomes a value, never propagates as a real error.
   ///
   /// @return The next batch, `std::nullopt` on end-of-stream, or an error.
   [[nodiscard]] static Result<std::optional<cache::DataBlockPtr>> ClaimNextBatch(
