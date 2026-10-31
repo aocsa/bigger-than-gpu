@@ -22,7 +22,7 @@
 #include "quest/taskflow/meta_pipeline.hpp"
 #include "quest/taskflow/pipeline.hpp"
 #include "quest/taskflow/pipeline_executor.hpp"
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest;
 using namespace quest::taskflow;

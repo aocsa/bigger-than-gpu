@@ -24,7 +24,7 @@
 #include "quest/cache/batch_holder.hpp"
 #include "quest/taskflow/graph_builder.hpp"
 #include "quest/taskflow/prepared_query.hpp"
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest;
 using namespace quest::taskflow;

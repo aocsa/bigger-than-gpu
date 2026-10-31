@@ -1,5 +1,4 @@
-#ifndef QUEST_CACHE_BLOCKING_QUEUE_HPP_
-#define QUEST_CACHE_BLOCKING_QUEUE_HPP_
+#pragma once
 
 /// @file blocking_queue.hpp
 /// @brief Thread-safe blocking queue for message passing between operators
@@ -249,5 +248,3 @@ class BlockingQueue {
 };
 
 }  // namespace quest::cache
-
-#endif  // QUEST_CACHE_BLOCKING_QUEUE_HPP_

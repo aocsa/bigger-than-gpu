@@ -6,7 +6,7 @@
 #include <quest/quest.hpp>
 
 #include "quest/taskflow/graph_builder.hpp"
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest;
 using namespace quest::taskflow;

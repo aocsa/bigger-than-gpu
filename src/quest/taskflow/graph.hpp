@@ -1,5 +1,4 @@
-#ifndef QUEST_TASKFLOW_GRAPH_HPP_
-#define QUEST_TASKFLOW_GRAPH_HPP_
+#pragma once
 
 /// @file graph.hpp
 /// @brief Execution graph for the taskflow model.
@@ -243,5 +242,3 @@ class EdgeTuner {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_GRAPH_HPP_

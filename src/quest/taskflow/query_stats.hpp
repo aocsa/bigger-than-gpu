@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_QUERY_STATS_HPP_
-#define QUEST_TASKFLOW_QUERY_STATS_HPP_
+#pragma once
 
 /// @file query_stats.hpp
 /// @brief Statistics and hardware descriptors passed to Graph::Prepare().
@@ -31,5 +30,3 @@ struct HardwareInfo {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_QUERY_STATS_HPP_

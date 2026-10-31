@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_PREPARED_QUERY_HPP_
-#define QUEST_TASKFLOW_PREPARED_QUERY_HPP_
+#pragma once
 
 /// @file prepared_query.hpp
 /// @brief PreparedQuery — holders + pipelines + executor after Graph::Prepare().
@@ -100,5 +99,3 @@ class PreparedQuery {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_PREPARED_QUERY_HPP_

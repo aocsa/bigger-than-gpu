@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_QUERY_BUILDER_HPP
-#define QUEST_QUERY_BUILDER_HPP
+#pragma once
 
 /// @file query_builder.hpp
 /// @brief Fluent query builder; ExecuteOnGraph() runs the query on the taskflow engine.
@@ -141,5 +140,3 @@ class QueryBuilder {
 };
 
 }  // namespace quest
-
-#endif  // QUEST_QUERY_BUILDER_HPP

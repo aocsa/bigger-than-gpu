@@ -1,5 +1,4 @@
-#ifndef QUEST_CACHE_BATCH_HOLDER_HPP_
-#define QUEST_CACHE_BATCH_HOLDER_HPP_
+#pragma once
 
 /// @file batch_holder.hpp
 /// @brief Manages data flow between operators via a blocking queue; renamed from CacheMachine.
@@ -282,5 +281,3 @@ class NonWaitingBatchHolder final : public BatchHolderBase {
     std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr);
 
 }  // namespace quest::cache
-
-#endif  // QUEST_CACHE_BATCH_HOLDER_HPP_

@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_EDGE_CONFIG_HPP_
-#define QUEST_TASKFLOW_EDGE_CONFIG_HPP_
+#pragma once
 
 /// @file edge_config.hpp
 /// @brief EdgeConfig, BarrierType, and SpillPolicy for graph edge semantics.
@@ -145,5 +144,3 @@ struct EdgeConfig {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_EDGE_CONFIG_HPP_

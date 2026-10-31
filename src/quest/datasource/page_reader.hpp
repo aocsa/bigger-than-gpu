@@ -1,8 +1,7 @@
 // Copyright 2024
 // Licensed under the Apache License, Version 2.0
 
-#ifndef PARQUET_READER_PAGE_READER_HPP
-#define PARQUET_READER_PAGE_READER_HPP
+#pragma once
 
 #include <cstdint>
 #include <cstring>
@@ -386,5 +385,3 @@ class PageReader {
 };
 
 }  // namespace quest::datasource
-
-#endif  // PARQUET_READER_PAGE_READER_HPP

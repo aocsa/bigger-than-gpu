@@ -1,5 +1,4 @@
-#ifndef QUEST_RESULT_HPP_
-#define QUEST_RESULT_HPP_
+#pragma once
 
 /// @file result.hpp
 /// @brief Result<T> and Status error-handling types built on std::expected.
@@ -317,5 +316,3 @@ template <typename T>
 }
 
 }  // namespace quest
-
-#endif  // QUEST_RESULT_HPP_

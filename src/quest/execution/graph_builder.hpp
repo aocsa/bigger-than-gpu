@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_EXECUTION_GRAPH_BUILDER_HPP_
-#define QUEST_EXECUTION_GRAPH_BUILDER_HPP_
+#pragma once
 
 /// @file graph_builder.hpp
 /// @brief Sirius-style create_plan gate: LogicalPlan → push-pipeline Graph.
@@ -330,5 +329,3 @@ namespace detail {
 }
 
 }  // namespace quest::execution
-
-#endif  // QUEST_EXECUTION_GRAPH_BUILDER_HPP_

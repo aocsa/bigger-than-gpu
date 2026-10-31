@@ -20,7 +20,7 @@
 #include "quest/cache/data_block.hpp"
 #include "quest/taskflow/operator.hpp"
 #include "quest/taskflow/operator_type.hpp"
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 namespace quest::taskflow {
 namespace {

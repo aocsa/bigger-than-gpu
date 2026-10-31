@@ -1,8 +1,7 @@
 // Copyright 2024
 // Licensed under the Apache License, Version 2.0
 
-#ifndef PARQUET_READER_TYPES_HPP
-#define PARQUET_READER_TYPES_HPP
+#pragma once
 
 #include <cstdint>
 #include <format>
@@ -191,5 +190,3 @@ inline bool IsFixedWidth(const DataType& type) {
 }
 
 }  // namespace quest::datasource
-
-#endif  // PARQUET_READER_TYPES_HPP

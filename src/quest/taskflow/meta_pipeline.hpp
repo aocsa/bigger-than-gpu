@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_META_PIPELINE_HPP_
-#define QUEST_TASKFLOW_META_PIPELINE_HPP_
+#pragma once
 
 /// @file meta_pipeline.hpp
 /// @brief MetaPipeline::Build — splits a finalized Graph into Pipelines at
@@ -46,5 +45,3 @@ class MetaPipeline {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_META_PIPELINE_HPP_

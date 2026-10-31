@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_LOGICAL_PLAN_HPP
-#define QUEST_LOGICAL_PLAN_HPP
+#pragma once
 
 /// @file logical_plan.hpp
 /// @brief Logical plan nodes for query execution.
@@ -280,5 +279,3 @@ inline Result<Field> ColumnIndex::ToField(const LogicalPlan& input) const {
 }
 
 }  // namespace quest
-
-#endif  // QUEST_LOGICAL_PLAN_HPP

@@ -1,8 +1,7 @@
 // Copyright 2024
 // Licensed under the Apache License, Version 2.0
 
-#ifndef PARQUET_READER_HPP
-#define PARQUET_READER_HPP
+#pragma once
 
 // Core datasource types (in quest::datasource namespace)
 #include "quest/datasource/column_reader.hpp"
@@ -19,5 +18,3 @@
 #include "quest/datasource/parquet/encoding.hpp"
 #include "quest/datasource/parquet/metadata.hpp"
 #include "quest/datasource/parquet/thrift_decoder.hpp"
-
-#endif  // PARQUET_READER_HPP

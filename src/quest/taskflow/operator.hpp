@@ -1,5 +1,4 @@
-#ifndef QUEST_TASKFLOW_OPERATOR_HPP_
-#define QUEST_TASKFLOW_OPERATOR_HPP_
+#pragma once
 
 /// @file operator.hpp
 /// @brief Base Operator class and SimpleOperator template for the execution graph.
@@ -201,5 +200,3 @@ class SimpleOperator : public Operator {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_OPERATOR_HPP_

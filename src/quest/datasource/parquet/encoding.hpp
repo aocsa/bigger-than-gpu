@@ -1,8 +1,7 @@
 // Copyright 2024
 // Licensed under the Apache License, Version 2.0
 
-#ifndef PARQUET_READER_ENCODING_HPP
-#define PARQUET_READER_ENCODING_HPP
+#pragma once
 
 /// @file encoding.hpp
 /// @brief Value decoders for Parquet encodings (Plain, RLE, Dictionary).
@@ -340,5 +339,3 @@ class RleBitPackingDecoder {
 }
 
 }  // namespace quest::datasource::parquet
-
-#endif  // PARQUET_READER_ENCODING_HPP

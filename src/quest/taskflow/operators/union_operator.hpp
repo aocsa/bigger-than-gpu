@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_OPERATORS_UNION_OPERATOR_HPP_
-#define QUEST_TASKFLOW_OPERATORS_UNION_OPERATOR_HPP_
+#pragma once
 
 /// @file union_operator.hpp
 /// @brief Streaming UNION ALL: forwards two input streams as one.
@@ -69,5 +68,3 @@ class UnionOperator : public SimpleOperator {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_OPERATORS_UNION_OPERATOR_HPP_

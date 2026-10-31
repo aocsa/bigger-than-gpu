@@ -1,5 +1,4 @@
-#ifndef QUEST_TASKFLOW_OPERATOR_TYPE_HPP_
-#define QUEST_TASKFLOW_OPERATOR_TYPE_HPP_
+#pragma once
 
 /// @file operator_type.hpp
 /// @brief Operator type enum and classification predicates for the execution graph.
@@ -96,5 +95,3 @@ enum class OperatorType : std::uint8_t {
 }
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_OPERATOR_TYPE_HPP_

@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_EXECUTION_BATCH_KERNELS_HPP_
-#define QUEST_EXECUTION_BATCH_KERNELS_HPP_
+#pragma once
 
 /// @file batch_kernels.hpp
 /// @brief Shared RecordBatch filter/project helpers for physical + taskflow paths.
@@ -379,5 +378,3 @@ namespace quest::execution {
 }
 
 }  // namespace quest::execution
-
-#endif  // QUEST_EXECUTION_BATCH_KERNELS_HPP_

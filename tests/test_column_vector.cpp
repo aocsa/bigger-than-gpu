@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "quest/datasource/column_vector.hpp"
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest::datasource;
 

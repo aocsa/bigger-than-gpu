@@ -19,7 +19,7 @@
 #include "quest/logical_plan/logical_plan.hpp"
 #include "quest/taskflow/meta_pipeline.hpp"
 #include "quest/taskflow/operators/union_operator.hpp"
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest;
 using namespace quest::taskflow;

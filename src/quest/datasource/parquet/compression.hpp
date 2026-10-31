@@ -1,8 +1,7 @@
 // Copyright 2024
 // Licensed under the Apache License, Version 2.0
 
-#ifndef PARQUET_READER_COMPRESSION_HPP
-#define PARQUET_READER_COMPRESSION_HPP
+#pragma once
 
 /// @file compression.hpp
 /// @brief Compression codec abstraction for Parquet decompression. Currently supports Snappy.
@@ -106,5 +105,3 @@ class SnappyCodec : public CompressionCodec {
 }
 
 }  // namespace quest::datasource::parquet
-
-#endif  // PARQUET_READER_COMPRESSION_HPP

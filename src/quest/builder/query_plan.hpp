@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_QUERY_PLAN_HPP
-#define QUEST_QUERY_PLAN_HPP
+#pragma once
 
 /// @file query_plan.hpp
 /// @brief Query plan building logic behind QueryBuilder's fluent API.
@@ -141,5 +140,3 @@ class QueryPlan {
 };
 
 }  // namespace quest
-
-#endif  // QUEST_QUERY_PLAN_HPP

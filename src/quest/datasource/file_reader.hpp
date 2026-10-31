@@ -1,8 +1,7 @@
 // Copyright 2024
 // Licensed under the Apache License, Version 2.0
 
-#ifndef PARQUET_READER_FILE_READER_HPP
-#define PARQUET_READER_FILE_READER_HPP
+#pragma once
 
 #include <algorithm>
 #include <cstdint>
@@ -308,5 +307,3 @@ class ParquetFileReader {
 };
 
 }  // namespace quest::datasource
-
-#endif  // PARQUET_READER_FILE_READER_HPP

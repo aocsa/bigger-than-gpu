@@ -1,8 +1,7 @@
 // Copyright 2024
 // Licensed under the Apache License, Version 2.0
 
-#ifndef PARQUET_READER_COLUMN_VECTOR_HPP
-#define PARQUET_READER_COLUMN_VECTOR_HPP
+#pragma once
 
 #include <bit>
 #include <cstdint>
@@ -225,5 +224,3 @@ inline std::unique_ptr<ColumnVector> CreateColumnVector(const DataType& type,
 }
 
 }  // namespace quest::datasource
-
-#endif  // PARQUET_READER_COLUMN_VECTOR_HPP

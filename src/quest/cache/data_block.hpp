@@ -1,5 +1,4 @@
-#ifndef QUEST_CACHE_DATA_BLOCK_HPP_
-#define QUEST_CACHE_DATA_BLOCK_HPP_
+#pragma once
 
 /// @file data_block.hpp
 /// @brief Abstract cache data representation across CPU and Disk tiers.
@@ -175,5 +174,3 @@ class DiskBlock final : public DataBlock {
 using DataBlockPtr = std::shared_ptr<DataBlock>;
 
 }  // namespace quest::cache
-
-#endif  // QUEST_CACHE_DATA_BLOCK_HPP_

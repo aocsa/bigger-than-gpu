@@ -62,8 +62,9 @@ Other dirs: `tests/` (one `test_*.cpp` per area, GTest), `examples/`, `docs/`, `
 - `const`-qualify all methods that don't mutate state
 
 ### Header Guards
-- Use `#ifndef`/`#define`/`#endif` — NOT `#pragma once`
-- Pattern: `QUEST_{SUBSYSTEM}_{FILENAME}_HPP_`
+- Use `#pragma once`, placed after the copyright header
+- No macros in `src/`; test-only macros (`ASSERT_OK`, `ASSERT_OK_AND_ASSIGN`) live in
+  `tests/support/test_utils.hpp`
 
 ### Documentation
 - Public API: Doxygen `///` with `@brief`, `@param`, `@return`

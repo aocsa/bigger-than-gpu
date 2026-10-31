@@ -42,7 +42,7 @@
 #include "quest/taskflow/operators/project_operator.hpp"
 #include "quest/taskflow/operators/table_scan_operator.hpp"
 #include "quest/taskflow/pipeline_executor.hpp"  // PipelineExecutor
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest;
 using namespace quest::taskflow;

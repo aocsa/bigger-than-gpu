@@ -1,5 +1,4 @@
-#ifndef QUEST_MEMORY_MEMORY_RESOURCE_HPP_
-#define QUEST_MEMORY_MEMORY_RESOURCE_HPP_
+#pragma once
 
 /// @file memory_resource.hpp
 /// @brief Two-tier (CPU RAM / Disk) memory resource interfaces.
@@ -195,5 +194,3 @@ class MemoryResourceManager {
 };
 
 }  // namespace quest::memory
-
-#endif  // QUEST_MEMORY_MEMORY_RESOURCE_HPP_

@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_EXPR_BUILDER_HPP
-#define QUEST_EXPR_BUILDER_HPP
+#pragma once
 
 /// @file expr_builder.hpp
 /// @brief Expression builder DSL for constructing logical expressions.
@@ -151,5 +150,3 @@ template <LiteralValue T>
 }
 
 }  // namespace quest
-
-#endif  // QUEST_EXPR_BUILDER_HPP

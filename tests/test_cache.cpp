@@ -17,7 +17,7 @@
 
 #include "quest/cache/batch_holder.hpp"
 #include "quest/cache/data_block.hpp"
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest;
 using namespace quest::cache;

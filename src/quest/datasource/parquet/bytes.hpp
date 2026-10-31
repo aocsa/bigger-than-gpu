@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_DATASOURCE_PARQUET_BYTES_HPP_
-#define QUEST_DATASOURCE_PARQUET_BYTES_HPP_
+#pragma once
 
 /// @file bytes.hpp
 /// @brief Bounds-checked reads from Parquet byte buffers.
@@ -50,5 +49,3 @@ template <typename T>
 }
 
 }  // namespace quest::datasource::parquet
-
-#endif  // QUEST_DATASOURCE_PARQUET_BYTES_HPP_

@@ -1,5 +1,4 @@
-#ifndef QUEST_TASKFLOW_PORT_HPP_
-#define QUEST_TASKFLOW_PORT_HPP_
+#pragma once
 
 /// @file port.hpp
 /// @brief Port class for managing operator input/output connections.
@@ -164,5 +163,3 @@ void AddPorts(Port& port, PortNames&&... names) {
 }
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_PORT_HPP_

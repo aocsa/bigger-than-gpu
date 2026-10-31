@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_OPERATORS_FILTER_OPERATOR_HPP_
-#define QUEST_TASKFLOW_OPERATORS_FILTER_OPERATOR_HPP_
+#pragma once
 
 /// @file filter_operator.hpp
 /// @brief Pipeline-role Filter that evaluates a pre-built physical expression.
@@ -59,5 +58,3 @@ class FilterOperator : public SimpleOperator {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_OPERATORS_FILTER_OPERATOR_HPP_

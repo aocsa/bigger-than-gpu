@@ -1,8 +1,7 @@
 // Copyright 2024
 // Licensed under the Apache License, Version 2.0
 
-#ifndef PARQUET_READER_DATA_SOURCE_HPP
-#define PARQUET_READER_DATA_SOURCE_HPP
+#pragma once
 
 #include <memory>
 #include <string>
@@ -159,5 +158,3 @@ class ParquetDataSource : public DataSource {
 };
 
 }  // namespace quest::datasource
-
-#endif  // PARQUET_READER_DATA_SOURCE_HPP

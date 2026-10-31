@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_PHYSICAL_EXPR_HPP
-#define QUEST_PHYSICAL_EXPR_HPP
+#pragma once
 
 /// @file physical_expr.hpp
 /// @brief Physical expressions for query execution.
@@ -784,5 +783,3 @@ class MaxExpression : public AggregateExpression {
 };
 
 }  // namespace quest
-
-#endif  // QUEST_PHYSICAL_EXPR_HPP

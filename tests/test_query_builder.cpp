@@ -10,7 +10,7 @@
 
 #include "quest/builder/query_builder.hpp"
 #include "quest/datasource/data_source.hpp"
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest;
 using namespace quest::datasource;

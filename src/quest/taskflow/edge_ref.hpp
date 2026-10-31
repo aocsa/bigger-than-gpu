@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_EDGE_REF_HPP_
-#define QUEST_TASKFLOW_EDGE_REF_HPP_
+#pragma once
 
 /// @file edge_ref.hpp
 /// @brief Edge identity and introspection types for runtime tuning (Phase 2.5 D5).
@@ -45,5 +44,3 @@ struct EdgeInfo {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_EDGE_REF_HPP_

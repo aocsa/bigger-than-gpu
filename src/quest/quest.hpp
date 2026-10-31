@@ -1,5 +1,4 @@
-#ifndef QUEST_QUEST_HPP_
-#define QUEST_QUEST_HPP_
+#pragma once
 
 /// @file quest.hpp
 /// @brief Convenience umbrella header for the QUEST library.
@@ -30,5 +29,3 @@ make_default_memory_manager() {
 }
 
 }  // namespace quest
-
-#endif  // QUEST_QUEST_HPP_

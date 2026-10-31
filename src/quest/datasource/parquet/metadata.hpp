@@ -1,8 +1,7 @@
 // Copyright 2024
 // Licensed under the Apache License, Version 2.0
 
-#ifndef PARQUET_READER_METADATA_HPP
-#define PARQUET_READER_METADATA_HPP
+#pragma once
 
 /// @file metadata.hpp
 /// @brief Parquet file metadata structures and Thrift footer parser.
@@ -804,5 +803,3 @@ inline Schema BuildSchema(const FileMetadata& metadata) {
 }
 
 }  // namespace quest::datasource::parquet
-
-#endif  // PARQUET_READER_METADATA_HPP

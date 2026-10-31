@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_OPERATORS_LIMIT_OPERATOR_HPP_
-#define QUEST_TASKFLOW_OPERATORS_LIMIT_OPERATOR_HPP_
+#pragma once
 
 /// @file limit_operator.hpp
 /// @brief Streaming Limit that truncates the pipeline to the first N rows.
@@ -101,5 +100,3 @@ class LimitOperator : public SimpleOperator {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_OPERATORS_LIMIT_OPERATOR_HPP_

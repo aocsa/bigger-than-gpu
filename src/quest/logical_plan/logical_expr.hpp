@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_LOGICAL_EXPR_HPP
-#define QUEST_LOGICAL_EXPR_HPP
+#pragma once
 
 /// @file logical_expr.hpp
 /// @brief Logical expressions for query plans.
@@ -572,5 +571,3 @@ inline LogicalExprPtr max(LogicalExprPtr input) {
 }
 
 }  // namespace quest
-
-#endif  // QUEST_LOGICAL_EXPR_HPP

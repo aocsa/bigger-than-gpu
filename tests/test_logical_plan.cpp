@@ -8,7 +8,7 @@
 
 #include "quest/logical_plan/logical_expr.hpp"
 #include "quest/logical_plan/logical_plan.hpp"
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest;
 using namespace quest::datasource;

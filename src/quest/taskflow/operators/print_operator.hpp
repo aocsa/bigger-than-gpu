@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_OPERATORS_PRINT_OPERATOR_HPP_
-#define QUEST_TASKFLOW_OPERATORS_PRINT_OPERATOR_HPP_
+#pragma once
 
 /// @file print_operator.hpp
 /// @brief Debug sink that writes each batch as CSV to an injectable ostream.
@@ -63,5 +62,3 @@ class PrintOperator : public Operator {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_OPERATORS_PRINT_OPERATOR_HPP_

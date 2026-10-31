@@ -1,7 +1,7 @@
-#ifndef QUEST_TESTS_UTILS_HPP_
-#define QUEST_TESTS_UTILS_HPP_
+#pragma once
 
 #include <gtest/gtest.h>
+
 #include <utility>
 
 #include "quest/datasource/column_vector.hpp"
@@ -10,9 +10,9 @@
 #include "quest/datasource/types.hpp"
 
 // Helper macro to generate unique variable names
-#define _QUEST_GTEST_CONCAT_IMPL(x, y) x##y
-#define _QUEST_GTEST_CONCAT(x, y) _QUEST_GTEST_CONCAT_IMPL(x, y)
-#define _QUEST_GTEST_NAME(x) _QUEST_GTEST_CONCAT(x, __LINE__)
+#define QUEST_TEST_CONCAT_IMPL(x, y) x##y
+#define QUEST_TEST_CONCAT(x, y) QUEST_TEST_CONCAT_IMPL(x, y)
+#define QUEST_TEST_NAME(x) QUEST_TEST_CONCAT(x, __LINE__)
 
 namespace quest::testing {
 
@@ -32,8 +32,7 @@ inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows) {
 }
 
 /// @brief Multiple int32 columns named "col0", "col1", etc.
-inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows,
-                                                    size_t num_columns) {
+inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows, size_t num_columns) {
   using namespace quest::datasource;
 
   std::vector<Field> fields;
@@ -55,21 +54,19 @@ inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows,
 }  // namespace quest::testing
 
 // Fails the test if Status/Result is not OK.
-#define ASSERT_OK(expr)                                                    \
-  do {                                                                     \
-    auto _res = (expr);                                                    \
-    ASSERT_TRUE(_res.has_value())                                          \
-        << "Operation failed: " << #expr << "\n"                           \
-        << "Error: " << _res.error().ToString();                           \
+#define ASSERT_OK(expr)                                        \
+  do {                                                         \
+    auto quest_test_status_ = (expr);                          \
+    ASSERT_TRUE(quest_test_status_.has_value())                \
+        << "Operation failed: " << #expr << "\n"               \
+        << "Error: " << quest_test_status_.error().ToString(); \
   } while (0)
 
 // Asserts Result<T> has a value, then moves the inner value into lhs.
 // Usage: ASSERT_OK_AND_ASSIGN(auto value, MyFunc());
-#define ASSERT_OK_AND_ASSIGN(lhs, expr)                                    \
-  auto _QUEST_GTEST_NAME(_result) = (expr);                                \
-  ASSERT_TRUE(_QUEST_GTEST_NAME(_result).has_value())                      \
-      << "Operation failed: " << #expr << "\n"                             \
-      << "Error: " << _QUEST_GTEST_NAME(_result).error().ToString();       \
-  lhs = std::move(*_QUEST_GTEST_NAME(_result));
-
-#endif  // QUEST_TESTS_UTILS_HPP_
+#define ASSERT_OK_AND_ASSIGN(lhs, expr)                                       \
+  auto QUEST_TEST_NAME(quest_test_result_) = (expr);                          \
+  ASSERT_TRUE(QUEST_TEST_NAME(quest_test_result_).has_value())                \
+      << "Operation failed: " << #expr << "\n"                                \
+      << "Error: " << QUEST_TEST_NAME(quest_test_result_).error().ToString(); \
+  lhs = std::move(*QUEST_TEST_NAME(quest_test_result_));

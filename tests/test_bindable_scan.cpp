@@ -16,7 +16,7 @@
 #include "quest/execution/graph_builder.hpp"
 #include "quest/taskflow/meta_pipeline.hpp"
 #include "quest/taskflow/operators/table_scan_operator.hpp"
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest;
 using namespace quest::taskflow;

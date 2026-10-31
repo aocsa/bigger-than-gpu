@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_OPERATORS_GENERATE_OPERATOR_HPP_
-#define QUEST_TASKFLOW_OPERATORS_GENERATE_OPERATOR_HPP_
+#pragma once
 
 /// @file generate_operator.hpp
 /// @brief Synthetic data source for dev/test pipelines.
@@ -98,5 +97,3 @@ class GenerateOperator : public Operator {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_OPERATORS_GENERATE_OPERATOR_HPP_

@@ -16,7 +16,7 @@
 #include "quest/datasource/parquet/bytes.hpp"
 #include "quest/datasource/parquet/encoding.hpp"
 #include "quest/datasource/parquet/parquet_reader.hpp"
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest;
 using namespace quest::datasource;

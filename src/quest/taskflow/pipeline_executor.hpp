@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_PIPELINE_EXECUTOR_HPP_
-#define QUEST_TASKFLOW_PIPELINE_EXECUTOR_HPP_
+#pragma once
 
 /// @file pipeline_executor.hpp
 /// @brief PipelineExecutor — runs a set of Pipelines on a bounded worker
@@ -157,5 +156,3 @@ class PipelineExecutor {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_PIPELINE_EXECUTOR_HPP_

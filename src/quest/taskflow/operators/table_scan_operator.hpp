@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_OPERATORS_TABLE_SCAN_OPERATOR_HPP_
-#define QUEST_TASKFLOW_OPERATORS_TABLE_SCAN_OPERATOR_HPP_
+#pragma once
 
 /// @file table_scan_operator.hpp
 /// @brief Pipeline-role TableScan that yields HostMemoryBlocks from a DataSource.
@@ -89,5 +88,3 @@ class TableScanOperator : public Operator {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_OPERATORS_TABLE_SCAN_OPERATOR_HPP_

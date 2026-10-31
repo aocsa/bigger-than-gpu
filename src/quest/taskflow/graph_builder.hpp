@@ -1,8 +1,7 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_GRAPH_BUILDER_HPP_
-#define QUEST_TASKFLOW_GRAPH_BUILDER_HPP_
+#pragma once
 
 /// @file graph_builder.hpp
 /// @brief GraphBuilder — fluent DSL for wiring execution graphs (Phase 2.5 D2).
@@ -300,5 +299,3 @@ ChainBuilder GraphBuilder::Chain(Ops&... ops) {
 }
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_GRAPH_BUILDER_HPP_

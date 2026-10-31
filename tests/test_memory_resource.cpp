@@ -10,7 +10,7 @@
 #include <filesystem>
 
 #include "quest/memory/memory_resource.hpp"
-#include "quest/tests/utils.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest::memory;
 

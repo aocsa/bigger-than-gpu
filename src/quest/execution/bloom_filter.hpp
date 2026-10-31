@@ -1,7 +1,6 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
-#ifndef QUEST_EXECUTION_BLOOM_FILTER_HPP_
-#define QUEST_EXECUTION_BLOOM_FILTER_HPP_
+#pragma once
 
 /// @file bloom_filter.hpp
 /// @brief Minimal insert-only Bloom filter for integer equality keys.
@@ -85,4 +84,3 @@ class BloomFilter {
 };
 
 }  // namespace quest::execution
-#endif  // QUEST_EXECUTION_BLOOM_FILTER_HPP_
