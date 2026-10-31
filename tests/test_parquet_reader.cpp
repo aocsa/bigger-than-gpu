@@ -6,9 +6,15 @@
 
 #include <gtest/gtest.h>
 
+#include <climits>
+#include <cstdint>
 #include <filesystem>
+#include <fstream>
+#include <vector>
 
 #include "quest/datasource/data_source.hpp"
+#include "quest/datasource/parquet/bytes.hpp"
+#include "quest/datasource/parquet/encoding.hpp"
 #include "quest/datasource/parquet/parquet_reader.hpp"
 #include "quest/tests/utils.hpp"
 
@@ -231,4 +237,57 @@ TEST_F(ParquetReaderTest, InvalidColumnProjection) {
       EXPECT_EQ(batch_result.value().num_columns(), 0U);
     }
   }
+}
+
+// =============================================================================
+// Corrupt input: every length comes from the file and must be bounds-checked
+// =============================================================================
+
+TEST(ParquetBytesTest, SliceAndLoadRejectOutOfBounds) {
+  const std::vector<uint8_t> buf{0x01, 0x02, 0x03, 0x04, 0x05};
+  ASSERT_OK_AND_ASSIGN(auto value, parquet::LoadLE<uint32_t>(buf, 1));
+  EXPECT_EQ(value, 0x05040302U);
+  EXPECT_FALSE(parquet::LoadLE<uint32_t>(buf, 2).has_value());
+  EXPECT_FALSE(parquet::Slice(buf, 3, 3).has_value());
+  EXPECT_FALSE(parquet::Slice(buf, 6, 0).has_value());
+  EXPECT_FALSE(parquet::Slice(buf, 1, SIZE_MAX).has_value());
+}
+
+TEST(ParquetBytesTest, BinaryDecoderRejectsLengthPastBuffer) {
+  const std::vector<uint8_t> buf{0xFF, 0xFF, 0xFF, 0x7F, 'a', 'b'};
+  parquet::PlainBinaryDecoder decoder;
+  decoder.SetData(buf);
+  EXPECT_FALSE(decoder.ReadValue().has_value());
+}
+
+TEST(ParquetBytesTest, RleDecoderRejectsTruncatedBitPackedRun) {
+  // Header 0x03: one bit-packed group of 8 values at bit width 8 needs 8 bytes; 2 are present.
+  const std::vector<uint8_t> buf{0x03, 0x01, 0x02};
+  parquet::RleBitPackingDecoder decoder(8);
+  decoder.SetData(buf, 8);
+  ASSERT_OK_AND_ASSIGN(auto first, decoder.ReadValue());
+  EXPECT_EQ(first, 1);
+  ASSERT_OK_AND_ASSIGN(auto second, decoder.ReadValue());
+  EXPECT_EQ(second, 2);
+  EXPECT_FALSE(decoder.ReadValue().has_value());
+}
+
+TEST(ParquetBytesTest, RleDecoderRejectsInvalidBitWidth) {
+  const std::vector<uint8_t> buf{0x02, 0x01};
+  parquet::RleBitPackingDecoder decoder(40);
+  decoder.SetData(buf, 1);
+  EXPECT_FALSE(decoder.ReadValue().has_value());
+}
+
+TEST(ParquetCorruptFileTest, FooterLengthPastFileStartIsAnError) {
+  const auto path = std::filesystem::temp_directory_path() / "quest_corrupt_footer.parquet";
+  {
+    std::ofstream out(path, std::ios::binary);
+    const char bytes[] = {'P', 'A', 'R', '1', 0, 0, 0, 0, '\xFF', '\xFF', '\xFF', '\x7F',
+                          'P', 'A', 'R', '1'};
+    out.write(bytes, sizeof(bytes));
+  }
+  auto result = ParquetDataSource::Open(path.string());
+  EXPECT_FALSE(result.has_value());
+  std::filesystem::remove(path);
 }

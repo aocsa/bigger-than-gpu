@@ -7,15 +7,18 @@
 /// @file encoding.hpp
 /// @brief Value decoders for Parquet encodings (Plain, RLE, Dictionary).
 
+#include <algorithm>
 #include <bit>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <memory>
 #include <span>
 #include <string>
 #include <vector>
 
 #include "quest/datasource/column_vector.hpp"
+#include "quest/datasource/parquet/bytes.hpp"
 #include "quest/datasource/types.hpp"
 #include "quest/result.hpp"
 
@@ -59,8 +62,10 @@ class PlainDecoder : public ValueDecoder {
       return std::unexpected(
           Status::ColumnDecodeError("No more values to read"));
     }
-    T value;
-    std::memcpy(&value, data_.data() + pos_, sizeof(T));
+    auto value = LoadLE<T>(data_, pos_);
+    if (!value) {
+      return value;
+    }
     pos_ += sizeof(T);
     ++values_read_;
     return value;
@@ -109,6 +114,9 @@ class PlainDecoder<bool> : public ValueDecoder {
       return std::unexpected(
           Status::ColumnDecodeError("No more boolean values to read"));
     }
+    if (byte_pos_ >= data_.size()) {
+      return Status::ColumnDecodeError("Not enough data for boolean values");
+    }
     bool value = (data_[byte_pos_] & (1 << bit_pos_)) != 0;
     ++bit_pos_;
     if (bit_pos_ == 8) {
@@ -147,22 +155,16 @@ class PlainBinaryDecoder : public ValueDecoder {
   }
 
   [[nodiscard]] Result<std::string> ReadValue() {
-    if (pos_ + 4 > data_.size()) {
-      return std::unexpected(
-          Status::ColumnDecodeError("Not enough data for string length"));
+    auto length = LoadLE<uint32_t>(data_, pos_);
+    if (!length) {
+      return std::unexpected(std::move(length).error());
     }
-    uint32_t length;
-    std::memcpy(&length, data_.data() + pos_, 4);
-    pos_ += 4;
-
-    if (pos_ + length > data_.size()) {
-      return std::unexpected(
-          Status::ColumnDecodeError("Not enough data for string content"));
+    auto bytes = Slice(data_, pos_ + 4, *length);
+    if (!bytes) {
+      return std::unexpected(std::move(bytes).error());
     }
-    std::string value(reinterpret_cast<const char*>(data_.data() + pos_),
-                      length);
-    pos_ += length;
-    return value;
+    pos_ += 4 + *length;
+    return std::string(reinterpret_cast<const char*>(bytes->data()), bytes->size());
   }
 
  private:
@@ -208,14 +210,15 @@ class RleBitPackingDecoder {
       }
     }
 
-    int32_t value;
-    if (is_rle_) {
-      value = current_value_;
-      --current_count_;
-    } else {
-      value = ReadBitPackedValue();
-      --current_count_;
+    int32_t value = current_value_;
+    if (!is_rle_) {
+      auto packed = ReadBitPackedValue();
+      if (!packed) {
+        return packed;
+      }
+      value = *packed;
     }
+    --current_count_;
     ++values_read_;
     return value;
   }
@@ -236,16 +239,25 @@ class RleBitPackingDecoder {
     if (pos_ >= data_.size()) {
       return Status::ColumnDecodeError("RLE decoder: unexpected end of data");
     }
+    if (bit_width_ < 0 || bit_width_ > 32) {
+      return Status::ColumnDecodeError(std::format("RLE decoder: invalid bit width {}", bit_width_));
+    }
 
-    uint32_t indicator = ReadVarInt();
+    auto varint = ReadVarInt();
+    if (!varint) {
+      return std::unexpected(std::move(varint).error());
+    }
+    uint32_t indicator = *varint;
     if (indicator & 1) {
       // Bit-packed run.
       is_rle_ = false;
       bit_packed_count_ = ((indicator >> 1) * 8);
       current_count_ = bit_packed_count_;
       bit_packed_pos_ = 0;
-      size_t bytes_needed = (bit_packed_count_ * bit_width_ + 7) / 8;
-      bit_packed_data_ = std::span(data_.data() + pos_, bytes_needed);
+      // Writers may truncate the final run's padding, so take what is there; reading past it is
+      // caught per value.
+      size_t bytes_needed = std::min((bit_packed_count_ * bit_width_ + 7) / 8, data_.size() - pos_);
+      bit_packed_data_ = data_.subspan(pos_, bytes_needed);
       pos_ += bytes_needed;
     } else {
       // RLE run.
@@ -256,18 +268,16 @@ class RleBitPackingDecoder {
     return Status::OK();
   }
 
-  uint32_t ReadVarInt() {
+  [[nodiscard]] Result<uint32_t> ReadVarInt() {
     uint32_t result = 0;
-    uint32_t shift = 0;
-    while (pos_ < data_.size()) {
+    for (uint32_t shift = 0; shift < 32 && pos_ < data_.size(); shift += 7) {
       uint8_t byte = data_[pos_++];
       result |= static_cast<uint32_t>(byte & 0x7F) << shift;
       if ((byte & 0x80) == 0) {
-        break;
+        return result;
       }
-      shift += 7;
     }
-    return result;
+    return Status::ColumnDecodeError("RLE decoder: truncated or oversized varint");
   }
 
   int32_t ReadFixedWidth() {
@@ -279,10 +289,13 @@ class RleBitPackingDecoder {
     return value;
   }
 
-  int32_t ReadBitPackedValue() {
+  [[nodiscard]] Result<int32_t> ReadBitPackedValue() {
     size_t bit_offset = bit_packed_pos_ * bit_width_;
     size_t byte_offset = bit_offset / 8;
     size_t bit_in_byte = bit_offset % 8;
+    if ((bit_offset + bit_width_ + 7) / 8 > bit_packed_data_.size()) {
+      return Status::ColumnDecodeError("RLE decoder: bit-packed run exceeds data");
+    }
 
     int32_t value = 0;
     int bits_read = 0;

@@ -265,8 +265,14 @@ class ParquetFileReader {
     if (!footer_len_result.has_value()) {
       return std::unexpected(footer_len_result.error());
     }
-    uint32_t footer_length;
-    std::memcpy(&footer_length, footer_len_result.value().data(), 4);
+    auto footer_length_result = parquet::LoadLE<uint32_t>(footer_len_result.value(), 0);
+    if (!footer_length_result) {
+      return std::unexpected(std::move(footer_length_result).error());
+    }
+    uint32_t footer_length = *footer_length_result;
+    if (footer_length > file_.size() - kFooterSize - kMagicSize) {
+      return Status::ParquetFormatError("Invalid Parquet file: footer length exceeds file size");
+    }
 
     size_t footer_start = file_.size() - kFooterSize - footer_length;
     auto footer_data_result = file_.Read(footer_start, footer_length);

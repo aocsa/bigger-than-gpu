@@ -151,21 +151,23 @@ class ColumnReader {
     std::vector<int32_t> def_levels;
     if (max_def_level > 0) {
       // Definition levels are prefixed with their byte length.
-      if (pos + 4 > data.size()) {
-        return Status::PageDecodeError(
-            "Not enough data for definition level length");
+      auto def_level_length = parquet::LoadLE<uint32_t>(data, pos);
+      if (!def_level_length) {
+        return std::unexpected(std::move(def_level_length).error());
       }
-      uint32_t def_level_length;
-      std::memcpy(&def_level_length, data.data() + pos, 4);
       pos += 4;
 
-      auto levels_result = DecodeDefinitionLevelsRle(
-          data.subspan(pos, def_level_length), max_def_level, header.num_values);
+      auto def_data = parquet::Slice(data, pos, *def_level_length);
+      if (!def_data) {
+        return std::unexpected(std::move(def_data).error());
+      }
+      auto levels_result =
+          DecodeDefinitionLevelsRle(*def_data, max_def_level, header.num_values);
       if (!levels_result.has_value()) {
         return std::unexpected(levels_result.error());
       }
       def_levels = std::move(levels_result.value());
-      pos += def_level_length;
+      pos += *def_level_length;
     }
 
     auto values_data = data.subspan(pos);
@@ -176,18 +178,23 @@ class ColumnReader {
   [[nodiscard]] Status ReadDataPageV2(const PageHeader& header,
                                        std::span<const uint8_t> data,
                                        ColumnVector* column) {
-    size_t pos = 0;
-
+    if (header.repetition_levels_byte_length < 0 || header.definition_levels_byte_length < 0 ||
+        header.num_nulls < 0 || header.num_nulls > header.num_values) {
+      return Status::PageDecodeError("Invalid data page V2 header");
+    }
     // Skip repetition levels (always 0 for flat schema).
-    pos += header.repetition_levels_byte_length;
+    size_t pos = static_cast<size_t>(header.repetition_levels_byte_length);
 
     // Read definition levels.
     std::vector<int32_t> def_levels;
     int max_def_level = field_.IsNullable() ? 1 : 0;
     if (max_def_level > 0 && header.definition_levels_byte_length > 0) {
-      auto def_data = data.subspan(pos, header.definition_levels_byte_length);
+      auto def_data = parquet::Slice(data, pos, header.definition_levels_byte_length);
+      if (!def_data) {
+        return std::unexpected(std::move(def_data).error());
+      }
       auto levels_result =
-          DecodeDefinitionLevelsRle(def_data, max_def_level, header.num_values);
+          DecodeDefinitionLevelsRle(*def_data, max_def_level, header.num_values);
       if (!levels_result.has_value()) {
         return std::unexpected(levels_result.error());
       }
@@ -195,6 +202,9 @@ class ColumnReader {
       pos += header.definition_levels_byte_length;
     }
 
+    if (pos > data.size()) {
+      return Status::PageDecodeError("Data page V2 levels exceed page size");
+    }
     auto values_data = data.subspan(pos);
     // V2 pages store non-null value count.
     size_t num_non_null = header.num_values - header.num_nulls;
@@ -358,7 +368,9 @@ class ColumnReader {
     PlainDecoder<T> dict_decoder;
     dict_decoder.SetData(dictionary_data_);
     std::vector<T> dictionary(dict_num_values_);
-    dict_decoder.ReadBatch(dictionary);
+    if (dict_decoder.ReadBatch(dictionary) != dictionary.size()) {
+      return Status::ColumnDecodeError("Dictionary page shorter than its value count");
+    }
 
     // The data contains the bit width followed by RLE encoded indices.
     if (data.empty()) {
