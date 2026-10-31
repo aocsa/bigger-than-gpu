@@ -90,3 +90,26 @@ Break the `cache → batch_kernels → physical_expr` include cycle by moving
 - CMake: `target_compile_options`, `-Werror` in CI, `Threads::Threads`, fix
   `project(bigger-than-gpu)` name, `QUEST_SANITIZERS` as a STRING cache var. The code compiles
   under `-std=c++23`, so the standard can drop from 26 to 23.
+
+## Resolved decisions (execution, 2026-10-31)
+
+Guiding rule: keep every component a Sirius-style CPU query engine needs (scan, filter, project,
+aggregate, join, sort, limit, spill, back-pressure, Parquet).
+
+1. Legacy callback engine: **delete**, except `BloomFilter`, its test and the `bloom_join`
+   example. The filter is standalone (no legacy-engine dependency) and is the runtime-filter
+   building block for hash joins.
+2. Aggregate expressions: **keep** (needed for the Aggregate operator).
+3. Runtime tuning + flow control: **keep, not wired**. Pipelines behind a barrier run after their
+   producer finishes, so blocking in `WaitIfSaturated` there would deadlock; spill already covers
+   that case. Back-pressure becomes live once concurrently running pipelines (exchange/shuffle on
+   the `distribution` branch) share an edge.
+4. Parquet reader: **keep**, fix bounds checks (S2).
+5. Header guards: **switch to `#pragma once`**, update CLAUDE.md.
+
+S1 adjustments: keep `AddPorts` (multi-input join ports). Row estimation is deleted because
+`QueryStats` is the live cardinality input.
+
+Regression gate per stage: full build, all ctest tests (baseline 609; 
+`GraphBridgeTest.FlagshipSpillThroughRealOperators` is a pre-existing flake under `ctest -j`),
+and byte-identical example/Parquet-decoder outputs against the pre-change binaries.
