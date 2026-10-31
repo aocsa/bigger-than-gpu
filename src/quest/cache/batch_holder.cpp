@@ -66,7 +66,7 @@ BatchHolder::BatchHolder(std::uint64_t id, BatchHolderConfig config,
 
 Status BatchHolder::Add(DataBlockPtr data) {
   if (!data) {
-    return Status::Invalid("Cannot add null data block");
+    return Error::Invalid("Cannot add null data block");
   }
 
   auto bytes = data->size_in_bytes();
@@ -74,13 +74,13 @@ Status BatchHolder::Add(DataBlockPtr data) {
 
   if (ShouldAutoSpill() && memory_manager_) {
     auto status = MaybeSpill(data);
-    if (!status.ok()) {
+    if (!status.has_value()) {
       return status;
     }
   }
 
   auto status = queue_.Put(std::move(data));
-  if (status.ok()) {
+  if (status.has_value()) {
     TrackAdded(bytes, rows);
     current_bytes_.fetch_add(bytes);
   }
@@ -136,7 +136,7 @@ bool BatchHolder::ShouldSpill() const {
 
 Status BatchHolder::MaybeSpill(DataBlockPtr& data) {
   if (!data) {
-    return Status::OK();
+    return {};
   }
 
   // Only spill CPU data if memory is saturated
@@ -148,7 +148,7 @@ Status BatchHolder::MaybeSpill(DataBlockPtr& data) {
     // If spilling fails, continue with CPU data
   }
 
-  return Status::OK();
+  return {};
 }
 
 // =============================================================================
@@ -162,14 +162,14 @@ ConcatenatingBatchHolder::ConcatenatingBatchHolder(
 
 Status ConcatenatingBatchHolder::Add(DataBlockPtr data) {
   if (!data) {
-    return Status::Invalid("Cannot add null data block");
+    return Error::Invalid("Cannot add null data block");
   }
 
   auto bytes = data->size_in_bytes();
   auto rows = data->num_rows();
 
   auto status = queue_.Put(std::move(data));
-  if (status.ok()) {
+  if (status.has_value()) {
     TrackAdded(bytes, rows);
   }
 
@@ -178,7 +178,7 @@ Status ConcatenatingBatchHolder::Add(DataBlockPtr data) {
 
 Result<std::optional<DataBlockPtr>> ConcatenatingBatchHolder::Pull() {
   auto status = queue_.WaitUntilFinished();
-  if (!status.ok() && !queue_.HasNext()) {
+  if (!status.has_value() && !queue_.HasNext()) {
     return std::unexpected(status.error());
   }
 
@@ -296,14 +296,14 @@ NonWaitingBatchHolder::NonWaitingBatchHolder(
 
 Status NonWaitingBatchHolder::Add(DataBlockPtr data) {
   if (!data) {
-    return Status::Invalid("Cannot add null data block");
+    return Error::Invalid("Cannot add null data block");
   }
 
   auto bytes = data->size_in_bytes();
   auto rows = data->num_rows();
 
   auto status = queue_.Put(std::move(data));
-  if (status.ok()) {
+  if (status.has_value()) {
     TrackAdded(bytes, rows);
   }
   return status;

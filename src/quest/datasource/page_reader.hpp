@@ -116,35 +116,35 @@ class PageHeaderParser {
         }
         case 5: {  // data_page_header
           auto status = ParseDataPageHeader(decoder, header);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
         }
         case 6: {  // index_page_header
           auto status = decoder.SkipStruct();
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
         }
         case 7: {  // dictionary_page_header
           auto status = ParseDictionaryPageHeader(decoder, header);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
         }
         case 8: {  // data_page_header_v2
           auto status = ParseDataPageHeaderV2(decoder, header);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
         }
         default: {
           auto status = decoder.SkipField(field->type);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
@@ -206,14 +206,14 @@ class PageHeaderParser {
         }
         default: {
           auto status = decoder.SkipField(field->type);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return status;
           }
           break;
         }
       }
     }
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] static Status ParseDataPageHeaderV2(ThriftDecoder& decoder,
@@ -286,14 +286,14 @@ class PageHeaderParser {
         }
         default: {
           auto status = decoder.SkipField(field->type);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return status;
           }
           break;
         }
       }
     }
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] static Status ParseDictionaryPageHeader(ThriftDecoder& decoder,
@@ -330,14 +330,14 @@ class PageHeaderParser {
         }
         default: {
           auto status = decoder.SkipField(field->type);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return status;
           }
           break;
         }
       }
     }
-    return Status::OK();
+    return {};
   }
 };
 
@@ -367,7 +367,7 @@ class PageReader {
     size_t page_size = current_header_.compressed_page_size;
     if (pos_ + page_size > data_.size()) {
       return std::unexpected(
-          Status::PageDecodeError("Page data exceeds buffer size"));
+          Error::PageDecodeError("Page data exceeds buffer size"));
     }
     auto result = data_.subspan(pos_, page_size);
     pos_ += page_size;

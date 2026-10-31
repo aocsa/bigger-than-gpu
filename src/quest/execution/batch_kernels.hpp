@@ -189,7 +189,7 @@ namespace quest::execution {
     columns.push_back(std::move(*result));
   }
   if (columns.size() != expressions.size()) {
-    return Status::ExpressionError("Projection produced fewer columns than expressions");
+    return Error::ExpressionError("Projection produced fewer columns than expressions");
   }
   return datasource::RecordBatch(schema, std::move(columns));
 }
@@ -198,12 +198,12 @@ namespace quest::execution {
 [[nodiscard]] inline Result<std::shared_ptr<cache::HostMemoryBlock>> EnsureHostBlock(
     cache::DataBlockPtr input) {
   if (!input) {
-    return Status::Invalid("Null data block");
+    return Error::Invalid("Null data block");
   }
   if (input->tier() == memory::MemoryTier::CPU) {
     auto host = std::dynamic_pointer_cast<cache::HostMemoryBlock>(input);
     if (!host) {
-      return Status::Invalid("CPU-tier block is not a HostMemoryBlock");
+      return Error::Invalid("CPU-tier block is not a HostMemoryBlock");
     }
     return host;
   }
@@ -243,7 +243,7 @@ namespace quest::execution {
         using TypeTag = std::decay_t<decltype(type_tag)>;
         auto append_one = [&](auto* typed) -> Status {
           if (!typed) {
-            return Status::Invalid("Concatenate destination type mismatch");
+            return Error::Invalid("Concatenate destination type mismatch");
           }
           for (size_t i = 0; i < src.size(); ++i) {
             auto val = src.GetValue(i);
@@ -255,43 +255,43 @@ namespace quest::execution {
               if (auto* v = std::get_if<bool>(&val)) {
                 typed->Append(*v);
               } else {
-                return Status::Invalid("Concatenate value type mismatch (bool)");
+                return Error::Invalid("Concatenate value type mismatch (bool)");
               }
             } else if constexpr (std::is_same_v<TypeTag, datasource::Int8Type>) {
               if (auto* v = std::get_if<int8_t>(&val)) {
                 typed->Append(*v);
               } else {
-                return Status::Invalid("Concatenate value type mismatch (int8)");
+                return Error::Invalid("Concatenate value type mismatch (int8)");
               }
             } else if constexpr (std::is_same_v<TypeTag, datasource::Int16Type>) {
               if (auto* v = std::get_if<int16_t>(&val)) {
                 typed->Append(*v);
               } else {
-                return Status::Invalid("Concatenate value type mismatch (int16)");
+                return Error::Invalid("Concatenate value type mismatch (int16)");
               }
             } else if constexpr (std::is_same_v<TypeTag, datasource::Int32Type>) {
               if (auto* v = std::get_if<int32_t>(&val)) {
                 typed->Append(*v);
               } else {
-                return Status::Invalid("Concatenate value type mismatch (int32)");
+                return Error::Invalid("Concatenate value type mismatch (int32)");
               }
             } else if constexpr (std::is_same_v<TypeTag, datasource::Int64Type>) {
               if (auto* v = std::get_if<int64_t>(&val)) {
                 typed->Append(*v);
               } else {
-                return Status::Invalid("Concatenate value type mismatch (int64)");
+                return Error::Invalid("Concatenate value type mismatch (int64)");
               }
             } else if constexpr (std::is_same_v<TypeTag, datasource::FloatType>) {
               if (auto* v = std::get_if<float>(&val)) {
                 typed->Append(*v);
               } else {
-                return Status::Invalid("Concatenate value type mismatch (float)");
+                return Error::Invalid("Concatenate value type mismatch (float)");
               }
             } else if constexpr (std::is_same_v<TypeTag, datasource::DoubleType>) {
               if (auto* v = std::get_if<double>(&val)) {
                 typed->Append(*v);
               } else {
-                return Status::Invalid("Concatenate value type mismatch (double)");
+                return Error::Invalid("Concatenate value type mismatch (double)");
               }
             } else {
               if (auto* v = std::get_if<std::string>(&val)) {
@@ -301,7 +301,7 @@ namespace quest::execution {
               }
             }
           }
-          return Status::OK();
+          return {};
         };
 
         if constexpr (std::is_same_v<TypeTag, datasource::BoolType>) {
@@ -329,7 +329,7 @@ namespace quest::execution {
 [[nodiscard]] inline Result<cache::DataBlockPtr> ConcatenateHostBlocks(
     std::vector<cache::DataBlockPtr> blocks) {
   if (blocks.empty()) {
-    return Status::Invalid("No data blocks to concatenate");
+    return Error::Invalid("No data blocks to concatenate");
   }
   if (blocks.size() == 1) {
     return std::move(blocks[0]);
@@ -345,7 +345,7 @@ namespace quest::execution {
     }
     auto host = std::move(*host_result);
     if (!host->record_batch()) {
-      return Status::Invalid("HostMemoryBlock has no record batch");
+      return Error::Invalid("HostMemoryBlock has no record batch");
     }
     total_rows += host->num_rows();
     hosts.push_back(std::move(host));
@@ -355,7 +355,7 @@ namespace quest::execution {
   const size_t num_cols = schema.num_fields();
   for (size_t i = 1; i < hosts.size(); ++i) {
     if (hosts[i]->record_batch()->schema().num_fields() != num_cols) {
-      return Status::SchemaError("Concatenate schema mismatch");
+      return Error::SchemaError("Concatenate schema mismatch");
     }
   }
 

@@ -43,7 +43,7 @@ namespace quest {
   if (const auto* col = dynamic_cast<const Column*>(&expr)) {
     auto index = input.schema().GetFieldIndex(col->name());
     if (!index) {
-      return std::unexpected(Status::SchemaError("No column named: " + col->name()));
+      return std::unexpected(Error::SchemaError("No column named: " + col->name()));
     }
     return std::make_unique<ColumnExpression>(*index);
   }
@@ -103,7 +103,7 @@ namespace quest {
   }
 
   return std::unexpected(
-      Status::PhysicalPlanError("Cannot create physical expression from: " + expr.ToString()));
+      Error::PhysicalPlanError("Cannot create physical expression from: " + expr.ToString()));
 }
 
 }  // namespace quest
@@ -266,7 +266,7 @@ namespace detail {
 
   if (const auto* union_all = dynamic_cast<const Union*>(&plan)) {
     if (!UnionCompatible(union_all->left().schema(), union_all->right().schema())) {
-      return std::unexpected(Status::SchemaError("UNION ALL inputs have mismatched schemas"));
+      return std::unexpected(Error::SchemaError("UNION ALL inputs have mismatched schemas"));
     }
     auto left = TranslateNode(union_all->left(), memory_manager, ops, gb, next_id);
     if (!left) {
@@ -284,7 +284,7 @@ namespace detail {
     return op_ptr;
   }
 
-  return std::unexpected(Status::PhysicalPlanError(
+  return std::unexpected(Error::PhysicalPlanError(
       "CreateGraph: unsupported logical plan node: " + plan.ToString()));
 }
 

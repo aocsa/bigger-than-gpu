@@ -112,35 +112,35 @@ EdgeConfig ResolveEdgeConfig(const GraphBuilder::EdgeSpec& spec) {
 Status CheckNonWaiting(const GraphBuilder::EdgeSpec& spec) {
   if (spec.config_replaced ||
       spec.config.type != cache::BatchHolderType::kNonWaiting) {
-    return Status::OK();
+    return {};
   }
   if (spec.explicit_flow_control) {
-    return Status::Invalid(
+    return Error::Invalid(
         "GraphBuilder: .NonWaiting() edges cannot use .FlowControl() — a "
         "pre-filled single-shot handoff has no producer to throttle.");
   }
   if (spec.explicit_barrier && spec.config.barrier == BarrierType::Full) {
-    return Status::Invalid(
+    return Error::Invalid(
         "GraphBuilder: .NonWaiting() edges cannot be .Full() — empty means "
         "drained; there is no producer pipeline to wait on.");
   }
-  return Status::OK();
+  return {};
 }
 
 /// @brief Check (e): Partial() is not yet supported.
 Status CheckPartial(const GraphBuilder::EdgeSpec& spec) {
   if (spec.partial_requested) {
-    return Status::Invalid(
+    return Error::Invalid(
         "GraphBuilder: .Partial() is reserved for phase 6 and is not yet supported. "
         "Use .Full() or .Streaming() instead.");
   }
-  return Status::OK();
+  return {};
 }
 
 /// @brief Check (c): explicit barrier contradiction with the consumer's InputEdgeContract.
 Status CheckContractConflict(const GraphBuilder::EdgeSpec& spec) {
   if (spec.config_replaced || !spec.explicit_barrier || spec.target == nullptr) {
-    return Status::OK();
+    return {};
   }
 
   EdgeConfig contract = spec.target->InputEdgeContract(spec.target_port);
@@ -149,29 +149,29 @@ Status CheckContractConflict(const GraphBuilder::EdgeSpec& spec) {
   // and the author's explicit barrier differs from it.
   if (contract.barrier != BarrierType::Pipeline &&
       spec.config.barrier != contract.barrier) {
-    return Status::Invalid(std::format(
+    return Error::Invalid(std::format(
         "GraphBuilder: explicit barrier contradicts the input contract of operator '{}' "
         "(port '{}'). The contract requires {}; author set {}. "
         "Use .Config() to override the contract.",
         spec.target->expression(), spec.target_port,
         to_string(contract.barrier), to_string(spec.config.barrier)));
   }
-  return Status::OK();
+  return {};
 }
 
 /// @brief Check (a): named ports on the target operator.
 Status CheckDeclaredPorts(const GraphBuilder::EdgeSpec& spec) {
-  if (spec.target == nullptr) { return Status::OK(); }
+  if (spec.target == nullptr) { return {}; }
 
   auto declared = spec.target->DeclaredInputPorts();
-  if (declared.empty()) { return Status::OK(); }  // legacy behavior: any name allowed
+  if (declared.empty()) { return {}; }  // legacy behavior: any name allowed
 
   const std::string_view port_name = spec.target_port;
   bool found = std::ranges::any_of(declared,
       [&port_name](std::string_view decl) { return decl == port_name; });
 
   if (!found) {
-    return Status::Invalid(std::format(
+    return Error::Invalid(std::format(
         "GraphBuilder: port '{}' is not declared on operator '{}'. "
         "Declared ports: [{}]. Check for typos.",
         port_name, spec.target->expression(),
@@ -186,12 +186,12 @@ Status CheckDeclaredPorts(const GraphBuilder::EdgeSpec& spec) {
           return list;
         }()));
   }
-  return Status::OK();
+  return {};
 }
 
 /// @brief Check (b): acyclicity via DFS coloring.
 Status CheckAcyclic(const std::deque<GraphBuilder::EdgeSpec>& specs) {
-  if (specs.empty()) { return Status::OK(); }
+  if (specs.empty()) { return {}; }
 
   // Build adjacency list.
   std::map<Operator*, std::vector<Operator*>> adj;
@@ -211,27 +211,27 @@ Status CheckAcyclic(const std::deque<GraphBuilder::EdgeSpec>& specs) {
     color[node] = Color::Gray;
     for (Operator* next : adj[node]) {
       if (color[next] == Color::Gray) {
-        return Status::Invalid(std::format(
+        return Error::Invalid(std::format(
             "GraphBuilder: cycle detected involving operator '{}'. "
             "Execution graphs must be acyclic.",
             next->expression()));
       }
       if (color[next] == Color::White) {
         auto status = dfs(next);
-        if (!status.ok()) { return status; }
+        if (!status.has_value()) { return status; }
       }
     }
     color[node] = Color::Black;
-    return Status::OK();
+    return {};
   };
 
   for (const auto& [oper, ignored] : adj) {
     if (color[oper] == Color::White) {
       auto status = dfs(oper);
-      if (!status.ok()) { return status; }
+      if (!status.has_value()) { return status; }
     }
   }
-  return Status::OK();
+  return {};
 }
 
 }  // namespace
@@ -242,20 +242,20 @@ Result<std::shared_ptr<Graph>> GraphBuilder::Build() && {
   for (const auto& spec : edge_specs_) {
     if (spec.name.empty()) { continue; }
     if (!seen_names.insert(spec.name).second) {
-      return std::unexpected(Status::Invalid(std::format(
+      return std::unexpected(Error::Invalid(std::format(
           "GraphBuilder: duplicate edge name '{}'. Edge names must be unique.", spec.name)).error());
     }
   }
 
   for (const auto& spec : edge_specs_) {
-    if (auto status = CheckPartial(spec); !status.ok()) { return std::unexpected(status.error()); }
-    if (auto status = CheckDeclaredPorts(spec); !status.ok()) { return std::unexpected(status.error()); }
-    if (auto status = CheckContractConflict(spec); !status.ok()) { return std::unexpected(status.error()); }
-    if (auto status = CheckNonWaiting(spec); !status.ok()) { return std::unexpected(status.error()); }
+    if (auto status = CheckPartial(spec); !status.has_value()) { return std::unexpected(status.error()); }
+    if (auto status = CheckDeclaredPorts(spec); !status.has_value()) { return std::unexpected(status.error()); }
+    if (auto status = CheckContractConflict(spec); !status.has_value()) { return std::unexpected(status.error()); }
+    if (auto status = CheckNonWaiting(spec); !status.has_value()) { return std::unexpected(status.error()); }
   }
 
   // (b) Acyclicity.
-  if (auto status = CheckAcyclic(edge_specs_); !status.ok()) { return std::unexpected(status.error()); }
+  if (auto status = CheckAcyclic(edge_specs_); !status.has_value()) { return std::unexpected(status.error()); }
 
   auto graph = std::make_shared<Graph>(std::move(memory_manager_));
 

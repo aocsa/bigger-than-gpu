@@ -117,13 +117,13 @@ class LoggingAccumulatingSink : public Operator {
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
     log_.Record(tag_ + "_sink_" + std::to_string(accumulated_.size()));
     accumulated_.push_back(std::move(batch));
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] Status FinalizeSink() override {
     log_.Record(tag_ + "_finalize");
     finalized_ = true;
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] bool IsSource() const noexcept override { return finalized_; }
@@ -189,7 +189,7 @@ class LoggingCollectingSink : public Operator {
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
     log_.Record(tag_ + "_sink_" + std::to_string(received_.size()));
     received_.push_back(std::move(batch));
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] std::size_t received_count() const noexcept { return received_.size(); }
@@ -222,7 +222,7 @@ class CollectingSink : public Operator {
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
     std::lock_guard<std::mutex> lock(mutex_);
     received_.push_back(std::move(batch));
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] std::size_t received_count() const {
@@ -294,7 +294,7 @@ class WaitableSink : public Operator {
     std::lock_guard<std::mutex> lock(mutex_);
     received_.push_back(std::move(batch));
     cv_.notify_all();
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] bool WaitForAtLeast(std::size_t count, std::chrono::milliseconds timeout) {

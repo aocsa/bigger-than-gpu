@@ -21,7 +21,7 @@ namespace quest {
 // =============================================================================
 
 enum class ErrorCode : uint8_t {
-  // No error (sentinel value for Status::code() when OK).
+  // No error.
   None = 0,
 
   // Invalid argument or malformed input data.
@@ -65,9 +65,6 @@ enum class ErrorCode : uint8_t {
 
   // Index or offset out of valid range.
   OutOfRange,
-
-  // End of data reached (used internally for iteration).
-  EndOfData,
 
   // Query engine: Logical plan error.
   LogicalPlanError,
@@ -114,8 +111,6 @@ enum class ErrorCode : uint8_t {
       return "TypeError";
     case ErrorCode::OutOfRange:
       return "OutOfRange";
-    case ErrorCode::EndOfData:
-      return "EndOfData";
     case ErrorCode::LogicalPlanError:
       return "LogicalPlanError";
     case ErrorCode::PhysicalPlanError:
@@ -173,24 +168,11 @@ struct Error {
   [[nodiscard]] bool operator!=(const Error& other) const noexcept { return code_ != other.code_; }
   [[nodiscard]] bool operator==(ErrorCode code) const noexcept { return code_ == code; }
   [[nodiscard]] bool operator!=(ErrorCode code) const noexcept { return code_ != code; }
-};
-
-// =============================================================================
-// Status Class
-// =============================================================================
-
-/// @brief Wraps std::expected<void, Error>; factory methods create typed errors.
-class Status : public std::expected<void, Error> {
- public:
-  using std::expected<void, Error>::expected;
-
-  [[nodiscard]] static Status OK() noexcept { return {}; }
 
   [[nodiscard]] static std::unexpected<Error> Invalid(
       std::string message, std::source_location loc = std::source_location::current()) {
     return std::unexpected<Error>{Error(ErrorCode::Invalid, std::move(message), loc)};
   }
-
   [[nodiscard]] static std::unexpected<Error> IOError(
       std::string message, std::source_location loc = std::source_location::current()) {
     return std::unexpected<Error>{Error(ErrorCode::IOError, std::move(message), loc)};
@@ -239,11 +221,6 @@ class Status : public std::expected<void, Error> {
       std::string message, std::source_location loc = std::source_location::current()) {
     return std::unexpected<Error>{Error(ErrorCode::OutOfRange, std::move(message), loc)};
   }
-  /// @brief Sentinel used internally by iterators to signal end of sequence.
-  [[nodiscard]] static std::unexpected<Error> EndOfData(
-      std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::EndOfData, std::string{}, loc)};
-  }
   [[nodiscard]] static std::unexpected<Error> LogicalPlanError(
       std::string message, std::source_location loc = std::source_location::current()) {
     return std::unexpected<Error>{Error(ErrorCode::LogicalPlanError, std::move(message), loc)};
@@ -260,27 +237,13 @@ class Status : public std::expected<void, Error> {
       std::string message, std::source_location loc = std::source_location::current()) {
     return std::unexpected<Error>{Error(ErrorCode::SchemaError, std::move(message), loc)};
   }
-
-  [[nodiscard]] bool ok() const noexcept { return this->has_value(); }
-  [[nodiscard]] explicit operator bool() const noexcept { return ok(); }
-  [[nodiscard]] ErrorCode code() const noexcept {
-    return this->has_value() ? ErrorCode::None : this->error().code_;
-  }
-  [[nodiscard]] std::string_view message() const noexcept {
-    return this->has_value() ? std::string_view{} : this->error().message_;
-  }
-  [[nodiscard]] bool is_end_of_data() const noexcept {
-    return !this->has_value() && this->error().code_ == ErrorCode::EndOfData;
-  }
-
-  [[nodiscard]] std::string ToString() const {
-    if (ok()) {
-      return "OK";
-    }
-    return error().ToString();
-  }
-
 };
+
+// =============================================================================
+// Status
+// =============================================================================
+
+using Status = std::expected<void, Error>;
 
 // =============================================================================
 // Result Type

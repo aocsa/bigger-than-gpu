@@ -36,7 +36,7 @@ class UncompressedCodec : public CompressionCodec {
       std::span<const uint8_t> compressed,
       size_t uncompressed_size) const override {
     if (compressed.size() != uncompressed_size) {
-      return std::unexpected(Status::Invalid(
+      return std::unexpected(Error::Invalid(
           "Uncompressed size mismatch: expected " +
           std::to_string(uncompressed_size) + " but got " +
           std::to_string(compressed.size())));
@@ -62,7 +62,7 @@ class SnappyCodec : public CompressionCodec {
 
     if (!success) {
       return std::unexpected(
-          Status::Invalid("Failed to decompress Snappy data"));
+          Error::Invalid("Failed to decompress Snappy data"));
     }
 
     return output;
@@ -83,25 +83,25 @@ class SnappyCodec : public CompressionCodec {
       return std::make_unique<SnappyCodec>();
     case CompressionType::kGzip:
       return std::unexpected(
-          Status::UnsupportedEncoding("GZIP compression not yet supported"));
+          Error::UnsupportedEncoding("GZIP compression not yet supported"));
     case CompressionType::kLzo:
       return std::unexpected(
-          Status::UnsupportedEncoding("LZO compression not yet supported"));
+          Error::UnsupportedEncoding("LZO compression not yet supported"));
     case CompressionType::kBrotli:
       return std::unexpected(
-          Status::UnsupportedEncoding("Brotli compression not yet supported"));
+          Error::UnsupportedEncoding("Brotli compression not yet supported"));
     case CompressionType::kLz4:
       return std::unexpected(
-          Status::UnsupportedEncoding("LZ4 compression not yet supported"));
+          Error::UnsupportedEncoding("LZ4 compression not yet supported"));
     case CompressionType::kZstd:
       return std::unexpected(
-          Status::UnsupportedEncoding("ZSTD compression not yet supported"));
+          Error::UnsupportedEncoding("ZSTD compression not yet supported"));
     case CompressionType::kLz4Raw:
       return std::unexpected(
-          Status::UnsupportedEncoding("LZ4_RAW compression not yet supported"));
+          Error::UnsupportedEncoding("LZ4_RAW compression not yet supported"));
   }
   return std::unexpected(
-      Status::UnsupportedEncoding("Unknown compression type"));
+      Error::UnsupportedEncoding("Unknown compression type"));
 }
 
 }  // namespace quest::datasource::parquet

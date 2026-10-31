@@ -54,7 +54,7 @@ TEST(BatchHolderTest, AddDataBlock) {
   auto data = MakeTestData("data1", 1024, 100);
   auto status = holder.Add(std::move(data));
 
-  EXPECT_TRUE(status.ok());
+  EXPECT_TRUE(status.has_value());
   EXPECT_EQ(holder.batch_count(), 1U);
   EXPECT_GT(holder.bytes_added(), 0U);  // Size depends on RecordBatch structure
   EXPECT_EQ(holder.rows_added(), 100U);
@@ -65,7 +65,7 @@ TEST(BatchHolderTest, AddNullMessage) {
   BatchHolder holder(1);
 
   auto status = holder.Add(nullptr);
-  EXPECT_FALSE(status.ok());
+  EXPECT_FALSE(status.has_value());
   EXPECT_EQ(holder.batch_count(), 0U);
 }
 
@@ -348,7 +348,7 @@ TEST(BatchHolderEdgeCaseTest, ZeroSizeDataBlock) {
   auto data = MakeTestData("empty", 0, 0);
 
   auto status = holder.Add(std::move(data));
-  EXPECT_TRUE(status.ok());
+  EXPECT_TRUE(status.has_value());
   EXPECT_EQ(holder.bytes_added(), 0U);
   EXPECT_EQ(holder.rows_added(), 0U);
 }
@@ -359,7 +359,7 @@ TEST(BatchHolderEdgeCaseTest, LargeBatch) {
   auto data = MakeTestData("large", 0, 10000);
   auto status = holder.Add(std::move(data));
 
-  EXPECT_TRUE(status.ok());
+  EXPECT_TRUE(status.has_value());
   EXPECT_GT(holder.bytes_added(), 0U);  // Size depends on RecordBatch structure
   EXPECT_EQ(holder.rows_added(), 10000U);
 }

@@ -38,7 +38,7 @@ class MockSink : public Operator {
 
   [[nodiscard]] bool IsSink() const noexcept override { return true; }
 
-  [[nodiscard]] Status Sink(std::shared_ptr<DataBlock> /*batch*/) override { return Status::OK(); }
+  [[nodiscard]] Status Sink(std::shared_ptr<DataBlock> /*batch*/) override { return {}; }
 };
 
 TEST(PreparedQueryTest, AddEdgeDoesNotMaterializeHolders) {

@@ -26,7 +26,7 @@ namespace quest::datasource::parquet {
 [[nodiscard]] inline Result<std::span<const uint8_t>> Slice(std::span<const uint8_t> data,
                                                             std::size_t pos, std::size_t len) {
   if (pos > data.size() || len > data.size() - pos) {
-    return Status::OutOfRange(
+    return Error::OutOfRange(
         std::format("read of {} bytes at offset {} exceeds buffer of {}", len, pos, data.size()));
   }
   return data.subspan(pos, len);

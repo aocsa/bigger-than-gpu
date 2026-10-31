@@ -49,7 +49,7 @@ class CollectorOperator : public Operator {
 
   [[nodiscard]] Status Sink(cache::DataBlockPtr batch) override {
     if (!batch || batch->num_rows() == 0) {
-      return Status::OK();
+      return {};
     }
     std::lock_guard lock(mutex_);
     total_rows_ += batch->num_rows();
@@ -57,7 +57,7 @@ class CollectorOperator : public Operator {
       ++disk_tier_count_;
     }
     batches_.push_back(std::move(batch));
-    return Status::OK();
+    return {};
   }
 
   // NOTE (thread-safety contract): Sink() locks because a future executor
@@ -87,7 +87,7 @@ class CollectorOperator : public Operator {
         host = std::move(*upgraded);
       }
       if (!host->record_batch()) {
-        return Status::Invalid("Collector: block has no record batch");
+        return Error::Invalid("Collector: block has no record batch");
       }
       // Copy columns into a new RecordBatch (HostMemoryBlock owns the original).
       const auto& rb = *host->record_batch();

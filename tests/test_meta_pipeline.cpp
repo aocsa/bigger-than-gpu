@@ -78,7 +78,7 @@ class AccumulatingSink : public Operator {
       : Operator(id, "accumulating_sink", OperatorType::ComputeAggregate) {}
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
     accumulated_.push_back(std::move(batch));
-    return Status::OK();
+    return {};
   }
   [[nodiscard]] std::size_t accumulated_count() const noexcept { return accumulated_.size(); }
 

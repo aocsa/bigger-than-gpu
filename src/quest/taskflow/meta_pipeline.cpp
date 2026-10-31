@@ -156,7 +156,7 @@ class MetaPipelineBuilder {
     for (const auto& edge : ordered) {
       auto* upstream = graph_.GetNode(edge.source_operator_id);
       if (upstream == nullptr) {
-        return Status::Invalid(
+        return Error::Invalid(
             "MetaPipeline::Build: edge references unregistered source "
             "operator");
       }
@@ -169,7 +169,7 @@ class MetaPipelineBuilder {
         // producer's output at execution time, so fail loudly until the
         // relay exists (planned with real joins; see
         // docs/dev/pipeline-execution-plan.md §6 Non-goals).
-        return Status::Invalid(
+        return Error::Invalid(
             "MetaPipeline::Build: blocking operator feeding a multi-input "
             "consumer is not supported yet (missing relay pipeline)");
       }
@@ -180,7 +180,7 @@ class MetaPipelineBuilder {
       auto edge_config = graph_.GetEdgeConfig(edge.source_operator_id, edge.target_operator_id);
       pipeline.AddProducer(child.value(), edge_config.barrier);
     }
-    return Status::OK();
+    return {};
   }
 
   const Graph& graph_;

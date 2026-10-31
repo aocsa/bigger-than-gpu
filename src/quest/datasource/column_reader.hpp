@@ -76,14 +76,14 @@ class ColumnReader {
           break;
         case PageType::kDataPage: {
           auto status = ReadDataPage(header, page_data, column.get());
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
         }
         case PageType::kDataPageV2: {
           auto status = ReadDataPageV2(header, page_data, column.get());
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
@@ -179,7 +179,7 @@ class ColumnReader {
                                        ColumnVector* column) {
     if (header.repetition_levels_byte_length < 0 || header.definition_levels_byte_length < 0 ||
         header.num_nulls < 0 || header.num_nulls > header.num_values) {
-      return Status::PageDecodeError("Invalid data page V2 header");
+      return Error::PageDecodeError("Invalid data page V2 header");
     }
     // Skip repetition levels (always 0 for flat schema).
     size_t pos = static_cast<size_t>(header.repetition_levels_byte_length);
@@ -202,7 +202,7 @@ class ColumnReader {
     }
 
     if (pos > data.size()) {
-      return Status::PageDecodeError("Data page V2 levels exceed page size");
+      return Error::PageDecodeError("Data page V2 levels exceed page size");
     }
     auto values_data = data.subspan(pos);
     // V2 pages store non-null value count.
@@ -222,7 +222,7 @@ class ColumnReader {
     RleBitPackingDecoder decoder(bit_width);
     decoder.SetData(data, num_values);
     auto status = decoder.ReadBatch(levels);
-    if (!status.ok()) {
+    if (!status.has_value()) {
       return std::unexpected(status.error());
     }
     return levels;
@@ -262,7 +262,7 @@ class ColumnReader {
         }
       }
     }
-    return Status::OK();
+    return {};
   }
 
   // ===========================================================================
@@ -278,7 +278,7 @@ class ColumnReader {
                            encoding == Encoding::kRleDictionary);
 
     if (use_dictionary && !has_dictionary_) {
-      return Status::ColumnDecodeError(
+      return Error::ColumnDecodeError(
           "Dictionary encoding but no dictionary page found");
     }
 
@@ -308,7 +308,7 @@ class ColumnReader {
         return DecodeInt96Values(encoding, data, num_values, def_levels,
                                  column);
     }
-    return Status::OK();
+    return {};
   }
 
   // ===========================================================================
@@ -320,7 +320,7 @@ class ColumnReader {
       const std::vector<int32_t>& def_levels, ColumnVector* column) {
     auto* typed_col = dynamic_cast<TypedColumnVector<bool>*>(column);
     if (!typed_col) {
-      return Status::TypeError("Column type mismatch for boolean");
+      return Error::TypeError("Column type mismatch for boolean");
     }
 
     PlainDecoder<bool> decoder;
@@ -340,7 +340,7 @@ class ColumnReader {
       const std::vector<int32_t>& def_levels, ColumnVector* column) {
     auto* typed_col = dynamic_cast<TypedColumnVector<T>*>(column);
     if (!typed_col) {
-      return Status::TypeError("Column type mismatch");
+      return Error::TypeError("Column type mismatch");
     }
 
     bool use_dictionary = (encoding == Encoding::kPlainDictionary ||
@@ -368,12 +368,12 @@ class ColumnReader {
     dict_decoder.SetData(dictionary_data_);
     std::vector<T> dictionary(dict_num_values_);
     if (dict_decoder.ReadBatch(dictionary) != dictionary.size()) {
-      return Status::ColumnDecodeError("Dictionary page shorter than its value count");
+      return Error::ColumnDecodeError("Dictionary page shorter than its value count");
     }
 
     // The data contains the bit width followed by RLE encoded indices.
     if (data.empty()) {
-      return Status::OK();
+      return {};
     }
     int bit_width = data[0];
     auto indices_data = data.subspan(1);
@@ -396,7 +396,7 @@ class ColumnReader {
           int32_t idx = idx_result.value();
           if (idx < 0 || static_cast<size_t>(idx) >= dictionary.size()) {
             return std::unexpected(
-                Status::OutOfRange("Dictionary index out of range"));
+                Error::OutOfRange("Dictionary index out of range"));
           }
           return dictionary[idx];
         },
@@ -411,7 +411,7 @@ class ColumnReader {
                                            ColumnVector* column) {
     auto* str_col = dynamic_cast<StringColumnVector*>(column);
     if (!str_col) {
-      return Status::TypeError("Column type mismatch for binary");
+      return Error::TypeError("Column type mismatch for binary");
     }
 
     bool use_dictionary = (encoding == Encoding::kPlainDictionary ||
@@ -447,7 +447,7 @@ class ColumnReader {
     }
 
     if (data.empty()) {
-      return Status::OK();
+      return {};
     }
     int bit_width = data[0];
     auto indices_data = data.subspan(1);
@@ -470,7 +470,7 @@ class ColumnReader {
           int32_t idx = idx_result.value();
           if (idx < 0 || static_cast<size_t>(idx) >= dictionary.size()) {
             return std::unexpected(
-                Status::OutOfRange("Dictionary index out of range"));
+                Error::OutOfRange("Dictionary index out of range"));
           }
           return dictionary[idx];
         },
@@ -483,7 +483,7 @@ class ColumnReader {
       const std::vector<int32_t>& def_levels, ColumnVector* column) {
     auto* str_col = dynamic_cast<StringColumnVector*>(column);
     if (!str_col) {
-      return Status::TypeError("Column type mismatch for fixed len byte array");
+      return Error::TypeError("Column type mismatch for fixed len byte array");
     }
 
     int32_t type_length = field_.type_length.value_or(0);
@@ -493,7 +493,7 @@ class ColumnReader {
         num_values, def_levels,
         [&data, &pos, type_length]() -> Result<std::string> {
           if (pos + type_length > data.size()) {
-            return std::unexpected(Status::PageDecodeError(
+            return std::unexpected(Error::PageDecodeError(
                 "Not enough data for fixed len byte array"));
           }
           std::string value(reinterpret_cast<const char*>(data.data() + pos),
@@ -511,7 +511,7 @@ class ColumnReader {
     // INT96 is typically used for timestamps, treat as binary.
     auto* str_col = dynamic_cast<StringColumnVector*>(column);
     if (!str_col) {
-      return Status::TypeError("Column type mismatch for INT96");
+      return Error::TypeError("Column type mismatch for INT96");
     }
 
     constexpr size_t INT96_SIZE = 12;
@@ -522,7 +522,7 @@ class ColumnReader {
         [&data, &pos]() -> Result<std::string> {
           if (pos + INT96_SIZE > data.size()) {
             return std::unexpected(
-                Status::PageDecodeError("Not enough data for INT96"));
+                Error::PageDecodeError("Not enough data for INT96"));
           }
           std::string value(reinterpret_cast<const char*>(data.data() + pos),
                             INT96_SIZE);

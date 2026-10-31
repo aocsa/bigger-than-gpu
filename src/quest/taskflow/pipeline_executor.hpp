@@ -152,7 +152,7 @@ class PipelineExecutor {
   // never runs on input constructed that way).
   std::size_t in_flight_{0};
   bool stop_scheduling_{false};
-  Status first_error_{Status::OK()};
+  Status first_error_;
 };
 
 }  // namespace quest::taskflow

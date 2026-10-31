@@ -34,7 +34,7 @@ class PrintOperator : public Operator {
 
   [[nodiscard]] Status Sink(cache::DataBlockPtr batch) override {
     if (!batch || batch->num_rows() == 0) {
-      return Status::OK();
+      return {};
     }
     auto host = execution::EnsureHostBlock(std::move(batch));
     if (!host) {
@@ -42,12 +42,12 @@ class PrintOperator : public Operator {
     }
     const auto* record_batch = (*host)->record_batch();
     if (record_batch == nullptr) {
-      return Status::Invalid("PrintOperator: block has no record batch");
+      return Error::Invalid("PrintOperator: block has no record batch");
     }
     out_ << record_batch->ToCSV();
     total_rows_ += record_batch->num_rows();
     ++batch_count_;
-    return Status::OK();
+    return {};
   }
 
   /// @brief Total rows printed (valid after Execute() returns).

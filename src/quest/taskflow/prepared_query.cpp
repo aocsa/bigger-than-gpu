@@ -25,13 +25,13 @@ Status PreparedQuery::Execute() {
   // Single-shot: pipelines_ moves into the executor. A second call must be
   // a loud error, not a silent OK for a query that didn't run (review P2).
   if (executed_) {
-    return Status::Invalid(
+    return Error::Invalid(
         "PreparedQuery::Execute: already executed — re-run by calling "
         "Graph::Prepare() again");
   }
   executed_ = true;
   if (pipelines_.empty()) {
-    return Status::OK();
+    return {};
   }
   return executor_->Execute(std::move(pipelines_));
 }
@@ -90,7 +90,7 @@ Status PreparedQuery::SetFlowControl(const EdgeRef& ref, std::size_t max_batches
                                      std::size_t max_bytes) {
   auto* edge = FindEdge(ref);
   if (edge == nullptr) {
-    return Status::Invalid(std::format("PreparedQuery::SetFlowControl: no edge {}:{}:{}",
+    return Error::Invalid(std::format("PreparedQuery::SetFlowControl: no edge {}:{}:{}",
                                        ref.source_id, ref.target_id, ref.target_port));
   }
 
@@ -100,13 +100,13 @@ Status PreparedQuery::SetFlowControl(const EdgeRef& ref, std::size_t max_batches
   for (auto& holder : edge->holders) {
     holder->SetFlowControl(max_batches, max_bytes);
   }
-  return Status::OK();
+  return {};
 }
 
 Status PreparedQuery::SetSpillPolicy(const EdgeRef& ref, SpillPolicy policy) {
   auto* edge = FindEdge(ref);
   if (edge == nullptr) {
-    return Status::Invalid(std::format("PreparedQuery::SetSpillPolicy: no edge {}:{}:{}",
+    return Error::Invalid(std::format("PreparedQuery::SetSpillPolicy: no edge {}:{}:{}",
                                        ref.source_id, ref.target_id, ref.target_port));
   }
 
@@ -115,12 +115,12 @@ Status PreparedQuery::SetSpillPolicy(const EdgeRef& ref, SpillPolicy policy) {
   for (auto& holder : edge->holders) {
     holder->SetSpillPolicy(enable_auto_spill);
   }
-  return Status::OK();
+  return {};
 }
 
 Status PreparedQuery::ScaleFlowControl(double factor) {
   if (!(factor > 0.0) || !std::isfinite(factor)) {
-    return Status::Invalid("PreparedQuery::ScaleFlowControl: factor must be > 0");
+    return Error::Invalid("PreparedQuery::ScaleFlowControl: factor must be > 0");
   }
 
   for (auto& edge : edges_) {
@@ -151,11 +151,11 @@ Status PreparedQuery::ScaleFlowControl(double factor) {
       holder->SetFlowControl(new_batches, new_bytes);
     }
   }
-  return Status::OK();
+  return {};
 }
 
 Status PreparedQuery::SetMaxInFlightTasks(std::size_t /*pipeline_id*/, std::size_t /*n*/) {
-  return Status::Invalid(
+  return Error::Invalid(
       "PreparedQuery::SetMaxInFlightTasks is reserved until phase 3 "
       "(task-creator admission)");
 }

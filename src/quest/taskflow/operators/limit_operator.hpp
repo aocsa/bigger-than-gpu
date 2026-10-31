@@ -58,7 +58,7 @@ class LimitOperator : public SimpleOperator {
     auto host = std::move(*host_result);
     const auto* batch = host->record_batch();
     if (!batch) {
-      return Status::Invalid("LimitOperator: empty record batch");
+      return Error::Invalid("LimitOperator: empty record batch");
     }
 
     const std::size_t rows = batch->num_rows();

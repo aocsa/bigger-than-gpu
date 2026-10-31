@@ -267,13 +267,13 @@ inline Result<Field> Column::ToField(const LogicalPlan& input) const {
     }
   }
   return std::unexpected(
-      Status::SchemaError("No column named '" + name_ + "' in schema"));
+      Error::SchemaError("No column named '" + name_ + "' in schema"));
 }
 
 inline Result<Field> ColumnIndex::ToField(const LogicalPlan& input) const {
   const auto& fields = input.schema().fields();
   if (index_ >= fields.size()) {
-    return std::unexpected(Status::OutOfRange("Column index out of range"));
+    return std::unexpected(Error::OutOfRange("Column index out of range"));
   }
   return fields[index_];
 }

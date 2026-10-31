@@ -85,18 +85,18 @@ class AccumulatingSinkOperator : public Operator {
   // Sink role -----------------------------------------------------------
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
     if (finalized_) {
-      return Status::Invalid("Sink called after FinalizeSink");
+      return Error::Invalid("Sink called after FinalizeSink");
     }
     accumulated_.push_back(std::move(batch));
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] Status FinalizeSink() override {
     if (finalized_) {
-      return Status::Invalid("FinalizeSink called twice");
+      return Error::Invalid("FinalizeSink called twice");
     }
     finalized_ = true;
-    return Status::OK();
+    return {};
   }
 
   // Source role (valid only after finalization) --------------------------
@@ -104,7 +104,7 @@ class AccumulatingSinkOperator : public Operator {
 
   [[nodiscard]] Result<std::optional<DataBlockPtr>> GetNextBatch() override {
     if (!finalized_) {
-      return Status::Invalid("GetNextBatch before FinalizeSink");
+      return Error::Invalid("GetNextBatch before FinalizeSink");
     }
     if (emit_index_ >= accumulated_.size()) {
       return std::optional<DataBlockPtr>{std::nullopt};  // EOS
@@ -149,12 +149,12 @@ TEST(OperatorRolesTest, DefaultGetNextBatchIsAnError) {
 TEST(OperatorRolesTest, DefaultSinkIsAnError) {
   DefaultRolesOperator op{0, OperatorType::Filter};
   auto status = op.Sink(MakeTestBlock("b0", 4));
-  EXPECT_FALSE(status.ok());
+  EXPECT_FALSE(status.has_value());
 }
 
 TEST(OperatorRolesTest, DefaultFinalizeSinkIsOkNoOp) {
   DefaultRolesOperator op{0, OperatorType::Filter};
-  EXPECT_TRUE(op.FinalizeSink().ok());
+  EXPECT_TRUE(op.FinalizeSink().has_value());
 }
 
 TEST(OperatorRolesTest, IsSourceConsultsTypeByDefault) {
@@ -219,14 +219,14 @@ TEST(OperatorRolesTest, AccumulatingSinkCollectsThenReEmitsAfterFinalize) {
 
   auto b0 = MakeTestBlock("b0", 4);
   auto b1 = MakeTestBlock("b1", 8);
-  ASSERT_TRUE(sink.Sink(b0).ok());
-  ASSERT_TRUE(sink.Sink(b1).ok());
+  ASSERT_TRUE(sink.Sink(b0).has_value());
+  ASSERT_TRUE(sink.Sink(b1).has_value());
   EXPECT_EQ(sink.accumulated_count(), 2U);
 
   // Source role is rejected before finalization.
   EXPECT_FALSE(sink.GetNextBatch().has_value());
 
-  ASSERT_TRUE(sink.FinalizeSink().ok());
+  ASSERT_TRUE(sink.FinalizeSink().has_value());
   EXPECT_TRUE(sink.finalized());
   EXPECT_TRUE(sink.IsSource());  // sink of one pipeline, source of the next
 
@@ -246,12 +246,12 @@ TEST(OperatorRolesTest, AccumulatingSinkCollectsThenReEmitsAfterFinalize) {
 
 TEST(OperatorRolesTest, AccumulatingSinkRejectsProtocolViolations) {
   AccumulatingSinkOperator sink{0};
-  ASSERT_TRUE(sink.FinalizeSink().ok());
+  ASSERT_TRUE(sink.FinalizeSink().has_value());
 
   // Sink after finalize: the producer pipeline already finished.
-  EXPECT_FALSE(sink.Sink(MakeTestBlock("late", 4)).ok());
+  EXPECT_FALSE(sink.Sink(MakeTestBlock("late", 4)).has_value());
   // Double finalize: FinalizeSink fires exactly once per pipeline.
-  EXPECT_FALSE(sink.FinalizeSink().ok());
+  EXPECT_FALSE(sink.FinalizeSink().has_value());
 }
 
 // =============================================================================
@@ -278,9 +278,9 @@ TEST(OperatorRolesTest, ManualPushLoopThroughAllThreeRoles) {
     }
     auto processed = stream.ProcessBatch(std::move(next.value().value()));
     ASSERT_TRUE(processed.has_value());
-    ASSERT_TRUE(sink.Sink(std::move(processed.value())).ok());
+    ASSERT_TRUE(sink.Sink(std::move(processed.value())).has_value());
   }
-  ASSERT_TRUE(sink.FinalizeSink().ok());
+  ASSERT_TRUE(sink.FinalizeSink().has_value());
 
   EXPECT_EQ(stream.processed_count(), 3U);
   EXPECT_EQ(sink.accumulated_count(), 3U);

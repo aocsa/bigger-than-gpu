@@ -132,7 +132,7 @@ Result<EdgeTuner> Graph::Tune(const EdgeRef& ref) {
   auto* spec = FindEdgeSpec(ref);
   if (spec == nullptr) {
     return std::unexpected(
-        Status::Invalid(std::format("Graph::Tune: no edge {}:{}:{}", ref.source_id, ref.target_id,
+        Error::Invalid(std::format("Graph::Tune: no edge {}:{}:{}", ref.source_id, ref.target_id,
                                     ref.target_port))
             .error());
   }
@@ -143,7 +143,7 @@ Result<EdgeTuner> Graph::Tune(std::string_view edge_name) {
   auto* spec = FindEdgeSpecByName(edge_name);
   if (spec == nullptr) {
     return std::unexpected(
-        Status::Invalid(std::format("Graph::Tune: no edge named '{}'", edge_name)).error());
+        Error::Invalid(std::format("Graph::Tune: no edge named '{}'", edge_name)).error());
   }
   return EdgeTuner{this, spec};
 }

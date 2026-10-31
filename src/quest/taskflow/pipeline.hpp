@@ -169,7 +169,7 @@ class Pipeline {
   /// (Sirius's `compute_task` start_index) can resume mid-pipeline by
   /// passing a larger value.
   ///
-  /// @return Status::OK() on success (including "a streaming operator consumed
+  /// @return OK on success (including "a streaming operator consumed
   ///         the batch to zero rows"), or the first error encountered.
   [[nodiscard]] Status RunTask(cache::DataBlockPtr batch, std::size_t start_index = 1);
 

@@ -44,7 +44,7 @@ class ProjectOperator : public SimpleOperator {
     auto host = std::move(*host_result);
     const auto* batch = host->record_batch();
     if (!batch) {
-      return Status::Invalid("ProjectOperator: empty record batch");
+      return Error::Invalid("ProjectOperator: empty record batch");
     }
 
     auto projected = execution::ProjectRecordBatch(*batch, schema_, expressions_);

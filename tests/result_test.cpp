@@ -19,15 +19,12 @@ using namespace quest;
 // =============================================================================
 
 TEST(StatusTest, OK) {
-    Status status = Status::OK();
+    Status status = Status{};
     EXPECT_TRUE(status.has_value());
-    EXPECT_TRUE(status.ok());
-    EXPECT_EQ(status.code(), ErrorCode::None);
-    EXPECT_TRUE(status.message().empty());
 }
 
 TEST(StatusTest, Invalid) {
-    Status status = Status::Invalid("Test error");
+    Status status = Error::Invalid("Test error");
     EXPECT_FALSE(status.has_value());
     EXPECT_FALSE(status);
 
@@ -37,7 +34,7 @@ TEST(StatusTest, Invalid) {
 }
 
 TEST(StatusTest, IOError) {
-    Status status = Status::IOError("File not found");
+    Status status = Error::IOError("File not found");
     EXPECT_FALSE(status.has_value());
 
     const auto& error = status.error();
@@ -46,7 +43,7 @@ TEST(StatusTest, IOError) {
 }
 
 TEST(StatusTest, OutOfMemory) {
-    Status status = Status::OutOfMemory("Allocation failed");
+    Status status = Error::OutOfMemory("Allocation failed");
     EXPECT_FALSE(status.has_value());
 
     const auto& error = status.error();
@@ -55,7 +52,7 @@ TEST(StatusTest, OutOfMemory) {
 }
 
 TEST(StatusTest, NotFound) {
-    Status status = Status::NotFound("Resource missing");
+    Status status = Error::NotFound("Resource missing");
     EXPECT_FALSE(status.has_value());
 
     const auto& error = status.error();
@@ -64,12 +61,12 @@ TEST(StatusTest, NotFound) {
 }
 
 TEST(StatusTest, OkMethod) {
-    Status error_status = Status::Invalid("Error");
-    EXPECT_FALSE(error_status.ok());
+    Status error_status = Error::Invalid("Error");
+    EXPECT_FALSE(error_status.has_value());
 
     // A default-constructed Status should be ok
     Status ok_status;
-    EXPECT_TRUE(ok_status.ok());
+    EXPECT_TRUE(ok_status.has_value());
 }
 
 // =============================================================================
@@ -103,7 +100,7 @@ TEST(ErrorTest, SourceLocation) {
 }
 
 TEST(ErrorTest, FactoryRecordsCallerLocation) {
-    Status status = Status::Invalid("bad");
+    Status status = Error::Invalid("bad");
     EXPECT_NE(std::string_view(status.error().location().file_name()).find("result_test.cpp"),
               std::string_view::npos);
 }
@@ -134,7 +131,7 @@ TEST(ResultTest, WithValue) {
 }
 
 TEST(ResultTest, WithError) {
-    Result<int> result = Status::Invalid("Parse error");
+    Result<int> result = Error::Invalid("Parse error");
     EXPECT_FALSE(result.has_value());
 
     const auto& error = result.error();
@@ -146,7 +143,7 @@ TEST(ResultTest, ValueOr) {
     Result<int> success = 42;
     EXPECT_EQ(success.value_or(0), 42);
 
-    Result<int> failure = Status::Invalid("Error");
+    Result<int> failure = Error::Invalid("Error");
     EXPECT_EQ(failure.value_or(0), 0);
 }
 
@@ -158,7 +155,7 @@ TEST(ResultTest, MonadicAndThen) {
     auto parse_positive = [](const std::string& s) -> Result<int> {
         int val = std::stoi(s);
         if (val <= 0) {
-            return Status::Invalid("Value must be positive");
+            return Error::Invalid("Value must be positive");
         }
         return val;
     };
@@ -180,13 +177,13 @@ TEST(ResultTest, MonadicTransform) {
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(*result, 15);
 
-    Result<int> error_result = Status::Invalid("Error");
+    Result<int> error_result = Error::Invalid("Error");
     auto transformed = error_result.transform([](int x) { return x * 3; });
     EXPECT_FALSE(transformed.has_value());
 }
 
 TEST(ResultTest, MonadicOrElse) {
-    Result<int> error_result = Status::Invalid("Error");
+    Result<int> error_result = Error::Invalid("Error");
 
     auto recovered = error_result.or_else([](const Error&) -> Result<int> {
         return 42;  // Default value
@@ -230,88 +227,81 @@ TEST(ErrorCodeTest, AllCodes) {
 // =============================================================================
 
 TEST(StatusTest, AlreadyExists) {
-    Status status = Status::AlreadyExists("Resource exists");
+    Status status = Error::AlreadyExists("Resource exists");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::AlreadyExists);
     EXPECT_EQ(status.error().message(), "Resource exists");
 }
 
 TEST(StatusTest, Cancelled) {
-    Status status = Status::Cancelled("Operation cancelled");
+    Status status = Error::Cancelled("Operation cancelled");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::Cancelled);
     EXPECT_EQ(status.error().message(), "Operation cancelled");
 }
 
 TEST(StatusTest, ParquetFormatError) {
-    Status status = Status::ParquetFormatError("Bad parquet");
+    Status status = Error::ParquetFormatError("Bad parquet");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::ParquetFormatError);
 }
 
 TEST(StatusTest, UnsupportedEncoding) {
-    Status status = Status::UnsupportedEncoding("Unknown encoding");
+    Status status = Error::UnsupportedEncoding("Unknown encoding");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::UnsupportedEncoding);
 }
 
 TEST(StatusTest, ThriftDecodeError) {
-    Status status = Status::ThriftDecodeError("Thrift error");
+    Status status = Error::ThriftDecodeError("Thrift error");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::ThriftDecodeError);
 }
 
 TEST(StatusTest, PageDecodeError) {
-    Status status = Status::PageDecodeError("Page error");
+    Status status = Error::PageDecodeError("Page error");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::PageDecodeError);
 }
 
 TEST(StatusTest, ColumnDecodeError) {
-    Status status = Status::ColumnDecodeError("Column error");
+    Status status = Error::ColumnDecodeError("Column error");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::ColumnDecodeError);
 }
 
 TEST(StatusTest, TypeError) {
-    Status status = Status::TypeError("Type mismatch");
+    Status status = Error::TypeError("Type mismatch");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::TypeError);
 }
 
 TEST(StatusTest, OutOfRange) {
-    Status status = Status::OutOfRange("Index out of range");
+    Status status = Error::OutOfRange("Index out of range");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::OutOfRange);
 }
 
-TEST(StatusTest, EndOfData) {
-    Status status = Status::EndOfData();
-    EXPECT_FALSE(status.has_value());
-    EXPECT_EQ(status.error().code(), ErrorCode::EndOfData);
-    EXPECT_TRUE(status.is_end_of_data());
-}
-
 TEST(StatusTest, LogicalPlanError) {
-    Status status = Status::LogicalPlanError("Plan error");
+    Status status = Error::LogicalPlanError("Plan error");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::LogicalPlanError);
 }
 
 TEST(StatusTest, PhysicalPlanError) {
-    Status status = Status::PhysicalPlanError("Physical plan error");
+    Status status = Error::PhysicalPlanError("Physical plan error");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::PhysicalPlanError);
 }
 
 TEST(StatusTest, ExpressionError) {
-    Status status = Status::ExpressionError("Expr error");
+    Status status = Error::ExpressionError("Expr error");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::ExpressionError);
 }
 
 TEST(StatusTest, SchemaError) {
-    Status status = Status::SchemaError("Schema mismatch");
+    Status status = Error::SchemaError("Schema mismatch");
     EXPECT_FALSE(status.has_value());
     EXPECT_EQ(status.error().code(), ErrorCode::SchemaError);
 }
@@ -321,38 +311,27 @@ TEST(StatusTest, SchemaError) {
 // =============================================================================
 
 TEST(StatusTest, CodeMethod) {
-    Status ok_status = Status::OK();
-    EXPECT_EQ(ok_status.code(), ErrorCode::None);
+    Status ok_status = Status{};
+    EXPECT_TRUE(ok_status.has_value());
 
-    Status error_status = Status::Invalid("error");
-    EXPECT_EQ(error_status.code(), ErrorCode::Invalid);
+    Status error_status = Error::Invalid("error");
+    EXPECT_EQ(error_status.error().code(), ErrorCode::Invalid);
 }
 
 TEST(StatusTest, MessageMethod) {
-    Status ok_status = Status::OK();
-    EXPECT_TRUE(ok_status.message().empty());
+    Status ok_status = Status{};
+    EXPECT_TRUE(ok_status.has_value());
 
-    Status error_status = Status::Invalid("test message");
-    EXPECT_EQ(error_status.message(), "test message");
-}
-
-TEST(StatusTest, IsEndOfData) {
-    Status ok_status = Status::OK();
-    EXPECT_FALSE(ok_status.is_end_of_data());
-
-    Status invalid_status = Status::Invalid("error");
-    EXPECT_FALSE(invalid_status.is_end_of_data());
-
-    Status end_status = Status::EndOfData();
-    EXPECT_TRUE(end_status.is_end_of_data());
+    Status error_status = Error::Invalid("test message");
+    EXPECT_EQ(error_status.error().message(), "test message");
 }
 
 TEST(StatusTest, ToStringMethod) {
-    Status ok_status = Status::OK();
-    EXPECT_EQ(ok_status.ToString(), "OK");
+    Status ok_status = Status{};
+    EXPECT_TRUE(ok_status.has_value());
 
-    Status error_status = Status::Invalid("test error");
-    std::string str = error_status.ToString();
+    Status error_status = Error::Invalid("test error");
+    std::string str = error_status.error().ToString();
     EXPECT_TRUE(str.find("test error") != std::string::npos);
 }
 
@@ -451,7 +430,7 @@ TEST(ResultTest, ChainedOperations) {
 }
 
 TEST(ResultTest, TransformError) {
-    Result<int> error_result = Status::Invalid("original");
+    Result<int> error_result = Error::Invalid("original");
 
     auto transformed = error_result.transform_error([](const Error& e) {
         return Error(e.code(), "transformed: " + std::string(e.message()));
@@ -463,7 +442,7 @@ TEST(ResultTest, TransformError) {
 
 TEST(ResultTest, ErrorPropagationChain) {
     auto step1 = []() -> Result<int> {
-        return Status::Invalid("step1 failed");
+        return Error::Invalid("step1 failed");
     };
 
     auto step2 = [](int x) -> Result<int> {
@@ -493,12 +472,12 @@ TEST(HelperTest, ErrFunction) {
 
 Result<int> ParseInt(const std::string& input) {
     if (input.empty()) {
-        return Status::Invalid("Empty string");
+        return Error::Invalid("Empty string");
     }
     try {
         return std::stoi(input);
     } catch (...) {
-        return Status::Invalid("Parse error");
+        return Error::Invalid("Parse error");
     }
 }
 
@@ -507,7 +486,7 @@ Result<int> ParseInt(const std::string& input) {
 // =============================================================================
 
 TEST(UtilsMacroTest, AssertOkWithOkStatus) {
-    Status ok_status = Status::OK();
+    Status ok_status = Status{};
     ASSERT_OK(ok_status);
 }
 

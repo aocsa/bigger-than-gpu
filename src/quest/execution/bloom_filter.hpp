@@ -29,7 +29,7 @@ class BloomFilter {
                                                  std::size_t hash_count = 7) {
     if (bit_count < 64 || bit_count > (std::size_t{1} << 30) ||
         (bit_count & (bit_count - 1)) != 0 || hash_count == 0 || hash_count > 16) {
-      return Status::Invalid("Bloom requires power-of-two bits in [64, 2^30] and hashes in [1, 16]");
+      return Error::Invalid("Bloom requires power-of-two bits in [64, 2^30] and hashes in [1, 16]");
     }
     return BloomFilter(bit_count, hash_count);
   }

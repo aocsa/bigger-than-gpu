@@ -40,7 +40,7 @@ class FilterOperator : public SimpleOperator {
     auto host = std::move(*host_result);
     const auto* batch = host->record_batch();
     if (!batch) {
-      return Status::Invalid("FilterOperator: empty record batch");
+      return Error::Invalid("FilterOperator: empty record batch");
     }
 
     auto filtered = execution::FilterRecordBatch(*batch, *predicate_);

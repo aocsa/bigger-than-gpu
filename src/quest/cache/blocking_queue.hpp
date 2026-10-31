@@ -65,14 +65,14 @@ class BlockingQueue {
 
   [[nodiscard]] Status Put(T item) {
     if (!item) {
-      return Status::Invalid("Cannot enqueue null message");
+      return Error::Invalid("Cannot enqueue null message");
     }
 
     {
       std::lock_guard lock(mutex_);
 
       if (finished_) {
-        return Status::Invalid("Cannot enqueue to finished queue");
+        return Error::Invalid("Cannot enqueue to finished queue");
       }
 
       queue_.push_back(std::move(item));
@@ -80,7 +80,7 @@ class BlockingQueue {
     }
 
     not_empty_.notify_one();
-    return Status::OK();
+    return {};
   }
 
   void Finish() {
@@ -105,7 +105,7 @@ class BlockingQueue {
     std::unique_lock lock(mutex_);
 
     if (!WaitFor(lock, [this] { return !queue_.empty() || finished_; })) {
-      return quest::Status::IOError("Pop operation timed out");
+      return quest::Error::IOError("Pop operation timed out");
     }
 
     if (queue_.empty()) {
@@ -132,7 +132,7 @@ class BlockingQueue {
     std::unique_lock lock(mutex_);
 
     if (!WaitFor(lock, [this] { return !queue_.empty() || finished_; })) {
-      return Status::IOError("PopAll operation timed out");
+      return Error::IOError("PopAll operation timed out");
     }
 
     std::vector<T> result;
@@ -156,7 +156,7 @@ class BlockingQueue {
 
     if (!WaitFor(lock,
                  [this, msg_id] { return ContainsId(msg_id) || finished_; })) {
-      return Status::IOError(
+      return Error::IOError(
           std::format("PopById timed out waiting for id: {}", msg_id));
     }
 
@@ -164,7 +164,7 @@ class BlockingQueue {
         queue_, [msg_id](const auto& item) { return item->id() == msg_id; });
 
     if (iter == queue_.end()) {
-      return Status::NotFound(
+      return Error::NotFound(
           std::format("Message with id '{}' not found", msg_id));
     }
 
@@ -202,10 +202,10 @@ class BlockingQueue {
     std::unique_lock lock(mutex_);
 
     if (!WaitFor(lock, [this] { return finished_; })) {
-      return Status::IOError("WaitUntilFinished timed out");
+      return Error::IOError("WaitUntilFinished timed out");
     }
 
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] const QueueConfig& Config() const { return config_; }

@@ -57,7 +57,7 @@ class MockSink : public Operator {
 
   [[nodiscard]] bool IsSink() const noexcept override { return true; }
 
-  [[nodiscard]] Status Sink(std::shared_ptr<DataBlock> /*batch*/) override { return Status::OK(); }
+  [[nodiscard]] Status Sink(std::shared_ptr<DataBlock> /*batch*/) override { return {}; }
 };
 
 class MockMid : public Operator {
@@ -238,7 +238,7 @@ TEST(RuntimeTuningTest, SetMaxInFlightTasksReturnsInvalid) {
   ASSERT_OK_AND_ASSIGN(auto query, graph->Prepare(QueryStats{}, HardwareInfo{}));
 
   auto status = query.SetMaxInFlightTasks(0, 4);
-  EXPECT_FALSE(status.ok());
+  EXPECT_FALSE(status.has_value());
   EXPECT_NE(status.error().message().find("reserved until phase 3"), std::string::npos);
 }
 

@@ -184,7 +184,7 @@ class ColumnExpression : public Expression {
       const RecordBatch& input) const override {
     if (index_ >= input.num_columns()) {
       return std::unexpected(
-          Status::OutOfRange("Column index out of range: " +
+          Error::OutOfRange("Column index out of range: " +
                              std::to_string(index_)));
     }
     return input.column_ptr(index_);

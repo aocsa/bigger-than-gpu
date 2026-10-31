@@ -85,7 +85,7 @@ class CollectingSink : public Operator {
   [[nodiscard]] Status Sink(cache::DataBlockPtr batch) override {
     total_rows_ += batch->num_rows();
     ++batch_count_;
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] std::size_t total_rows() const noexcept { return total_rows_; }

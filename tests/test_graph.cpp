@@ -64,7 +64,7 @@ class SinkOperator : public Operator {
     if (batch) {
       ++received_batch_count_;
     }
-    return Status::OK();
+    return {};
   }
 
  private:
@@ -106,14 +106,14 @@ class NamedPortSink : public Operator {
 
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
     if (!batch) {
-      return Status::OK();
+      return {};
     }
     if (batch->id().starts_with("source_0_")) {
       ++left_received_count_;
     } else if (batch->id().starts_with("source_1_")) {
       ++right_received_count_;
     }
-    return Status::OK();
+    return {};
   }
 
  private:
@@ -225,7 +225,7 @@ TEST(GraphExecutionTest, SimpleExecution) {
   ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto status = graph->Execute();
-  ASSERT_TRUE(status.ok());
+  ASSERT_TRUE(status.has_value());
   EXPECT_EQ(received_count, 5);
 }
 
@@ -240,7 +240,7 @@ TEST(GraphExecutionTest, PassthroughExecution) {
   ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto status = graph->Execute();
-  ASSERT_TRUE(status.ok());
+  ASSERT_TRUE(status.has_value());
   EXPECT_EQ(received_count, 10);
 }
 
@@ -258,7 +258,7 @@ TEST(GraphExecutionTest, NamedPortsExecution) {
   ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto status = graph->Execute();
-  ASSERT_TRUE(status.ok());
+  ASSERT_TRUE(status.has_value());
   EXPECT_EQ(left_count, 3);
   EXPECT_EQ(right_count, 4);
 }
@@ -276,7 +276,7 @@ TEST(GraphExecutionTest, ConcatenatingBatchHolder) {
   ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
   auto status = graph->Execute();
-  ASSERT_TRUE(status.ok());
+  ASSERT_TRUE(status.has_value());
   EXPECT_EQ(received_count, 1);  // 3 batches in, 1 merged batch out
 }
 

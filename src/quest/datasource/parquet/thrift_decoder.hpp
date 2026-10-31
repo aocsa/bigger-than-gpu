@@ -63,16 +63,16 @@ class ThriftDecoder {
 
   [[nodiscard]] Status Skip(size_t count) noexcept {
     if (pos_ + count > data_.size()) {
-      return Status::ThriftDecodeError("Unexpected end of data during skip");
+      return Error::ThriftDecodeError("Unexpected end of data during skip");
     }
     pos_ += count;
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] Result<uint8_t> ReadByte() noexcept {
     if (pos_ >= data_.size()) {
       return std::unexpected(
-          Status::ThriftDecodeError("Unexpected end of data reading byte"));
+          Error::ThriftDecodeError("Unexpected end of data reading byte"));
     }
     return data_[pos_++];
   }
@@ -101,7 +101,7 @@ class ThriftDecoder {
       shift += 7;
       if (shift > 28) {
         return std::unexpected(
-            Status::ThriftDecodeError("Varint32 too long (exceeds 5 bytes)"));
+            Error::ThriftDecodeError("Varint32 too long (exceeds 5 bytes)"));
       }
     }
 
@@ -129,7 +129,7 @@ class ThriftDecoder {
       shift += 7;
       if (shift > 63) {
         return std::unexpected(
-            Status::ThriftDecodeError("Varint64 too long (exceeds 10 bytes)"));
+            Error::ThriftDecodeError("Varint64 too long (exceeds 10 bytes)"));
       }
     }
 
@@ -185,7 +185,7 @@ class ThriftDecoder {
     uint32_t length = length_result.value();
 
     if (pos_ + length > data_.size()) {
-      return Status::ThriftDecodeError(
+      return Error::ThriftDecodeError(
           "String length exceeds remaining buffer");
     }
 
@@ -203,7 +203,7 @@ class ThriftDecoder {
     uint32_t length = length_result.value();
 
     if (pos_ + length > data_.size()) {
-      return Status::ThriftDecodeError(
+      return Error::ThriftDecodeError(
           "Binary length exceeds remaining buffer");
     }
 
@@ -299,14 +299,14 @@ class ThriftDecoder {
       case ThriftType::kBoolTrue:
       case ThriftType::kBoolFalse:
         // No data to skip for inline booleans.
-        return Status::OK();
+        return {};
 
       case ThriftType::kByte: {
         auto status = Skip(1);
-        if (!status.ok()) {
+        if (!status.has_value()) {
           return status;
         }
-        return Status::OK();
+        return {};
       }
 
       case ThriftType::kI16:
@@ -315,7 +315,7 @@ class ThriftDecoder {
         if (!result.has_value()) {
           return std::unexpected(result.error());
         }
-        return Status::OK();
+        return {};
       }
 
       case ThriftType::kI64: {
@@ -323,15 +323,15 @@ class ThriftDecoder {
         if (!result.has_value()) {
           return std::unexpected(result.error());
         }
-        return Status::OK();
+        return {};
       }
 
       case ThriftType::kDouble: {
         auto status = Skip(8);
-        if (!status.ok()) {
+        if (!status.has_value()) {
           return status;
         }
-        return Status::OK();
+        return {};
       }
 
       case ThriftType::kBinary: {
@@ -340,10 +340,10 @@ class ThriftDecoder {
           return std::unexpected(length_result.error());
         }
         auto status = Skip(length_result.value());
-        if (!status.ok()) {
+        if (!status.has_value()) {
           return status;
         }
-        return Status::OK();
+        return {};
       }
 
       case ThriftType::kList:
@@ -357,11 +357,11 @@ class ThriftDecoder {
         // Skip each element.
         for (uint32_t i = 0; i < header.size; ++i) {
           auto status = SkipField(header.element_type);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return status;
           }
         }
-        return Status::OK();
+        return {};
       }
 
       case ThriftType::kMap: {
@@ -384,23 +384,23 @@ class ThriftDecoder {
           // Skip each key-value pair.
           for (uint32_t i = 0; i < size; ++i) {
             auto key_status = SkipField(key_type);
-            if (!key_status.ok()) {
+            if (!key_status.has_value()) {
               return key_status;
             }
             auto val_status = SkipField(val_type);
-            if (!val_status.ok()) {
+            if (!val_status.has_value()) {
               return val_status;
             }
           }
         }
-        return Status::OK();
+        return {};
       }
 
       case ThriftType::kStruct:
         return SkipStruct();
 
       default:
-        return Status::ThriftDecodeError("Unknown Thrift type to skip");
+        return Error::ThriftDecodeError("Unknown Thrift type to skip");
     }
   }
 
@@ -422,12 +422,12 @@ class ThriftDecoder {
 
       last_field_id = header->field_id;
       auto status = SkipField(header->type);
-      if (!status.ok()) {
+      if (!status.has_value()) {
         return status;
       }
     }
 
-    return Status::OK();
+    return {};
   }
 
  private:

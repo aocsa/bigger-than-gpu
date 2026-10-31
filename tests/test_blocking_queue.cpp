@@ -29,7 +29,7 @@ class BlockingQueueTest : public ::testing::Test {
 TEST_F(BlockingQueueTest, BasicPutPop) {
   auto msg = std::make_unique<TestMessage>("test_1", 42);
   auto status = queue_.Put(std::move(msg));
-  ASSERT_TRUE(status.ok());
+  ASSERT_TRUE(status.has_value());
   ASSERT_EQ(queue_.Size(), 1);
 
   auto result = queue_.Pop();
@@ -61,7 +61,7 @@ TEST_F(BlockingQueueTest, Finish) {
   EXPECT_FALSE(result->has_value());
 
   auto status = queue_.Put(std::make_unique<TestMessage>("2", 2));
-  EXPECT_FALSE(status.ok());
+  EXPECT_FALSE(status.has_value());
 }
 
 TEST_F(BlockingQueueTest, PopOnFinishedEmptyQueueIsNulloptNotError) {

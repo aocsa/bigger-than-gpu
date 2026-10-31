@@ -63,13 +63,13 @@ class TpchBloomJoin {
   /// @param batch Borrowed PART rows; may be empty.
   /// @return Success, or Invalid if build has already been finalized.
   [[nodiscard]] Status AddBuildBatch(std::span<const Part> batch) {
-    if (finalized_) return Status::Invalid("Cannot add build rows after finalization");
+    if (finalized_) return Error::Invalid("Cannot add build rows after finalization");
     for (const auto& part : batch) {
       if (part.brand != selected_brand_) continue;
       ++matches_per_key_[part.part_key];
       bloom_.Insert(static_cast<uint64_t>(part.part_key));
     }
-    return Status::OK();
+    return {};
   }
 
   /// @brief Seal all build input before any probe; repeated calls are harmless.
@@ -81,7 +81,7 @@ class TpchBloomJoin {
   /// @return Output rows and counters, or Invalid if build is not finalized.
   [[nodiscard]] Result<ProbeResult> ProbeBatch(std::span<const Lineitem> batch,
                                               bool use_bloom = true) const {
-    if (!finalized_) return Status::Invalid("Finalize build before probing");
+    if (!finalized_) return Error::Invalid("Finalize build before probing");
     ProbeResult result;
     for (const auto& item : batch) {
       if (use_bloom && !bloom_.MayContain(static_cast<uint64_t>(item.part_key))) {

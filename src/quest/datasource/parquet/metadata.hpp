@@ -164,7 +164,7 @@ class MetadataParser {
         }
         default: {
           auto status = decoder.SkipField(header->type);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
@@ -266,7 +266,7 @@ class MetadataParser {
         }
         default: {
           auto status = decoder.SkipField(header->type);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
@@ -368,7 +368,7 @@ class MetadataParser {
         }
         default: {
           auto status = decoder.SkipField(header->type);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
@@ -438,14 +438,14 @@ class MetadataParser {
         }
         case 3: {  // meta_data
           auto status = ParseColumnMetadata(decoder, cc);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
         }
         default: {
           auto status = decoder.SkipField(header->type);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
@@ -561,14 +561,14 @@ class MetadataParser {
         }
         default: {
           auto status = decoder.SkipField(header->type);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return status;
           }
           break;
         }
       }
     }
-    return Status::OK();
+    return {};
   }
 
   // ===========================================================================
@@ -675,7 +675,7 @@ class MetadataParser {
             stats.max_value = std::move(result.value());
           } else {
             auto status = decoder.SkipField(header->type);
-            if (!status.ok()) {
+            if (!status.has_value()) {
               return std::unexpected(status.error());
             }
           }
@@ -690,7 +690,7 @@ class MetadataParser {
             stats.min_value = std::move(result.value());
           } else {
             auto status = decoder.SkipField(header->type);
-            if (!status.ok()) {
+            if (!status.has_value()) {
               return std::unexpected(status.error());
             }
           }
@@ -698,7 +698,7 @@ class MetadataParser {
         }
         default: {
           auto status = decoder.SkipField(header->type);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;
@@ -763,7 +763,7 @@ class MetadataParser {
         }
         default: {
           auto status = decoder.SkipField(header->type);
-          if (!status.ok()) {
+          if (!status.has_value()) {
             return std::unexpected(status.error());
           }
           break;

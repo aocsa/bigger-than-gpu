@@ -48,7 +48,7 @@ class FileHandle {
     handle.path_ = path;
     handle.stream_.open(path, std::ios::binary | std::ios::ate);
     if (!handle.stream_) {
-      return Status::IOError("Failed to open file: " + path);
+      return Error::IOError("Failed to open file: " + path);
     }
     handle.file_size_ = handle.stream_.tellg();
     handle.stream_.seekg(0);
@@ -72,16 +72,16 @@ class FileHandle {
     stream_.read(reinterpret_cast<char*>(buffer.data()),
                  static_cast<std::streamsize>(length));
     if (!stream_) {
-      return Status::IOError("Failed to read from file");
+      return Error::IOError("Failed to read from file");
     }
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] Result<std::vector<uint8_t>> Read(size_t offset,
                                                    size_t length) {
     std::vector<uint8_t> buffer;
     auto status = Read(offset, length, buffer);
-    if (!status.ok()) {
+    if (!status.has_value()) {
       return std::unexpected(status.error());
     }
     return buffer;
@@ -125,12 +125,12 @@ class ParquetFileReader {
     reader.file_ = std::move(file_result.value());
 
     auto validate_status = reader.ValidateFileFormat();
-    if (!validate_status.ok()) {
+    if (!validate_status.has_value()) {
       return std::unexpected(validate_status.error());
     }
 
     auto metadata_status = reader.ReadMetadata();
-    if (!metadata_status.ok()) {
+    if (!metadata_status.has_value()) {
       return std::unexpected(metadata_status.error());
     }
 
@@ -171,7 +171,7 @@ class ParquetFileReader {
       const std::vector<std::string>& columns = {}) {
     if (row_group_index >= metadata_.row_groups.size()) {
       return std::unexpected(
-          Status::OutOfRange("Row group index out of range"));
+          Error::OutOfRange("Row group index out of range"));
     }
 
     const auto& row_group = metadata_.row_groups[row_group_index];
@@ -189,7 +189,7 @@ class ParquetFileReader {
         auto idx = schema_.GetFieldIndex(name);
         if (!idx.has_value()) {
           return std::unexpected(
-              Status::NotFound("Column not found: " + name));
+              Error::NotFound("Column not found: " + name));
         }
         column_indices.push_back(*idx);
       }
@@ -232,7 +232,7 @@ class ParquetFileReader {
 
   [[nodiscard]] Status ValidateFileFormat() {
     if (file_.size() < kMagicSize * 2 + 4) {
-      return Status::ParquetFormatError(
+      return Error::ParquetFormatError(
           "File too small to be valid Parquet");
     }
 
@@ -242,7 +242,7 @@ class ParquetFileReader {
     }
     if (std::memcmp(start_magic_result.value().data(), kParquetMagic,
                     kMagicSize) != 0) {
-      return Status::ParquetFormatError(
+      return Error::ParquetFormatError(
           "Invalid Parquet file: missing start magic");
     }
 
@@ -252,11 +252,11 @@ class ParquetFileReader {
     }
     if (std::memcmp(end_magic_result.value().data(), kParquetMagic,
                     kMagicSize) != 0) {
-      return Status::ParquetFormatError(
+      return Error::ParquetFormatError(
           "Invalid Parquet file: missing end magic");
     }
 
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] Status ReadMetadata() {
@@ -270,7 +270,7 @@ class ParquetFileReader {
     }
     uint32_t footer_length = *footer_length_result;
     if (footer_length > file_.size() - kFooterSize - kMagicSize) {
-      return Status::ParquetFormatError("Invalid Parquet file: footer length exceeds file size");
+      return Error::ParquetFormatError("Invalid Parquet file: footer length exceeds file size");
     }
 
     size_t footer_start = file_.size() - kFooterSize - footer_length;
@@ -287,7 +287,7 @@ class ParquetFileReader {
 
     schema_ = BuildSchema(metadata_);
 
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] Result<std::vector<uint8_t>> ReadColumnChunk(

@@ -91,7 +91,7 @@ Status Pipeline::RunTask(cache::DataBlockPtr batch, std::size_t start_index) {
     if (batch == nullptr || batch->num_rows() == 0) {
       // A streaming operator (e.g. a filter) consumed the batch entirely.
       // Nothing to publish; this is not an error.
-      return Status::OK();
+      return {};
     }
   }
   return PublishOutput(std::move(batch));
@@ -100,7 +100,7 @@ Status Pipeline::RunTask(cache::DataBlockPtr batch, std::size_t start_index) {
 Status Pipeline::PublishOutput(cache::DataBlockPtr batch) {
   Operator* sink_op = sink();
   if (sink_op == nullptr) {
-    return Status::Invalid("Pipeline::PublishOutput: pipeline has no sink");
+    return Error::Invalid("Pipeline::PublishOutput: pipeline has no sink");
   }
 
   if (sink_op->IsSink()) {
@@ -121,7 +121,7 @@ Status Pipeline::PublishOutput(cache::DataBlockPtr batch) {
   // filter dropped every row). Mirror RunTask's 0-row short-circuit so a
   // downstream holder never receives an empty (0-column) batch.
   if (processed.value() == nullptr || processed.value()->num_rows() == 0) {
-    return Status::OK();
+    return {};
   }
 
   // FOR_EACH partitioned edge: round-robin across output_0…N-1 lanes

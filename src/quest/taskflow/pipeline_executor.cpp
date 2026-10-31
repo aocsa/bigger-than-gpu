@@ -20,7 +20,7 @@ PipelineExecutor::PipelineExecutor(std::size_t num_workers)
 
 Status PipelineExecutor::Execute(std::vector<PipelinePtr> pipelines) {
   if (pipelines.empty()) {
-    return Status::OK();
+    return {};
   }
 
   pipelines_ = std::move(pipelines);
@@ -28,7 +28,7 @@ Status PipelineExecutor::Execute(std::vector<PipelinePtr> pipelines) {
   ready_queue_.clear();
   scheduled_.clear();
   stop_scheduling_ = false;
-  first_error_ = Status::OK();
+  first_error_ = Status{};
   outstanding_ = pipelines_.size();
   in_flight_ = 0;
 
@@ -59,7 +59,7 @@ Status PipelineExecutor::Execute(std::vector<PipelinePtr> pipelines) {
     // OnPipelineFinished's stall check.)
     pipelines_.clear();
     scheduled_.clear();
-    return Status::Invalid(
+    return Error::Invalid(
         "PipelineExecutor: no pipeline is runnable at start (a "
         "Full-barrier producer chain has no root)");
   }
@@ -97,7 +97,7 @@ void PipelineExecutor::WorkerLoop() {
     }
 
     auto status = DrainPipeline(*pipeline);
-    if (!status.ok()) {
+    if (!status.has_value()) {
       RecordError(std::move(status));
     }
     OnPipelineFinished(pipeline);
@@ -131,8 +131,8 @@ void PipelineExecutor::OnPipelineFinished(Pipeline* finished_pipeline) {
     // start (so that check passed), but a disjoint subset of pipelines
     // depends only on each other in a cycle.
     if (ready_queue_.empty() && in_flight_ == 0 && outstanding_ > 0) {
-      if (first_error_.ok()) {
-        first_error_ = Status::Invalid(
+      if (first_error_.has_value()) {
+        first_error_ = Error::Invalid(
             "PipelineExecutor: deadlocked -- no pipeline is runnable but "
             "some have not finished (a Full-barrier cycle among a subset "
             "of pipelines?)");
@@ -146,7 +146,7 @@ void PipelineExecutor::OnPipelineFinished(Pipeline* finished_pipeline) {
 
 void PipelineExecutor::RecordError(Status status) {
   std::lock_guard<std::mutex> lock(schedule_mutex_);
-  if (first_error_.ok()) {
+  if (first_error_.has_value()) {
     first_error_ = std::move(status);
   }
   stop_scheduling_ = true;
@@ -156,7 +156,7 @@ void PipelineExecutor::RecordError(Status status) {
 Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
   Operator* source_op = pipeline.source();
   if (source_op == nullptr) {
-    return Status::Invalid("PipelineExecutor: pipeline has no source operator");
+    return Error::Invalid("PipelineExecutor: pipeline has no source operator");
   }
 
   // Whatever happens below, this pipeline is done running once this
@@ -190,7 +190,7 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
     // also lands here and receives a no-op FinalizeSink(); harmless by
     // contract -- the default implementation returns OK.)
     auto finalize_status = source_op->FinalizeSink();
-    if (!finalize_status.ok()) {
+    if (!finalize_status.has_value()) {
       return finalize_status;
     }
   }
@@ -262,12 +262,12 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
 
     auto run_status = pipeline.RunTask(std::move(*batch), run_start_index);
     pipeline.MarkTaskCompleted();
-    if (!run_status.ok()) {
+    if (!run_status.has_value()) {
       return run_status;
     }
   }
 
-  return Status::OK();
+  return {};
 }
 
 Result<std::optional<cache::DataBlockPtr>> PipelineExecutor::PullFromHolder(

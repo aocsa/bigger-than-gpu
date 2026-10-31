@@ -172,7 +172,7 @@ TEST(BatchHolderTest, AddAndPull) {
       std::make_shared<HostMemoryBlock>("data1", std::move(batch));
 
   auto add_status = holder.Add(cache_data);
-  EXPECT_TRUE(add_status.ok());
+  EXPECT_TRUE(add_status.has_value());
   EXPECT_EQ(holder.batch_count(), 1U);
   EXPECT_GT(holder.bytes_added(), 0U);
   EXPECT_EQ(holder.rows_added(), 100U);
@@ -235,7 +235,7 @@ TEST(BatchHolderTest, NullMessage) {
   BatchHolder holder(5);
 
   auto status = holder.Add(nullptr);
-  EXPECT_FALSE(status.ok());
+  EXPECT_FALSE(status.has_value());
 }
 
 TEST(BatchHolderTest, MultipleBatches) {

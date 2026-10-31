@@ -61,17 +61,17 @@ std::size_t HostMemoryBlock::size_in_bytes() const noexcept {
 
 Result<std::shared_ptr<HostMemoryBlock>> HostMemoryBlock::ToCpu() {
   // Caller must use the existing shared_ptr; no conversion path from raw this.
-  return Status::Invalid(
+  return Error::Invalid(
       "Cannot convert HostMemoryBlock to CPU - use existing shared_ptr");
 }
 
 Result<std::shared_ptr<DiskBlock>> HostMemoryBlock::ToDisk() {
   if (!valid_ || !record_batch_) {
-    return Status::Invalid("Cache data is not valid");
+    return Error::Invalid("Cache data is not valid");
   }
 
   if (!disk_resource_) {
-    return Status::Invalid("No disk resource configured for spilling");
+    return Error::Invalid("No disk resource configured for spilling");
   }
 
   auto file_path = disk_resource_->generate_cache_path("cpu_spill");
@@ -80,7 +80,7 @@ Result<std::shared_ptr<DiskBlock>> HostMemoryBlock::ToDisk() {
     datasource::RecordBatchSerializer::SerializeToFile(*record_batch_,
                                                         file_path.string());
   } catch (const std::exception& e) {
-    return Status::IOError("Failed to serialize record batch: " +
+    return Error::IOError("Failed to serialize record batch: " +
                            std::string(e.what()));
   }
 
@@ -88,7 +88,7 @@ Result<std::shared_ptr<DiskBlock>> HostMemoryBlock::ToDisk() {
   auto file_size = std::filesystem::file_size(file_path, ec);
   if (ec) {
     std::filesystem::remove(file_path);
-    return Status::IOError("Failed to get file size: " + ec.message());
+    return Error::IOError("Failed to get file size: " + ec.message());
   }
 
   disk_resource_->record_file_created(file_path, file_size);
@@ -172,7 +172,7 @@ bool DiskBlock::is_valid() const noexcept {
 
 Result<std::shared_ptr<HostMemoryBlock>> DiskBlock::ToCpu() {
   if (!is_valid()) {
-    return Status::Invalid("Cache file is not valid");
+    return Error::Invalid("Cache file is not valid");
   }
 
   try {
@@ -187,13 +187,13 @@ Result<std::shared_ptr<HostMemoryBlock>> DiskBlock::ToCpu() {
 
     return cpu_data;
   } catch (const std::exception& e) {
-    return Status::IOError("Failed to deserialize record batch: " +
+    return Error::IOError("Failed to deserialize record batch: " +
                            std::string(e.what()));
   }
 }
 
 Result<std::shared_ptr<DiskBlock>> DiskBlock::ToDisk() {
-  return Status::Invalid(
+  return Error::Invalid(
       "Cannot convert DiskBlock to Disk - use existing shared_ptr");
 }
 

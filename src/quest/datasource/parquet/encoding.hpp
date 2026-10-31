@@ -59,7 +59,7 @@ class PlainDecoder : public ValueDecoder {
   [[nodiscard]] Result<T> ReadValue() {
     if (values_read_ >= num_values_) {
       return std::unexpected(
-          Status::ColumnDecodeError("No more values to read"));
+          Error::ColumnDecodeError("No more values to read"));
     }
     auto value = LoadLE<T>(data_, pos_);
     if (!value) {
@@ -111,10 +111,10 @@ class PlainDecoder<bool> : public ValueDecoder {
   [[nodiscard]] Result<bool> ReadValue() {
     if (values_read_ >= num_values_) {
       return std::unexpected(
-          Status::ColumnDecodeError("No more boolean values to read"));
+          Error::ColumnDecodeError("No more boolean values to read"));
     }
     if (byte_pos_ >= data_.size()) {
-      return Status::ColumnDecodeError("Not enough data for boolean values");
+      return Error::ColumnDecodeError("Not enough data for boolean values");
     }
     bool value = (data_[byte_pos_] & (1 << bit_pos_)) != 0;
     ++bit_pos_;
@@ -204,7 +204,7 @@ class RleBitPackingDecoder {
   [[nodiscard]] Result<int32_t> ReadValue() {
     if (current_count_ == 0) {
       auto status = ReadNextGroup();
-      if (!status.ok()) {
+      if (!status.has_value()) {
         return std::unexpected(status.error());
       }
     }
@@ -230,16 +230,16 @@ class RleBitPackingDecoder {
       }
       values[i] = result.value();
     }
-    return Status::OK();
+    return {};
   }
 
  private:
   [[nodiscard]] Status ReadNextGroup() {
     if (pos_ >= data_.size()) {
-      return Status::ColumnDecodeError("RLE decoder: unexpected end of data");
+      return Error::ColumnDecodeError("RLE decoder: unexpected end of data");
     }
     if (bit_width_ < 0 || bit_width_ > 32) {
-      return Status::ColumnDecodeError(std::format("RLE decoder: invalid bit width {}", bit_width_));
+      return Error::ColumnDecodeError(std::format("RLE decoder: invalid bit width {}", bit_width_));
     }
 
     auto varint = ReadVarInt();
@@ -264,7 +264,7 @@ class RleBitPackingDecoder {
       current_count_ = indicator >> 1;
       current_value_ = ReadFixedWidth();
     }
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] Result<uint32_t> ReadVarInt() {
@@ -276,7 +276,7 @@ class RleBitPackingDecoder {
         return result;
       }
     }
-    return Status::ColumnDecodeError("RLE decoder: truncated or oversized varint");
+    return Error::ColumnDecodeError("RLE decoder: truncated or oversized varint");
   }
 
   int32_t ReadFixedWidth() {
@@ -293,7 +293,7 @@ class RleBitPackingDecoder {
     size_t byte_offset = bit_offset / 8;
     size_t bit_in_byte = bit_offset % 8;
     if ((bit_offset + bit_width_ + 7) / 8 > bit_packed_data_.size()) {
-      return Status::ColumnDecodeError("RLE decoder: bit-packed run exceeds data");
+      return Error::ColumnDecodeError("RLE decoder: bit-packed run exceeds data");
     }
 
     int32_t value = 0;

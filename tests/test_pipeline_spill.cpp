@@ -65,14 +65,14 @@ class SpillCollector : public Operator {
 
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
     if (!batch) {
-      return Status::OK();
+      return {};
     }
     ++batch_count_;
     total_rows_ += batch->num_rows();
     if (batch->tier() == memory::MemoryTier::Disk) {
       ++disk_tier_count_;
     }
-    return Status::OK();
+    return {};
   }
 
   [[nodiscard]] std::size_t batch_count() const noexcept { return batch_count_; }
