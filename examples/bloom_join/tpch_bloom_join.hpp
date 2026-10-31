@@ -1,7 +1,6 @@
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
-#ifndef QUEST_EXAMPLES_TPCH_BLOOM_JOIN_HPP_
-#define QUEST_EXAMPLES_TPCH_BLOOM_JOIN_HPP_
+#pragma once
 
 /// @file tpch_bloom_join.hpp
 /// @brief Educational batched inner join over non-null TPC-H column projections.
@@ -109,4 +108,3 @@ class TpchBloomJoin {
 };
 
 }  // namespace quest::examples
-#endif  // QUEST_EXAMPLES_TPCH_BLOOM_JOIN_HPP_
