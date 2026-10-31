@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "quest/datasource/parquet/parquet_reader.hpp"
+#include "quest/datasource/parquet_data_source.hpp"
 
 using namespace quest::datasource;
 
@@ -119,10 +120,8 @@ int main(int argc, char* argv[]) {
   std::cout << "Data:\n";
   size_t row_group_idx = 0;
 
-  // Use explicit iterator since operator* returns Result<RecordBatch>.
-  auto sequence = parquet.Scan(columns);
-  for (auto it = sequence.begin(); it != sequence.end(); ++it) {
-    auto batch_result = *it;
+  for (size_t i = 0; i < parquet.num_partitions(); ++i) {
+    auto batch_result = parquet.ReadPartition(i, columns);
     if (!batch_result.has_value()) {
       std::cerr << "Error reading row group " << row_group_idx << ": "
                 << batch_result.error().message() << "\n";

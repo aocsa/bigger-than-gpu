@@ -32,11 +32,14 @@ class InMemoryDataSource : public DataSource {
 
   [[nodiscard]] Schema schema() const override { return schema_; }
 
-  [[nodiscard]] RecordBatchSequence Scan(
-      const std::vector<std::string>& /*projection*/) override {
-    // For testing, return empty sequence (can't use real iterator without
-    // ParquetFileReader)
-    return RecordBatchSequence(nullptr, {});
+  [[nodiscard]] size_t num_partitions() const override { return batches_.size(); }
+
+  [[nodiscard]] Result<RecordBatch> ReadPartition(
+      size_t index, const std::vector<std::string>& /*projection*/) override {
+    if (index >= batches_.size()) {
+      return Error::OutOfRange("Partition index out of range");
+    }
+    return batches_[index];
   }
 
   const std::vector<RecordBatch>& batches() const { return batches_; }

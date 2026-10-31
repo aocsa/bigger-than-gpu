@@ -31,7 +31,7 @@
 #include <vector>
 
 #include "quest/builder/query_builder.hpp"        // the oracle (fluent API)
-#include "quest/datasource/data_source.hpp"       // ParquetDataSource
+#include "quest/datasource/parquet_data_source.hpp"
 #include "quest/execution/graph_builder.hpp"      // CreatePhysicalExpr
 #include "quest/logical_plan/logical_expr.hpp"    // col(), lit(), gt()
 #include "quest/logical_plan/logical_plan.hpp"    // Scan, Selection, Projection

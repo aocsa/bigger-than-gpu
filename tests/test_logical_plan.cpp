@@ -23,9 +23,11 @@ class MockDataSource : public DataSource {
 
   [[nodiscard]] Schema schema() const override { return schema_; }
 
-  [[nodiscard]] RecordBatchSequence Scan(
-      const std::vector<std::string>& /*projection*/) override {
-    return RecordBatchSequence(nullptr, {});
+  [[nodiscard]] size_t num_partitions() const override { return 0; }
+
+  [[nodiscard]] Result<RecordBatch> ReadPartition(
+      size_t /*index*/, const std::vector<std::string>& /*projection*/) override {
+    return Error::OutOfRange("MockDataSource has no partitions");
   }
 
  private:

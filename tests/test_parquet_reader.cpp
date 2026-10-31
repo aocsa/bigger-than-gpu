@@ -12,10 +12,10 @@
 #include <fstream>
 #include <vector>
 
-#include "quest/datasource/data_source.hpp"
 #include "quest/datasource/parquet/bytes.hpp"
 #include "quest/datasource/parquet/encoding.hpp"
 #include "quest/datasource/parquet/parquet_reader.hpp"
+#include "quest/datasource/parquet_data_source.hpp"
 #include "support/test_utils.hpp"
 
 using namespace quest;
@@ -93,12 +93,11 @@ TEST_F(ParquetReaderTest, ScanAllColumns) {
     all_columns.push_back(schema.field(i).name);
   }
 
-  auto sequence = ds.Scan(all_columns);
   size_t batch_count = 0;
   size_t total_rows = 0;
 
-  for (auto it = sequence.begin(); it != sequence.end(); ++it) {
-    auto batch_result = *it;
+  for (size_t i = 0; i < ds.num_partitions(); ++i) {
+    auto batch_result = ds.ReadPartition(i, all_columns);
     ASSERT_TRUE(batch_result.has_value())
         << "Batch read failed: " << batch_result.error().ToString();
     total_rows += batch_result.value().num_rows();
@@ -122,10 +121,9 @@ TEST_F(ParquetReaderTest, ScanProjection) {
   }
 
   std::vector<std::string> projection = {schema.field(0).name};
-  auto sequence = ds.Scan(projection);
 
-  for (auto it = sequence.begin(); it != sequence.end(); ++it) {
-    auto batch_result = *it;
+  for (size_t i = 0; i < ds.num_partitions(); ++i) {
+    auto batch_result = ds.ReadPartition(i, projection);
     ASSERT_TRUE(batch_result.has_value());
     EXPECT_EQ(batch_result.value().num_columns(), 1U);
     EXPECT_EQ(batch_result.value().schema().field(0).name, schema.field(0).name);
@@ -152,9 +150,8 @@ TEST_F(ParquetReaderTest, StringColumnRead) {
     GTEST_SKIP() << "No string column found in test file";
   }
 
-  auto sequence = ds.Scan({*string_col});
-  for (auto it = sequence.begin(); it != sequence.end(); ++it) {
-    auto batch_result = *it;
+  for (size_t i = 0; i < ds.num_partitions(); ++i) {
+    auto batch_result = ds.ReadPartition(i, {*string_col});
     ASSERT_TRUE(batch_result.has_value());
     auto& col = batch_result.value().column(0);
     EXPECT_TRUE(std::holds_alternative<StringType>(col.GetType()));
@@ -177,9 +174,8 @@ TEST_F(ParquetReaderTest, NumericColumnTypes) {
                       std::holds_alternative<DoubleType>(field.data_type);
 
     if (is_numeric) {
-      auto sequence = ds.Scan({field.name});
-      for (auto it = sequence.begin(); it != sequence.end(); ++it) {
-        auto batch_result = *it;
+      for (size_t i = 0; i < ds.num_partitions(); ++i) {
+        auto batch_result = ds.ReadPartition(i, {field.name});
         ASSERT_TRUE(batch_result.has_value());
         EXPECT_EQ(batch_result.value().num_columns(), 1U);
       }
@@ -211,11 +207,10 @@ TEST_F(ParquetReaderTest, EmptyProjection) {
 
   // Empty projection should still work (may scan all or none depending on impl)
   std::vector<std::string> empty_projection;
-  auto sequence = ds.Scan(empty_projection);
 
   // Just verify it doesn't crash
-  for (auto it = sequence.begin(); it != sequence.end(); ++it) {
-    (void)*it;
+  for (size_t i = 0; i < ds.num_partitions(); ++i) {
+    (void)ds.ReadPartition(i, empty_projection);
   }
 }
 
@@ -227,11 +222,10 @@ TEST_F(ParquetReaderTest, InvalidColumnProjection) {
   ASSERT_OK_AND_ASSIGN(auto ds, ParquetDataSource::Open(employees_file().string()));
 
   std::vector<std::string> bad_projection = {"nonexistent_column_xyz"};
-  auto sequence = ds.Scan(bad_projection);
 
   // The scan should either fail or return empty batches
-  for (auto it = sequence.begin(); it != sequence.end(); ++it) {
-    auto batch_result = *it;
+  for (size_t i = 0; i < ds.num_partitions(); ++i) {
+    auto batch_result = ds.ReadPartition(i, bad_projection);
     // Either fails or returns batch with 0 columns
     if (batch_result.has_value()) {
       EXPECT_EQ(batch_result.value().num_columns(), 0U);

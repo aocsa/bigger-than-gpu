@@ -15,6 +15,7 @@
 
 #include "quest/builder/expr_builder.hpp"
 #include "quest/datasource/data_source.hpp"
+#include "quest/datasource/parquet_data_source.hpp"
 #include "quest/logical_plan/logical_plan.hpp"
 #include "quest/result.hpp"
 

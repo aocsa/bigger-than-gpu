@@ -6,6 +6,7 @@
 /// @file table_scan_operator.hpp
 /// @brief Pipeline-role TableScan that yields HostMemoryBlocks from a DataSource.
 
+#include <cstddef>
 #include <cstdint>
 #include <format>
 #include <memory>
@@ -46,26 +47,21 @@ class TableScanOperator : public Operator {
 
   [[nodiscard]] Result<std::optional<cache::DataBlockPtr>> GetNextBatch() override {
     if (!started_) {
-      std::vector<std::string> proj;
       if (projection_) {
-        proj = *projection_;
+        columns_ = *projection_;
       } else {
         for (const auto& field : source_->schema().fields()) {
-          proj.push_back(field.name);
+          columns_.push_back(field.name);
         }
       }
-      sequence_ = source_->Scan(proj);
-      iter_ = sequence_->begin();
-      end_ = sequence_->end();
       started_ = true;
     }
 
-    if (iter_ == end_) {
+    if (next_partition_ >= source_->num_partitions()) {
       return std::optional<cache::DataBlockPtr>{std::nullopt};
     }
 
-    auto batch_result = *iter_;
-    ++iter_;
+    auto batch_result = source_->ReadPartition(next_partition_++, columns_);
     if (!batch_result) {
       return std::unexpected(batch_result.error());
     }
@@ -81,9 +77,8 @@ class TableScanOperator : public Operator {
   std::shared_ptr<memory::MemoryResourceManager> memory_manager_;
 
   bool started_{false};
-  std::optional<datasource::RecordBatchSequence> sequence_;
-  datasource::RecordBatchIterator iter_{nullptr, {}, 0};
-  datasource::RecordBatchIterator end_{nullptr, {}, 0};
+  std::vector<std::string> columns_;
+  std::size_t next_partition_{0};
   std::uint64_t next_batch_id_{0};
 };
 
