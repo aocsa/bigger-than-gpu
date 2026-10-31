@@ -2,33 +2,32 @@
 
 Small, focused fixes. Each one is a single commit.
 
+> **Note (2026-08-01):** The legacy thread-per-operator executor has been deleted. P1.1, P1.2,
+> and P1.3 were specific to that scheduler (`Graph::Execute()`'s BFS loop,
+> `SimpleOperator::run()`, and `BlockingQueue` EOS signaling). All three are now **obsolete**
+> — the pipelined engine has no BFS loop, no `run()` method, and EOS is a value
+> (`std::optional` nullopt), not an error code. P1.4 and P1.5 remain open.
+
 ## Tasks
 
-### 1.1 Data race in `Graph::Execute()` — `processed_edges`
+### ~~1.1 Data race in `Graph::Execute()` — `processed_edges`~~ (OBSOLETE — executor deleted)
 
-- **File**: `src/quest/taskflow/graph.cpp:186`
-- **Bug**: `processed_edges` (std::set) is read inside jthread lambdas (line 223-225) and written in the main loop (line 246) without synchronization.
-- **Fix**: Protect `processed_edges` with the existing `queue_mutex` or a separate mutex.
-- [ ] Implement fix
-- [ ] Write test proving race is fixed (use ThreadSanitizer or concurrent stress test)
+- ~~**File**: `src/quest/taskflow/graph.cpp:186`~~
+- ~~**Bug**: `processed_edges` (std::set) is read inside jthread lambdas without synchronization.~~
+- **Status**: The BFS scheduler and `processed_edges` were removed when the legacy executor was deleted.
 
-### 1.2 Busy-wait spin in scheduler
+### ~~1.2 Busy-wait spin in scheduler~~ (OBSOLETE — executor deleted)
 
-- **File**: `src/quest/taskflow/graph.cpp`
-- **Bug**: When operator dependencies aren't met, the scheduler re-pushes the operator and loops with no sleep or condition variable — 100% CPU burn.
-- **Fix**: Add a condition variable that operator completion threads notify, so the scheduler blocks instead of spinning.
-- [ ] Implement fix
-- [ ] Verify CPU usage drops to near-zero when waiting
+- ~~**File**: `src/quest/taskflow/graph.cpp`~~
+- ~~**Bug**: Scheduler re-pushes operators with no sleep or condition variable.~~
+- **Status**: The BFS scheduler was removed when the legacy executor was deleted.
 
-### 1.3 `SimpleOperator::run()` uses wrong error code for end-of-stream
+### ~~1.3 `SimpleOperator::run()` uses wrong error code for end-of-stream~~ (OBSOLETE — executor deleted)
 
-- **File**: `src/quest/taskflow/operator.cpp:105`
-- **Bug**: Uses `ErrorCode::Invalid` to detect end-of-stream. `Invalid` also means malformed input — conflated semantics.
-- **Note**: `ErrorCode::EndOfData` already exists in `result.hpp:311`.
-- **Fix**: Change the check from `ErrorCode::Invalid` to `ErrorCode::EndOfData` in `operator.cpp`, and update `BlockingQueue` to return `EndOfData` when finished+empty.
-- [ ] Update `BlockingQueue::Pop()`/`TryPop()` to return `EndOfData` for finished+empty
-- [ ] Update `SimpleOperator::run()` to check `EndOfData`
-- [ ] Verify existing tests still pass
+- ~~**File**: `src/quest/taskflow/operator.cpp:105`~~
+- ~~**Bug**: Uses `ErrorCode::Invalid` to detect end-of-stream.~~
+- **Status**: `SimpleOperator::run()` and the legacy EOS-via-error-code path were deleted.
+  The pipeline engine signals EOS as an engaged `std::nullopt` from `GetNextBatch()`.
 
 ### 1.4 `MaterializedColumnVector::IsNull()` always returns false
 

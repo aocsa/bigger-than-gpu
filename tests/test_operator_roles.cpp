@@ -28,8 +28,7 @@ namespace {
 using cache::DataBlockPtr;
 using cache::HostMemoryBlock;
 
-[[nodiscard]] DataBlockPtr MakeTestBlock(const std::string& block_id,
-                                         std::size_t rows) {
+[[nodiscard]] DataBlockPtr MakeTestBlock(const std::string& block_id, std::size_t rows) {
   auto batch = quest::testing::MakeTestRecordBatch(rows);
   return std::make_shared<HostMemoryBlock>(block_id, std::move(batch));
 }
@@ -44,13 +43,6 @@ class VectorSourceOperator : public Operator {
   VectorSourceOperator(std::uint32_t id, std::vector<DataBlockPtr> batches)
       : Operator(id, "vector_source", OperatorType::TableScan),
         pending_(batches.begin(), batches.end()) {}
-
-  [[nodiscard]] ExecutionStatus run() override {
-    return ExecutionStatus::Proceed;
-  }
-  [[nodiscard]] bool can_you_throttle_my_input() const override {
-    return false;
-  }
 
   [[nodiscard]] Result<std::optional<DataBlockPtr>> GetNextBatch() override {
     if (pending_.empty()) {
@@ -71,22 +63,12 @@ class CountingStreamOperator : public Operator {
   explicit CountingStreamOperator(std::uint32_t id)
       : Operator(id, "counting_stream", OperatorType::Filter) {}
 
-  [[nodiscard]] ExecutionStatus run() override {
-    return ExecutionStatus::Proceed;
-  }
-  [[nodiscard]] bool can_you_throttle_my_input() const override {
-    return true;
-  }
-
-  [[nodiscard]] Result<DataBlockPtr> ProcessBatch(
-      DataBlockPtr input) override {
+  [[nodiscard]] Result<DataBlockPtr> ProcessBatch(DataBlockPtr input) override {
     ++processed_count_;
     return input;
   }
 
-  [[nodiscard]] std::size_t processed_count() const noexcept {
-    return processed_count_;
-  }
+  [[nodiscard]] std::size_t processed_count() const noexcept { return processed_count_; }
 
  private:
   std::size_t processed_count_{0};
@@ -99,13 +81,6 @@ class AccumulatingSinkOperator : public Operator {
  public:
   explicit AccumulatingSinkOperator(std::uint32_t id)
       : Operator(id, "accumulating_sink", OperatorType::ComputeAggregate) {}
-
-  [[nodiscard]] ExecutionStatus run() override {
-    return ExecutionStatus::Proceed;
-  }
-  [[nodiscard]] bool can_you_throttle_my_input() const override {
-    return true;
-  }
 
   // Sink role -----------------------------------------------------------
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
@@ -137,9 +112,7 @@ class AccumulatingSinkOperator : public Operator {
     return std::optional<DataBlockPtr>{accumulated_[emit_index_++]};
   }
 
-  [[nodiscard]] std::size_t accumulated_count() const noexcept {
-    return accumulated_.size();
-  }
+  [[nodiscard]] std::size_t accumulated_count() const noexcept { return accumulated_.size(); }
   [[nodiscard]] bool finalized() const noexcept { return finalized_; }
 
  private:
@@ -154,14 +127,7 @@ class AccumulatingSinkOperator : public Operator {
 
 class DefaultRolesOperator : public Operator {
  public:
-  DefaultRolesOperator(std::uint32_t id, OperatorType type)
-      : Operator(id, "default_roles", type) {}
-  [[nodiscard]] ExecutionStatus run() override {
-    return ExecutionStatus::Proceed;
-  }
-  [[nodiscard]] bool can_you_throttle_my_input() const override {
-    return true;
-  }
+  DefaultRolesOperator(std::uint32_t id, OperatorType type) : Operator(id, "default_roles", type) {}
 };
 
 TEST(OperatorRolesTest, DefaultProcessBatchIsPassthrough) {
@@ -248,8 +214,8 @@ TEST(OperatorRolesTest, EmptyVectorSourceIsImmediatelyExhausted) {
 
 TEST(OperatorRolesTest, AccumulatingSinkCollectsThenReEmitsAfterFinalize) {
   AccumulatingSinkOperator sink{0};
-  EXPECT_TRUE(sink.IsSink());       // ComputeAggregate is blocking
-  EXPECT_FALSE(sink.IsSource());    // not a source until finalized
+  EXPECT_TRUE(sink.IsSink());     // ComputeAggregate is blocking
+  EXPECT_FALSE(sink.IsSource());  // not a source until finalized
 
   auto b0 = MakeTestBlock("b0", 4);
   auto b1 = MakeTestBlock("b1", 8);

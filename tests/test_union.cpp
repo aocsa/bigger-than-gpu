@@ -69,8 +69,8 @@ class VectorSourceExec : public PhysicalPlan {
 };
 
 /// @brief Finds the single pipeline whose sink is the given operator type.
-[[nodiscard]] const Pipeline* FindPipelineBySinkType(
-    const std::vector<PipelinePtr>& pipelines, OperatorType type) {
+[[nodiscard]] const Pipeline* FindPipelineBySinkType(const std::vector<PipelinePtr>& pipelines,
+                                                     OperatorType type) {
   for (const auto& pipeline : pipelines) {
     if (pipeline->sink() != nullptr && pipeline->sink()->type() == type) {
       return pipeline.get();
@@ -89,12 +89,12 @@ TEST(UnionPlanTest, LogicalSchemaChildrenToString) {
   if (!std::filesystem::exists(EmployeesParquet())) {
     GTEST_SKIP() << "missing " << EmployeesParquet();
   }
-  auto plan = QueryBuilder::FromParquet(EmployeesParquet().string())
-                  .value()
-                  .Select({"id"})
-                  .UnionAll(QueryBuilder::FromParquet(EmployeesParquet().string()).value().Select(
-                      {"id"}))
-                  .BuildLogicalPlan();
+  auto plan =
+      QueryBuilder::FromParquet(EmployeesParquet().string())
+          .value()
+          .Select({"id"})
+          .UnionAll(QueryBuilder::FromParquet(EmployeesParquet().string()).value().Select({"id"}))
+          .BuildLogicalPlan();
   const auto* union_all = dynamic_cast<const Union*>(plan.get());
   ASSERT_NE(union_all, nullptr);
   EXPECT_EQ(union_all->schema().num_fields(), 1U);
@@ -121,7 +121,6 @@ TEST(UnionOperatorTest, ContractAndPassthrough) {
   UnionOperator op{7};
   EXPECT_FALSE(op.IsBlocking());
   EXPECT_FALSE(op.IsSink());
-  EXPECT_TRUE(op.can_you_throttle_my_input());
 
   auto ports = op.DeclaredInputPorts();
   ASSERT_EQ(ports.size(), 2U);
@@ -145,8 +144,8 @@ TEST(UnionOperatorTest, ContractAndPassthrough) {
 TEST(UnionExecTest, ConcatenatesLeftThenRight) {
   auto left_batch = MakeTestRecordBatch(3);
   auto right_batch = MakeTestRecordBatch(5);
-  auto left = std::make_unique<VectorSourceExec>(left_batch.schema(),
-                                                 std::vector<RecordBatch>{left_batch});
+  auto left =
+      std::make_unique<VectorSourceExec>(left_batch.schema(), std::vector<RecordBatch>{left_batch});
   auto right = std::make_unique<VectorSourceExec>(right_batch.schema(),
                                                   std::vector<RecordBatch>{right_batch});
   UnionAllExec union_all(std::move(left), std::move(right));
@@ -244,11 +243,10 @@ TEST(UnionE2ETest, GraphRowCountIsSumOfInputs) {
   ASSERT_OK_AND_ASSIGN(auto one, QueryBuilder::FromParquet(path).value().ExecuteCollect());
   const auto single_rows = TotalRows(one);
 
-  ASSERT_OK_AND_ASSIGN(auto graph_batches,
-                       QueryBuilder::FromParquet(path)
-                           .value()
-                           .UnionAll(QueryBuilder::FromParquet(path).value())
-                           .ExecuteOnGraph());
+  ASSERT_OK_AND_ASSIGN(auto graph_batches, QueryBuilder::FromParquet(path)
+                                               .value()
+                                               .UnionAll(QueryBuilder::FromParquet(path).value())
+                                               .ExecuteOnGraph());
   EXPECT_EQ(TotalRows(graph_batches), 2 * single_rows);
 }
 

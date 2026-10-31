@@ -27,10 +27,6 @@ class CollectorOperator : public Operator {
   explicit CollectorOperator(std::uint32_t operator_id)
       : Operator(operator_id, "Collector", OperatorType::Output) {}
 
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
-
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-
   [[nodiscard]] bool IsSink() const noexcept override { return true; }
 
   // --- Port contract: CollectorOperator always requires a Full barrier -------
@@ -39,9 +35,7 @@ class CollectorOperator : public Operator {
   ///
   /// The collector accepts data from any source, so port name checking is not
   /// enforced. The contract below applies to all inputs regardless of port.
-  [[nodiscard]] std::vector<std::string_view> DeclaredInputPorts() const override {
-    return {};
-  }
+  [[nodiscard]] std::vector<std::string_view> DeclaredInputPorts() const override { return {}; }
 
   /// @brief CollectorOperator requires Full barrier on every input port.
   ///

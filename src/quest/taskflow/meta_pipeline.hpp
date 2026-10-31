@@ -36,9 +36,8 @@ class MetaPipeline {
   /// have producers already resolved.
   ///
   /// @param graph The graph to split. Must outlive the returned pipelines
-  ///        (they hold non-owning `Operator*` into it). Safe to call
-  ///        before or after `graph.FinalizeWorkflow()` — terminal
-  ///        detection ignores the sentinel edges it adds.
+  ///        (they hold non-owning `Operator*` into it). Terminal operators are
+  ///        discovered automatically from graph structure.
   /// @return The pipelines in dependency order, or an error if the graph
   ///         is malformed (an edge referencing an unregistered operator,
   ///         a cycle, or a blocking operator feeding a multi-input

@@ -2,7 +2,6 @@ Build the project and run a specific example.
 
 Available examples:
 - `simple_graph`
-- `join_example`
 - `parquet_reader_demo`
 - `logical_plan_to_physical_plan_demo`
 

@@ -1,4 +1,4 @@
-# QUEST — Bigger Than GPU
+# QUEST — Bigger Than RAM
 
 A modern C++23 batch processing framework with two-tier memory (CPU/Disk) and declarative dataflow execution.
 

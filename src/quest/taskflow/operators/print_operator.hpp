@@ -31,11 +31,6 @@ class PrintOperator : public Operator {
   PrintOperator(std::uint32_t operator_id, std::ostream& out)
       : Operator(operator_id, "Print", OperatorType::Print), out_(out) {}
 
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
-
-  /// @brief Legacy escape hatch — unused by PipelineExecutor.
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-
   [[nodiscard]] bool IsSink() const noexcept override { return true; }
 
   [[nodiscard]] Status Sink(cache::DataBlockPtr batch) override {

@@ -43,16 +43,12 @@ namespace {
 class MockOperator : public Operator {
  public:
   MockOperator(std::uint32_t id, OperatorType type) : Operator(id, "mock", type) {}
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
 };
 
 /// @brief Streaming double for RunTask: passthrough that counts calls.
 class CountingOperator : public Operator {
  public:
   explicit CountingOperator(std::uint32_t id) : Operator(id, "counting", OperatorType::Filter) {}
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
   [[nodiscard]] Result<DataBlockPtr> ProcessBatch(DataBlockPtr input) override {
     ++processed_count_;
     return input;
@@ -68,8 +64,6 @@ class CountingOperator : public Operator {
 class FailingOperator : public Operator {
  public:
   explicit FailingOperator(std::uint32_t id) : Operator(id, "failing", OperatorType::Filter) {}
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
   [[nodiscard]] Result<DataBlockPtr> ProcessBatch(DataBlockPtr) override {
     return Err(ErrorCode::Invalid, "FailingOperator always fails");
   }
@@ -82,8 +76,6 @@ class AccumulatingSink : public Operator {
  public:
   explicit AccumulatingSink(std::uint32_t id)
       : Operator(id, "accumulating_sink", OperatorType::ComputeAggregate) {}
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
     accumulated_.push_back(std::move(batch));
     return Status::OK();
@@ -311,14 +303,13 @@ TEST(MetaPipelineTest, SharedBlockingProducerIsBuiltOnce) {
 // Robustness — terminal detection, unsupported shapes, cycles
 // =============================================================================
 
-TEST(MetaPipelineTest, BuildStillFindsTerminalsAfterFinalizeWorkflow) {
+TEST(MetaPipelineTest, BuildFindsTerminalOperator) {
   MockOperator scan{0, OperatorType::TableScan};
   MockOperator filter{1, OperatorType::Filter};
 
   GraphBuilder gb;
   gb.Chain(scan, filter);
   ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
-  graph->FinalizeWorkflow();  // adds sentinel (-1) edges to terminals
 
   auto result = MetaPipeline::Build(*graph);
   ASSERT_TRUE(result.has_value());

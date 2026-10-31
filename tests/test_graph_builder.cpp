@@ -30,11 +30,8 @@ using quest::cache::DataBlock;
 /// Minimal source — produces no data; just a placeholder for graph topology tests.
 class TestSource : public Operator {
  public:
-  explicit TestSource(std::uint32_t id)
-      : Operator(id, "TestSource", OperatorType::TableScan) {}
+  explicit TestSource(std::uint32_t id) : Operator(id, "TestSource", OperatorType::TableScan) {}
 
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
   [[nodiscard]] bool IsSource() const noexcept override { return true; }
 
   [[nodiscard]] Result<std::optional<std::shared_ptr<DataBlock>>> GetNextBatch() override {
@@ -45,21 +42,13 @@ class TestSource : public Operator {
 /// Minimal passthrough operator (filter, project, etc.).
 class TestOp : public Operator {
  public:
-  explicit TestOp(std::uint32_t id)
-      : Operator(id, "TestOp", OperatorType::Filter) {}
-
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
+  explicit TestOp(std::uint32_t id) : Operator(id, "TestOp", OperatorType::Filter) {}
 };
 
 /// Operator with declared named ports (simulates a HashJoin).
 class TestJoinOp : public Operator {
  public:
-  explicit TestJoinOp(std::uint32_t id)
-      : Operator(id, "TestJoin", OperatorType::Filter) {}
-
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
+  explicit TestJoinOp(std::uint32_t id) : Operator(id, "TestJoin", OperatorType::Filter) {}
 
   [[nodiscard]] OperatorPortPair probe() { return {this, "probe"}; }
   [[nodiscard]] OperatorPortPair build() { return {this, "build"}; }

@@ -87,8 +87,7 @@ class LoggingSourceOperator : public Operator {
         log_(log),
         tag_(std::move(tag)) {}
 
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
+  [[nodiscard]] bool IsSource() const noexcept override { return true; }
 
   [[nodiscard]] Result<std::optional<DataBlockPtr>> GetNextBatch() override {
     if (index_ >= batches_.size()) {
@@ -114,9 +113,6 @@ class LoggingAccumulatingSink : public Operator {
       : Operator(id, "logging_accumulating_sink", OperatorType::ComputeAggregate),
         log_(log),
         tag_(std::move(tag)) {}
-
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
 
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
     log_.Record(tag_ + "_sink_" + std::to_string(accumulated_.size()));
@@ -164,9 +160,6 @@ class LoggingStreamOperator : public Operator {
   LoggingStreamOperator(std::uint32_t id, EventLog& log, std::string tag)
       : Operator(id, "logging_stream", OperatorType::Project), log_(log), tag_(std::move(tag)) {}
 
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
-
   [[nodiscard]] Result<DataBlockPtr> ProcessBatch(DataBlockPtr input) override {
     log_.Record(tag_ + "_process_" + std::to_string(processed_count_++));
     return input;
@@ -191,8 +184,6 @@ class LoggingCollectingSink : public Operator {
         log_(log),
         tag_(std::move(tag)) {}
 
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
   [[nodiscard]] bool IsSink() const noexcept override { return true; }
 
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
@@ -213,8 +204,6 @@ class LoggingCollectingSink : public Operator {
 class FailingOperator : public Operator {
  public:
   explicit FailingOperator(std::uint32_t id) : Operator(id, "failing", OperatorType::Filter) {}
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
   [[nodiscard]] Result<DataBlockPtr> ProcessBatch(DataBlockPtr) override {
     return Err(ErrorCode::Invalid, "FailingOperator always fails");
   }
@@ -228,8 +217,6 @@ class CollectingSink : public Operator {
   explicit CollectingSink(std::uint32_t id)
       : Operator(id, "collecting_sink", OperatorType::Output) {}
 
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
   [[nodiscard]] bool IsSink() const noexcept override { return true; }
 
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
@@ -253,9 +240,6 @@ class VectorSourceOperator : public Operator {
  public:
   VectorSourceOperator(std::uint32_t id, std::size_t batch_count)
       : Operator(id, "vector_source", OperatorType::TableScan), remaining_(batch_count) {}
-
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
 
   [[nodiscard]] Result<std::optional<DataBlockPtr>> GetNextBatch() override {
     if (remaining_ == 0) {
@@ -281,9 +265,6 @@ class GatedTwoBatchSource : public Operator {
         batches_{std::move(first), std::move(second)},
         release_second_(std::move(release_second)) {}
 
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
-
   [[nodiscard]] Result<std::optional<DataBlockPtr>> GetNextBatch() override {
     if (index_ >= batches_.size()) {
       return std::optional<DataBlockPtr>{std::nullopt};
@@ -307,8 +288,6 @@ class WaitableSink : public Operator {
  public:
   explicit WaitableSink(std::uint32_t id) : Operator(id, "waitable_sink", OperatorType::Filter) {}
 
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
   [[nodiscard]] bool IsSink() const noexcept override { return true; }
 
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
@@ -616,10 +595,10 @@ TEST(PipelineExecutorTest, WorkerPoolSmallerThanPipelineCountStillCompletesAll) 
 }
 
 // =============================================================================
-// Test 6 -- Graph::ExecutePipelined() end-to-end smoke test
+// Test 6 -- Graph::Execute() end-to-end smoke test
 // =============================================================================
 
-TEST(PipelineExecutorTest, GraphExecutePipelinedRunsALinearPlan) {
+TEST(PipelineExecutorTest, GraphExecuteRunsALinearPlan) {
   EventLog log;
 
   LoggingSourceOperator scan{0, {MakeTestBlock("b0", 4), MakeTestBlock("b1", 4)}, log, "source"};
@@ -630,7 +609,7 @@ TEST(PipelineExecutorTest, GraphExecutePipelinedRunsALinearPlan) {
   gb.Chain(scan, filter, collector);
   ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
-  auto status = graph->ExecutePipelined();
+  auto status = graph->Execute();
   ASSERT_TRUE(status.has_value()) << status.error().ToString();
 
   EXPECT_EQ(filter.processed_count(), 2U);

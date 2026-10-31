@@ -29,7 +29,6 @@ using namespace quest::testing;
 TEST(GenerateOperatorTest, EmitsConfiguredBatchesThenEos) {
   GenerateOperator gen{0, /*batch_count=*/3, /*rows_per_batch=*/4};
   EXPECT_TRUE(gen.IsSource());
-  EXPECT_FALSE(gen.can_you_throttle_my_input());
   EXPECT_EQ(gen.schema().num_fields(), 1U);
 
   for (int i = 0; i < 3; ++i) {

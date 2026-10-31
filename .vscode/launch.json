@@ -15,19 +15,6 @@
       "preLaunchTask": "CMake: Build"
     },
     {
-      "name": "Example: join_example",
-      "type": "cppdbg",
-      "request": "launch",
-      "program": "${workspaceFolder}/build/examples/join_example",
-      "args": [],
-      "stopAtEntry": false,
-      "cwd": "${workspaceFolder}",
-      "environment": [],
-      "externalConsole": false,
-      "MIMode": "lldb",
-      "preLaunchTask": "CMake: Build"
-    },
-    {
       "name": "Test: graph",
       "type": "cppdbg",
       "request": "launch",
@@ -97,7 +84,9 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/tests/test_${fileBasenameNoExtension}",
-      "args": ["--gtest_filter=*"],
+      "args": [
+        "--gtest_filter=*"
+      ],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "environment": [],

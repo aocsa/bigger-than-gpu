@@ -1,38 +1,43 @@
 ---
 name: verify-operator
-description: Adversarial testing that tries to BREAK a QUEST operator across 6 failure dimensions. Trigger: "verify operator", "test operator", "break this operator", "stress test"
+description: Adversarial testing that tries to BREAK a QUEST operator across 5 failure dimensions. Trigger: "verify operator", "test operator", "break this operator", "stress test"
 ---
 
 # Verify Operator — Adversarial Tester
 
-Systematically attempts to break an operator by testing the 6 failure dimensions specific to QUEST's architecture.
+Systematically attempts to break an operator by testing the 5 failure dimensions specific to
+QUEST's push pipeline architecture. The old thread-per-operator executor (`ExecuteLegacy`) is
+deleted; all operators run through `Graph::Execute()` → `MetaPipeline::Build` →
+`PipelineExecutor`. Tests must wire through `GraphBuilder`/`PreparedQuery`, not the legacy DSL.
 
 ## Read These Files First
 
-- The operator under test (its `.hpp` and `.cpp`)
+- The operator under test (its `.hpp` and `.cpp` in `src/quest/taskflow/operators/`)
 - `src/quest/cache/batch_holder.hpp` — `IBatchHolder` interface: `Add()`, `Pull()`, `Finish()`
 - `src/quest/cache/data_block.hpp` — `HostMemoryBlock`, `DiskBlock`
 - `src/quest/cache/blocking_queue.hpp` — thread safety via mutex + condition_variable
 - `src/quest/memory/memory_resource.hpp` — 85% CPU threshold, `is_saturated()`, `should_spill()`
+- `src/quest/taskflow/pipeline_executor.hpp` — claim/task-creation discipline
 - `docs/dev/future_improvement.md` — known bugs that may affect test results
 
-## 6-Point Test Strategy
+## 5-Point Test Strategy
 
 ### 1. Empty/Null DataBlocks
 
-- Pass a `DataBlock` with 0 rows through the operator
+- Pass a `DataBlock` with 0 rows through the operator (`ProcessBatch` / `Sink`)
 - Pass a `DataBlock` where all column values are null
 - Pass a `nullptr` DataBlock (if interface allows)
 - Expected: operator handles gracefully, no crash, no UB
 
-### 2. Backpressure: Downstream Full
+### 2. Holder Boundaries and Backpressure
 
 - Set `BatchHolderConfig::flow_control_batches_threshold` to 1
-- Push multiple batches into the operator's output BatchHolder
-- Verify the operator respects `WaitIfSaturated()` and doesn't overflow
-- Check that `can_you_throttle_my_input()` returns the correct value
+- Test `WaitIfSaturated()` directly with a producer and consumer; the current executor does not
+  call it on behalf of an operator
+- Verify a cross-pipeline consumer blocks in `Pull()` until input arrives or the holder finishes
+- Verify intra-pipeline execution does not assume a holder exists between fused operators
 
-### 3. Spill Boundary: 84% -> 86% Memory
+### 3. Spill Boundary: 84% → 86% Memory
 
 - Configure `CPUMemoryResource` with a small `max_bytes` and 85% threshold
 - Fill memory to ~84% via `record_allocation()`
@@ -49,32 +54,39 @@ Systematically attempts to break an operator by testing the 6 failure dimensions
 - Single-row batches
 - Very large batches (10K+ rows)
 
-### 5. Concurrent Access
+### 5. Concurrent Access via Graph::Execute
 
-- Two operators sharing the same `IBatchHolder`
-- One thread calling `Add()`, another calling `Pull()` simultaneously
+- Wire the operator in a full pipeline and call `Graph::Execute()` (which uses `PipelineExecutor`)
+- Run with two concurrent drains sharing an inter-pipeline `BatchHolder`
+  (one thread calling `Add()`, another calling `Pull()`)
 - Verify `BlockingQueue` mutex protects against data races
-- Known bug: `processed_edges` race in `Graph::Execute()` (P1.1)
+- For blocking operators: verify `FinalizeSink()` is called exactly once and the
+  `status_lock_` / `MarkTaskCreated` / `MarkTaskCompleted` claim sequence is correct
 
-### 6. Throttle Compliance
+## Pipeline Role Checks
 
-- Verify `can_you_throttle_my_input()` returns the expected value
-- If `true`: verify the operator actually pauses when downstream is saturated
-- If `false`: verify the operator documents WHY it can't throttle
-- For `SimpleOperator` subclasses: throttle is always `true` (base class default)
+For each operator, verify the role contract before writing tests:
+
+| Role | Method | Contract |
+|------|--------|---------|
+| Streaming | `ProcessBatch(batch)` | Returns transformed batch or error; never returns nullopt |
+| Source | `IsSource()` → true, `GetNextBatch()` | Returns `optional<DataBlockPtr>`; `nullopt` = EOS (not `Status::Invalid`) |
+| Sink | `IsSink()` → true, `Sink(batch)` | Accumulates; returns `Status::OK()` on each batch |
+| Finalize | `FinalizeSink()` | Called once; flips operator to source mode |
+| Blocking source | `IsSource()` → true, `GetNextBatch()` | Emits accumulated batches after finalize; nullopt = done |
 
 ## Execution
 
 Use a subagent to run the tests. For each dimension:
 
 1. Read the operator source to understand its specific behavior
-2. Write targeted test cases
+2. Write targeted test cases using `GraphBuilder`/`PreparedQuery`
 3. Run the tests
 4. Report results
 
 ## Verdict Format
 
-For each of the 6 dimensions, report:
+For each of the 5 dimensions, report:
 
 ```
 ## Verdict: {OPERATOR_NAME}
@@ -82,22 +94,21 @@ For each of the 6 dimensions, report:
 | Dimension | Status | Details |
 |-----------|--------|---------|
 | Empty/Null | PASS/FAIL | file:line reference |
-| Backpressure | PASS/FAIL | file:line reference |
+| Holder Boundaries/Backpressure | PASS/FAIL | file:line reference |
 | Spill Boundary | PASS/PARTIAL | "blocked by known P1.5 bug" |
 | Type Edge Cases | PASS/FAIL | file:line reference |
-| Concurrent Access | PASS/FAIL | file:line reference |
-| Throttle Compliance | PASS/FAIL | file:line reference |
+| Concurrent Access (Graph::Execute) | PASS/FAIL | file:line reference |
 
 Overall: PASS / PARTIAL / FAIL
 ```
 
-- **PASS**: All 6 dimensions pass
+- **PASS**: All 5 dimensions pass
 - **PARTIAL**: Some dimensions blocked by known bugs (reference `future_improvement.md`)
 - **FAIL**: At least one dimension fails with a new (not previously known) bug
 
 ## Gotchas
 
 - `MaterializedColumnVector::IsNull()` always returns false (P1.4) — affects null testing
-- `SimpleOperator::run()` uses `ErrorCode::Invalid` for end-of-stream (P1.3) — don't confuse with actual errors
 - `ConcatenatingBatchHolder` multi-block case is not implemented (P3.1) — use `BatchHolder` (kSimple) for testing
 - `DataBlock::ToCpu()` on a `HostMemoryBlock` returns error (P3.2) — can't round-trip self-conversion
+- EOS from `GetNextBatch()` is engaged `std::nullopt` — never `Status::Invalid`; a `Status::Invalid` from a source is a real error

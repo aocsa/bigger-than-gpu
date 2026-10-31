@@ -1,6 +1,37 @@
-# QUEST — C++23 Batch Processing Framework
+# QUEST — C++26 Batch Processing Framework
 
 Two-tier memory (CPU/Disk) batch processing engine inspired by BlazingSQL.
+
+## Codebase Map
+
+Static library `quest` (`quest::quest`), built from the `.cpp` files listed in root `CMakeLists.txt`
+(`QUEST_SOURCES`; most of the code is header-only). Deps: Snappy, pthread; GTest for tests.
+Toolchain is pinned via Pixi (`pixi.toml`, see `docs/dev/cpp26-pixi-setup.md`). Options:
+`QUEST_BUILD_TESTS`, `QUEST_BUILD_EXAMPLES`, `QUEST_SANITIZERS` (asan/tsan/ubsan). Default build type: Debug.
+
+Source lives in `src/quest/`; umbrella header is `quest.hpp`, error type is `result.hpp`.
+
+| Dir | Role |
+|---|---|
+| `builder/` | User-facing fluent API: `QueryBuilder`, `StreamingQueryBuilder`, `ExprBuilder`, `QueryPlan`, `Generator` |
+| `logical_plan/` | Logical plan nodes and expressions |
+| `physical_plan/` | Physical plan and `expressions/physical_expr.hpp` |
+| `taskflow/` | Execution engine: `Graph`, `GraphBuilder`, `Pipeline`, `MetaPipeline`, `PipelineExecutor`, `PreparedQuery`, `Port`, `Operator`, `OperatorType` |
+| `taskflow/operators/` | Concrete operators: TableScan, Generate, Filter, Project, Limit, Union, Print, Collector |
+| `cache/` | `DataBlock`, `BatchHolder` (CPU/Disk tiers, spill), `BlockingQueue` |
+| `memory/` | `MemoryResourceManager` |
+| `datasource/` | `DataSource`, schema, column vectors, record batches + serializer; `parquet/` reader |
+| `execution/` | Batch kernels, bloom filter, graph-builder helpers |
+
+Query flow: `QueryBuilder` -> logical plan -> physical plan -> `GraphBuilder` -> `Graph` of
+`Operator`s split into `Pipeline`s by `MetaPipeline` -> `PipelineExecutor` runs them
+(sources `GetNextBatch`, streaming ops `ProcessBatch`, blocking ops `Sink`/`FinalizeSink`).
+
+`OperatorType` also reserves Aggregate, Sort, Join, Partition and Output entries that have no
+operator class yet; check `operators/` before assuming one exists.
+
+Other dirs: `tests/` (one `test_*.cpp` per area, GTest), `examples/`, `docs/`, `tasks/`
+(todo, lessons, handoff notes), `.claude/skills/` (new-operator, verify-operator, etc.).
 
 ## Mandatory Rules
 
@@ -44,7 +75,11 @@ Two-tier memory (CPU/Disk) batch processing engine inspired by BlazingSQL.
 
 ### Before Writing Code
 1. Check ownership conventions match the model above
-2. New operators MUST implement `run()` AND `can_you_throttle_my_input()`
+2. New operators MUST implement the pipeline-role contract:
+   - **Streaming transformations** (Filter, Project, Limit): override `ProcessBatch(DataBlockPtr)` — called in-line by `Pipeline::RunTask`; no `run()` loop.
+   - **Sources** (TableScan, Generate, BindableTableScan): override `GetNextBatch()` and ensure `IsSource()` is true, either through `OperatorType` classification or an override. Return `std::optional<DataBlockPtr>` (nullopt = EOS, never `Status::Invalid`).
+   - **Blocking operators** (Aggregate, Sort, Join): override `Sink(DataBlockPtr)` and `FinalizeSink()`; expose `IsSource()` + `GetNextBatch()` only after finalization for the post-barrier source phase.
+   - All roles default to passthrough/no-op in `Operator`; override only what the operator needs.
 3. Every new file gets a test in `tests/` registered in `tests/CMakeLists.txt`
 4. `QueryBuilder` methods are rvalue-qualified (`&&`) — chain with `std::move`
 

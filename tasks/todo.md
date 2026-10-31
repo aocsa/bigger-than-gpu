@@ -307,7 +307,27 @@ Catalog + build order in [sirius-replication-plan.md Phase 2.7](../docs/dev/siri
 - Heavy decomposed kernels stay phase 6: `ComputeAggregate/MergeAggregate`,
   `SortAndSample/PartitionSingleNode/MergeStream`, `PartwiseJoin`
 
+## Legacy executor removal (COMPLETE)
+- [x] Establish focused and full-suite baseline
+- [x] Migrate `simple_graph` and graph execution tests to `Graph::Execute()`
+- [x] Delete `join_example` and dual-engine parity/benchmark code
+- [x] Delete `ExecuteLegacy`, `ExecutePipelined`, `run()`, and throttle contracts
+- [x] Update repository rules, skills, tooling, and maintained docs
+- [x] Format, build, test, and pass zero-reference search gates
+- [x] REVIEW GATE
+
 ## Review log
+
+### 2026-08-01 — Legacy executor removal
+- Removed the thread-per-operator scheduler and its compile-only operator contract. `Graph::Execute()`
+  is now the sole graph entry point.
+- Replaced the four legacy graph execution tests with pipeline-role coverage, retained spill coverage
+  in `test_pipeline_spill`, migrated `simple_graph`, and removed the run-only join example.
+- Updated repository rules, operator skills, tooling, architecture docs, and historical migration
+  notes. Search gates find no deleted executor symbols in C++.
+- Verification: focused graph, executor, and spill binaries pass; `simple_graph` runs against the
+  bundled Parquet file; full suite **602 passed / 0 failed / 1 skipped** (603 total).
+- Independent review found no high-confidence correctness regressions.
 
 ### 2026-07-09 — Phase 2.6 implementation (E1–E3)
 - E1/E2/E3 landed per the heritage map (design §11): `kNonWaiting`, chunked
@@ -377,3 +397,52 @@ Suite: **530 passed / 0 failed / 1 skipped**.
 - Suite: all existing binaries green + 5 new `test_graph_bridge` tests; arithmetic
   `CreatePhysicalExpr` tests green. (CMake `gtest_discover_tests` 5s timeouts remain flaky
   under load — run binaries directly).
+# Sirius distributed GROUP BY PR review — 2026-09-14
+
+- [x] Inspect old PRs and all eleven layers ending at #1788 at pinned revisions.
+- [x] Compare overlapping behavior, missing functionality, and performance constraints.
+- [x] Produce a cited minimal-stack recommendation and verification caveats.
+
+Review: docs/sirius-distributed-groupby-pr-review.md. Verified all ten adjacent stack SHA links;
+inspected all 17 primary PR patches and #1710/#1711 follow-ups; bash -n passes for #1788.
+GPU tests were not rerun. Main gaps: complete-shuffle retention, lease cleanup, general
+aggregate wire schemas/key ordering, and no demonstrated fast-path bandwidth.
+
+## Minimal Bloom join example — 2026-10-22
+
+- [x] Implement a documented integer-key Bloom filter with validated configuration.
+- [x] Add a batch-oriented in-memory Part/Lineitem inner join and executable demo.
+- [x] Verify exact equivalence, duplicates, empty inputs, saturation and build lifecycle.
+- [x] Register tests/example in CMake and record validation results.
+
+Design: standalone educational helper, not a new pipeline operator. Synthetic TPC-H
+column projections, integer keys without NULL, exact join after Bloom prefilter.
+Build batches are sealed before probing; spans allow a future Parquet adapter.
+Preserve all pre-existing staged/unstaged edits.
+
+Review: C++23 standalone demo passed: 1,000 probe rows, 900 rejected, 100 exact
+lookups, 100 output rows identical to baseline. All 5 GoogleTest cases passed
+under AddressSanitizer and UndefinedBehaviorSanitizer. Tests cover independent
+nested-loop equivalence, duplicate multiplicity, signed/extreme keys, empty build,
+phase misuse and saturated-filter false positives. CMake registration added.
+Fresh full-project configure in /tmp/quest-bloom-build was blocked by unavailable
+Snappy; full repository suite could not run. Existing build directory preserved.
+
+## Theseus TPC-H reproduction on GB200 — 2026-10-26
+
+- [x] Read supplied paper; extract total times, node/GPU counts and timing protocol.
+- [x] Verify storage, GDS, software and benchmark artifacts against primary sources.
+- [x] Develop 1/2-node, 4/8-GPU GB200 reproduction matrix; distinguish unknowns from results.
+- [x] Save cited report and review tables against original figures.
+
+Plan reviewed: research/report only; preserve existing work. No benchmark execution requested.
+
+Review: docs/theseus-tpch-gb200-reproduction.md and docs/theseus-gb200-hardware-notes.md.
+Figure 5/6/7 labels visually checked against the supplied PDF; Figure 8 cloud
+values checked against text and rendered page. Official NVIDIA, RAPIDS, Arrow and TPC
+sources checked for the proposed GB200 setup. No GPU benchmark executed; original
+engine/artifact, GDS proof, cache procedure and tuning values remain unspecified.
+User confirmed four GPUs/node and has not selected an engine. No source-code changes
+or build/tests needed for this research-only report.
+
+> Parallel track: slim-down / C++23 cleanup plan in [slim-down-plan.md](slim-down-plan.md) (draft, awaiting approval).

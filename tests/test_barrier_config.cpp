@@ -49,8 +49,7 @@ TEST(BarrierConfigTest, WithBarrierChainsLikeWithFlowControl) {
   EXPECT_EQ(config.barrier, BarrierType::Full);
 
   // Chaining order must not matter.
-  auto chained =
-      EdgeConfig::Simple().with_barrier(BarrierType::Full).with_flow_control(8);
+  auto chained = EdgeConfig::Simple().with_barrier(BarrierType::Full).with_flow_control(8);
   EXPECT_EQ(chained.barrier, BarrierType::Full);
   EXPECT_EQ(chained.flow_control_batches_threshold, 8U);
 }
@@ -66,15 +65,7 @@ TEST(BarrierConfigTest, BarrierToString) {
 
 class NoOpOperator : public Operator {
  public:
-  NoOpOperator(std::uint32_t id, OperatorType type)
-      : Operator(id, "noop", type) {}
-
-  [[nodiscard]] ExecutionStatus run() override {
-    return ExecutionStatus::Proceed;
-  }
-  [[nodiscard]] bool can_you_throttle_my_input() const override {
-    return true;
-  }
+  NoOpOperator(std::uint32_t id, OperatorType type) : Operator(id, "noop", type) {}
 };
 
 TEST(BlockingOperatorTest, BlockingTypes) {

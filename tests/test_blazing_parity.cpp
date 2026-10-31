@@ -47,9 +47,6 @@ class VectorSource : public Operator {
     }
   }
 
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
-
   [[nodiscard]] Result<std::optional<DataBlockPtr>> GetNextBatch() override {
     if (next_ >= batches_.size()) {
       return std::optional<DataBlockPtr>{std::nullopt};
@@ -68,8 +65,6 @@ class EmptySource : public Operator {
  public:
   explicit EmptySource(std::uint32_t operator_id)
       : Operator(operator_id, "empty_source", OperatorType::TableScan) {}
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
   [[nodiscard]] Result<std::optional<DataBlockPtr>> GetNextBatch() override {
     return std::optional<DataBlockPtr>{std::nullopt};
   }
@@ -81,8 +76,6 @@ class CollectingSink : public Operator {
  public:
   explicit CollectingSink(std::uint32_t operator_id)
       : Operator(operator_id, "collecting_sink", OperatorType::Output) {}
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
   [[nodiscard]] bool IsSink() const noexcept override { return true; }
 
   [[nodiscard]] Status Sink(DataBlockPtr batch) override {
@@ -234,8 +227,7 @@ TEST(BlazingParityTest, PolicySizesConcatCapFromStats) {
 
   // The cap is exactly the kind of knob that should be stats-bound: a policy
   // sizes it when footer stats exist, never the author at wiring time.
-  graph->AddTuningPolicy([](const EdgeInfo& edge, const QueryStats& stats,
-                            const HardwareInfo&) {
+  graph->AddTuningPolicy([](const EdgeInfo& edge, const QueryStats& stats, const HardwareInfo&) {
     EdgeConfig cfg = edge.config;
     if (cfg.type == cache::BatchHolderType::kConcatenating) {
       cfg.concat_bytes_threshold = stats.estimated_bytes / 4;

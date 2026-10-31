@@ -155,7 +155,10 @@ memory (CPU/Disk) batch processing engine inspired by BlazingSQL.
 
 ## Before Writing Code
 1. Check ownership conventions match the table above
-2. Verify new operators implement run() AND can_you_throttle_my_input()
+2. Verify new operators implement the pipeline-role contract:
+   - Streaming (Filter/Project/Limit): override ProcessBatch(DataBlockPtr)
+   - Sources (TableScan/Generate): override IsSource() + GetNextBatch() (nullopt = EOS)
+   - Blocking (Aggregate/Sort/Join): override IsSink() + Sink() + FinalizeSink()
 3. Every new file gets a test in tests/ registered in CMakeLists.txt
 ```
 
@@ -210,16 +213,17 @@ Your job is to BREAK the operator, not confirm it works.
 3. Spill boundary — force memory to 84% → 86% mid-operation
 4. Type edge cases — NULL columns, zero-length strings, INT64_MAX values
 5. Concurrent access — two operators reading same shared BatchHolder
-6. Throttle compliance — does can_you_throttle_my_input() actually pause?
+6. Pipeline role contracts — does the operator correctly implement its pipeline role?
 
 ## For Each Test
 - State what you're testing and WHY it could fail
 - Write the minimal Google Test that reproduces the scenario
+- Wire via GraphBuilder/PreparedQuery — not the old `*graph += a >> b` DSL
 - Expected: what SHOULD happen per QUEST's invariants
 - Actual: what DOES happen
 
 ## Verdict
-PASS — all 6 strategies survived
+PASS — all 5 strategies survived
 PARTIAL — failures in non-critical paths (list which)
 FAIL — ownership violation, data race, or silent data corruption
 ```
@@ -237,16 +241,16 @@ FAIL — ownership violation, data race, or silent data corruption
 User says "new operator", "add operator", or "create operator"
 
 ## Steps
-1. ASK: operator name, input/output port count, description of transform
+1. ASK: operator name, role (streaming/source/blocking), input/output port count, description of transform
 2. GENERATE:
    - Enum entry in operator_type.hpp
-   - Operator subclass in src/quest/taskflow/{name}_operator.hpp
-   - run() with DataBlock consume/produce pattern
-   - can_you_throttle_my_input() with sensible default
-   - Test file tests/test_{name}_operator.cpp
+   - Operator subclass in src/quest/taskflow/operators/{name}_operator.hpp (#ifndef guards)
+   - Pipeline role methods: ProcessBatch (streaming), IsSource+GetNextBatch (source),
+     IsSink+Sink+FinalizeSink (blocking)
+   - Test file tests/test_{name}_operator.cpp wired via GraphBuilder
    - CMakeLists.txt registration
 3. VERIFY: builds with cmake --build build
-4. SHOW: DSL usage — graph += scan >> {name} >> output;
+4. SHOW: GraphBuilder usage — GraphBuilder{mm}.Chain(scan, {name}, collector).Build()
 ```
 
 ---

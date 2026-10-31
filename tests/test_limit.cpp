@@ -78,9 +78,7 @@ class VectorSourceExec : public PhysicalPlan {
 class CountingBatchSourceExec : public PhysicalPlan {
  public:
   CountingBatchSourceExec(Schema schema, std::size_t batch_count, std::size_t rows_per_batch)
-      : schema_(std::move(schema)),
-        batch_count_(batch_count),
-        rows_per_batch_(rows_per_batch) {}
+      : schema_(std::move(schema)), batch_count_(batch_count), rows_per_batch_(rows_per_batch) {}
 
   [[nodiscard]] Schema schema() const override { return schema_; }
 
@@ -115,8 +113,6 @@ class CountingVectorSource : public Operator {
         remaining_(batch_count),
         rows_per_batch_(rows_per_batch) {}
 
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
   [[nodiscard]] bool IsSource() const noexcept override { return true; }
 
   [[nodiscard]] std::size_t get_next_batch_calls() const noexcept {
@@ -145,8 +141,6 @@ class CollectingSink : public Operator {
   explicit CollectingSink(std::uint32_t id)
       : Operator(id, "collecting_sink", OperatorType::Filter) {}
 
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
   [[nodiscard]] bool IsSink() const noexcept override { return true; }
 
   [[nodiscard]] Status Sink(cache::DataBlockPtr batch) override {
@@ -282,8 +276,7 @@ TEST(LimitPlanTest, LogicalSchemaAndToString) {
 
 TEST(LimitPlanTest, LimitExecCollectsFirstN) {
   auto batch = MakeTestRecordBatch(10);
-  auto input = std::make_unique<VectorSourceExec>(batch.schema(),
-                                                  std::vector<RecordBatch>{batch});
+  auto input = std::make_unique<VectorSourceExec>(batch.schema(), std::vector<RecordBatch>{batch});
   LimitExec limit(std::move(input), 4);
 
   std::size_t total = 0;
@@ -299,10 +292,8 @@ TEST(LimitPlanTest, CreatePhysicalPlanBuildsLimitExec) {
   if (!std::filesystem::exists(EmployeesParquet())) {
     GTEST_SKIP() << "missing " << EmployeesParquet();
   }
-  auto plan = QueryBuilder::FromParquet(EmployeesParquet().string())
-                  .value()
-                  .Limit(5)
-                  .BuildLogicalPlan();
+  auto plan =
+      QueryBuilder::FromParquet(EmployeesParquet().string()).value().Limit(5).BuildLogicalPlan();
   ASSERT_OK_AND_ASSIGN(auto physical, CreatePhysicalPlan(*plan));
   EXPECT_NE(dynamic_cast<LimitExec*>(physical.get()), nullptr);
   EXPECT_EQ(physical->ToString(), "LimitExec(5)");
@@ -311,9 +302,8 @@ TEST(LimitPlanTest, CreatePhysicalPlanBuildsLimitExec) {
 TEST(LimitPlanTest, LimitExecStopsUpstreamAfterLimit) {
   // 10 batches of 3 rows; Limit(4) needs only 2 batches (3+1), not all 10.
   auto schema = MakeTestRecordBatch(1).schema();
-  auto source =
-      std::make_unique<CountingBatchSourceExec>(schema, /*batch_count=*/10,
-                                                /*rows_per_batch=*/3);
+  auto source = std::make_unique<CountingBatchSourceExec>(schema, /*batch_count=*/10,
+                                                          /*rows_per_batch=*/3);
   CountingBatchSourceExec* observer = source.get();
   LimitExec limit(std::move(source), 4);
 
@@ -418,18 +408,14 @@ TEST(LimitE2ETest, GraphRowCountMatchesLimit) {
   const auto path = EmployeesParquet().string();
   constexpr std::size_t kLimit = 3;
 
-  ASSERT_OK_AND_ASSIGN(auto graph_batches, QueryBuilder::FromParquet(path)
-                                               .value()
-                                               .Select({"id"})
-                                               .Limit(kLimit)
-                                               .ExecuteOnGraph());
+  ASSERT_OK_AND_ASSIGN(
+      auto graph_batches,
+      QueryBuilder::FromParquet(path).value().Select({"id"}).Limit(kLimit).ExecuteOnGraph());
   EXPECT_EQ(TotalRows(graph_batches), kLimit);
 
-  ASSERT_OK_AND_ASSIGN(auto callback_batches, QueryBuilder::FromParquet(path)
-                                                  .value()
-                                                  .Select({"id"})
-                                                  .Limit(kLimit)
-                                                  .ExecuteCollect());
+  ASSERT_OK_AND_ASSIGN(
+      auto callback_batches,
+      QueryBuilder::FromParquet(path).value().Select({"id"}).Limit(kLimit).ExecuteCollect());
   EXPECT_EQ(TotalRows(callback_batches), kLimit);
 }
 
@@ -457,9 +443,7 @@ TEST(LimitE2ETest, LimitExceedsTotalRows) {
   ASSERT_OK_AND_ASSIGN(auto all_batches, QueryBuilder::FromParquet(path).value().ExecuteCollect());
   const auto total = TotalRows(all_batches);
 
-  ASSERT_OK_AND_ASSIGN(auto graph_batches, QueryBuilder::FromParquet(path)
-                                               .value()
-                                               .Limit(total + 100)
-                                               .ExecuteOnGraph());
+  ASSERT_OK_AND_ASSIGN(auto graph_batches,
+                       QueryBuilder::FromParquet(path).value().Limit(total + 100).ExecuteOnGraph());
   EXPECT_EQ(TotalRows(graph_batches), total);
 }

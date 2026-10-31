@@ -51,11 +51,6 @@ class GenerateOperator : public Operator {
         memory_manager_(std::move(memory_manager)),
         schema_(BuildSchema(num_columns_)) {}
 
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
-
-  /// @brief Legacy escape hatch — unused by PipelineExecutor.
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-
   [[nodiscard]] bool IsSource() const noexcept override { return true; }
 
   [[nodiscard]] const datasource::Schema& schema() const noexcept { return schema_; }

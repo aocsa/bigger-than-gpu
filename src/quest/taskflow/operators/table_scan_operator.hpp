@@ -35,11 +35,6 @@ class TableScanOperator : public Operator {
         projection_(std::move(projection)),
         memory_manager_(std::move(memory_manager)) {}
 
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
-
-  /// @brief Legacy escape hatch — unused by PipelineExecutor.
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-
   [[nodiscard]] bool IsSource() const noexcept override { return true; }
 
   /// @brief The columns this scan reads (nullopt = all source columns).

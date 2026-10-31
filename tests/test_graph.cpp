@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include <quest/quest.hpp>
+
 #include "quest/taskflow/graph_builder.hpp"
 #include "quest/tests/utils.hpp"
 
@@ -21,11 +22,9 @@ class CountingOperator : public Operator {
       : Operator(operator_id, "Counter", OperatorType::Project),
         invocation_counter_(invocation_counter) {}
 
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
-
-  [[nodiscard]] ExecutionStatus run() override {
+  [[nodiscard]] Result<DataBlockPtr> ProcessBatch(DataBlockPtr input) override {
     ++invocation_counter_;
-    return ExecutionStatus::Proceed;
+    return input;
   }
 
  private:
@@ -35,25 +34,22 @@ class CountingOperator : public Operator {
 class SourceOperator : public Operator {
  public:
   SourceOperator(std::uint32_t operator_id, std::size_t batch_count)
-      : Operator(operator_id, "Source", OperatorType::TableScan),
-        batch_count_(batch_count) {}
+      : Operator(operator_id, "Source", OperatorType::TableScan), batch_count_(batch_count) {}
 
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
-
-  [[nodiscard]] ExecutionStatus run() override {
-    for (std::size_t batch_index = 0; batch_index < batch_count_;
-         ++batch_index) {
-      auto batch = quest::testing::MakeTestRecordBatch(10, 2);
-      auto batch_data = std::make_shared<HostMemoryBlock>(
-          std::format("batch_{}", batch_index), std::move(batch));
-
-      (void)AddToOutput(std::move(batch_data));
+  [[nodiscard]] Result<std::optional<DataBlockPtr>> GetNextBatch() override {
+    if (next_batch_ >= batch_count_) {
+      return std::optional<DataBlockPtr>{std::nullopt};
     }
-    return ExecutionStatus::Proceed;
+    auto batch = quest::testing::MakeTestRecordBatch(10, 2);
+    auto block = std::make_shared<HostMemoryBlock>(
+        std::format("source_{}_batch_{}", id(), next_batch_), std::move(batch));
+    ++next_batch_;
+    return std::optional<DataBlockPtr>{std::move(block)};
   }
 
  private:
   std::size_t batch_count_;
+  std::size_t next_batch_{0};
 };
 
 class SinkOperator : public Operator {
@@ -62,21 +58,13 @@ class SinkOperator : public Operator {
       : Operator(operator_id, "Sink", OperatorType::Output),
         received_batch_count_(received_batch_count) {}
 
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
+  [[nodiscard]] bool IsSink() const noexcept override { return true; }
 
-  [[nodiscard]] ExecutionStatus run() override {
-    auto batch_holder = InputCache();
-
-    while (batch_holder) {
-      auto pull_result = batch_holder->Pull();
-      if (!pull_result.has_value()) {
-        break;
-      }
-      if (pull_result.value()) {
-        ++received_batch_count_;
-      }
+  [[nodiscard]] Status Sink(DataBlockPtr batch) override {
+    if (batch) {
+      ++received_batch_count_;
     }
-    return ExecutionStatus::Proceed;
+    return Status::OK();
   }
 
  private:
@@ -95,41 +83,37 @@ class PassthroughOperator : public SimpleOperator {
   }
 };
 
-/// Two-input operator simulating a join; registers named "left_input" / "right_input" ports.
-class JoinOperator : public Operator {
+/// Terminal sink that proves both named input ports are drained.
+class NamedPortSink : public Operator {
  public:
-  JoinOperator(std::uint32_t operator_id,
-               std::size_t& left_received_count,
-               std::size_t& right_received_count)
-      : Operator(operator_id, "Join", OperatorType::PartwiseJoin),
+  NamedPortSink(std::uint32_t operator_id, std::size_t& left_received_count,
+                std::size_t& right_received_count)
+      : Operator(operator_id, "NamedPortSink", OperatorType::Output),
         left_received_count_(left_received_count),
-        right_received_count_(right_received_count) {
-    input().RegisterPort("left_input");
-    input().RegisterPort("right_input");
+        right_received_count_(right_received_count) {}
+
+  [[nodiscard]] std::vector<std::string_view> DeclaredInputPorts() const override {
+    return {"left_input", "right_input"};
   }
 
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
+  [[nodiscard]] EdgeConfig InputEdgeContract(std::string_view /*port*/) const override {
+    EdgeConfig config;
+    config.barrier = BarrierType::Full;
+    return config;
+  }
 
-  [[nodiscard]] ExecutionStatus run() override {
-    auto& left_cache = input()["left_input"];
-    while (left_cache) {
-      auto pull_result = left_cache->Pull();
-      if (!pull_result.has_value()) {
-        break;
-      }
-      ++left_received_count_;
+  [[nodiscard]] bool IsSink() const noexcept override { return true; }
+
+  [[nodiscard]] Status Sink(DataBlockPtr batch) override {
+    if (!batch) {
+      return Status::OK();
     }
-
-    auto& right_cache = input()["right_input"];
-    while (right_cache) {
-      auto pull_result = right_cache->Pull();
-      if (!pull_result.has_value()) {
-        break;
-      }
+    if (batch->id().starts_with("source_0_")) {
+      ++left_received_count_;
+    } else if (batch->id().starts_with("source_1_")) {
       ++right_received_count_;
     }
-
-    return ExecutionStatus::Proceed;
+    return Status::OK();
   }
 
  private:
@@ -240,7 +224,7 @@ TEST(GraphExecutionTest, SimpleExecution) {
   gb.Chain(source, sink);
   ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
-  auto status = graph->ExecuteLegacy();
+  auto status = graph->Execute();
   ASSERT_TRUE(status.ok());
   EXPECT_EQ(received_count, 5);
 }
@@ -255,7 +239,7 @@ TEST(GraphExecutionTest, PassthroughExecution) {
   gb.Chain(source, passthrough, sink);
   ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
-  auto status = graph->ExecuteLegacy();
+  auto status = graph->Execute();
   ASSERT_TRUE(status.ok());
   EXPECT_EQ(received_count, 10);
 }
@@ -266,14 +250,14 @@ TEST(GraphExecutionTest, NamedPortsExecution) {
 
   SourceOperator source_a(0, 3);
   SourceOperator source_b(1, 4);
-  JoinOperator join_op(2, left_count, right_count);
+  NamedPortSink sink(2, left_count, right_count);
 
   GraphBuilder gb;
-  gb.Edge(source_a, join_op["left_input"]);
-  gb.Edge(source_b, join_op["right_input"]);
+  gb.Edge(source_a, sink["left_input"]);
+  gb.Edge(source_b, sink["right_input"]);
   ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
-  auto status = graph->ExecuteLegacy();
+  auto status = graph->Execute();
   ASSERT_TRUE(status.ok());
   EXPECT_EQ(left_count, 3);
   EXPECT_EQ(right_count, 4);
@@ -291,7 +275,7 @@ TEST(GraphExecutionTest, ConcatenatingBatchHolder) {
   gb.Edge(source, sink).Concatenating().FlowControl(10, 1024 * 1024);
   ASSERT_OK_AND_ASSIGN(auto graph, std::move(gb).Build());
 
-  auto status = graph->ExecuteLegacy();
+  auto status = graph->Execute();
   ASSERT_TRUE(status.ok());
   EXPECT_EQ(received_count, 1);  // 3 batches in, 1 merged batch out
 }
@@ -439,20 +423,6 @@ TEST(MemoryManagerTest, GraphMemoryManager) {
   auto new_manager = make_default_memory_manager();
   graph->SetMemoryManager(new_manager);
   EXPECT_EQ(graph->GetMemoryManager(), new_manager);
-}
-
-// =============================================================================
-// Operator Execution State Tests
-// =============================================================================
-
-TEST(OperatorStateTest, ExecutionState) {
-  std::size_t counter = 0;
-  CountingOperator test_operator(0, counter);
-
-  EXPECT_FALSE(test_operator.is_done());
-
-  test_operator.mark_done();
-  EXPECT_TRUE(test_operator.is_done());
 }
 
 // =============================================================================

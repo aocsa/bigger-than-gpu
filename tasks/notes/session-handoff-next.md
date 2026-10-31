@@ -32,9 +32,12 @@ commit.
 | 4 — `PipelineExecutor` | ✅ done | `d0cc379` + harden `61791b5` |
 | 5 — Parity + spill + benchmark | ✅ done | `9d9a107` (with Stage 6) |
 | 6 — Flip default + docs | ✅ done | `9d9a107` |
+| **Cleanup — Delete `ExecuteLegacy` + `run()`-based operators** | ✅ done | post-Phase-2 cleanup |
 
-**Pipeline-execution-plan.md is DONE.** Flagship proof recorded: fused pipeline ~5× faster than
-thread-per-operator on a 10M-row / 10k-batch passthrough plan (21 ms → 4 ms, Debug, Apple M).
+**Pipeline-execution-plan.md is DONE and fully cleaned up.** The legacy thread-per-operator
+executor (`ExecuteLegacy`), `SimpleOperator::run()`, and all `run()`-only mock operators have
+been deleted. `Graph::Execute()` is the sole graph entry point and always runs the push
+pipeline engine.
 
 Test baseline: **524 passed / 0 failed / 1 skipped** (`ParquetReaderTest.StringColumnRead`).
 Branch: `feature/refactor`, ahead of origin by several commits (do not push unless asked).
@@ -48,7 +51,7 @@ not compile failures.
 ## What landed (architecture you inherit)
 
 ```text
-Graph DSL (*graph += a >> b)          unchanged
+Graph DSL (GraphBuilder.Chain/Edge)   current wiring API
         │
 MetaPipeline::Build(graph)            splits at blocking ops / Full / partitioned edges
         │
@@ -56,8 +59,8 @@ vector<PipelinePtr>                   children before parents; Full deps recorde
         │
 PipelineExecutor::Execute(...)        worker pool; claim → RunTask → FinishOnExit
         │
-Graph::Execute()  ──delegates──►  ExecutePipelined()   ← DEFAULT
-Graph::ExecuteLegacy()                DEPRECATED escape hatch for run()-only operators
+Graph::Execute()  ──delegates──►  PipelineExecutor  ← SOLE EXECUTION PATH
+(ExecuteLegacy and run()-based operators are DELETED)
 ```
 
 Key files (all under `src/quest/taskflow/` unless noted):
@@ -70,7 +73,7 @@ Key files (all under `src/quest/taskflow/` unless noted):
 | `pipeline.hpp/.cpp` | Operator list, `RunTask(batch, start_index)`, `PublishOutput`, atomics + `status_lock_` |
 | `meta_pipeline.hpp/.cpp` | `Build` / `BuildFrom`; cycle detection; rejects blocking→multi-input |
 | `pipeline_executor.hpp/.cpp` | Worker pool, runnable set, claim, stall detection, teardown |
-| `graph.hpp/.cpp` | `edge_configs_` + `GetEdgeConfig`; `GetTerminalOperators`; `Execute`/`ExecuteLegacy`/`ExecutePipelined` |
+| `graph.hpp/.cpp` | `edge_configs_` + `GetEdgeConfig`; `GetTerminalOperators`; `Execute` (sole entry point — `ExecuteLegacy`/`ExecutePipelined` deleted) |
 | `docs/dev/ARCHITECTURE.md` | Execution Model section rewritten for pipelines |
 | `tasks/lessons.md` | Lessons #1 (benchmark axis) and #2 (flip audits contracts) |
 
@@ -101,12 +104,11 @@ Tests worth knowing:
    one drain per pipeline; must narrow before intra-pipeline parallelism.
 8. **`PublishOutput` / `ClaimNextBatch` default-port only.** Partitioned edges
    (`output_{i}` / `input_{i}`) are shape-tested but not executed end-to-end yet.
-9. **`ExecuteLegacy()`** still required by `tests/test_graph.cpp` mocks and
+9. ~~**`ExecuteLegacy()`** still required by `tests/test_graph.cpp` mocks and
    `examples/{simple_graph,join_example}.cpp` (run()-only). Delete only after those migrate to
-   pipeline roles.
+   pipeline roles.~~ **DONE — `ExecuteLegacy()` and all `run()`-only code have been deleted.**
 10. **Holders still created in `AddEdge` for every edge** (Stage 3 deviation). Pipelined path
-    ignores intra-pipeline holders. Moving holder creation to Build was deferred past Stage 6
-    because `ExecuteLegacy` still needs them — still open cleanup once Legacy dies.
+    ignores intra-pipeline holders. Moving holder creation to `Build`/`Prepare()` is still open cleanup.
 
 ## Known open gaps (carry into next work)
 
@@ -116,8 +118,8 @@ Tests worth knowing:
 | Blocking op → multi-input consumer | `MetaPipeline::WalkMultiInputProducers` rejects | Real joins / relay pipelines (replication Phase 6) |
 | Worker starvation with Pipeline-barrier consumers | Executor ORDERING INVARIANT | Phase 3 hint chain (non-blocking claim) |
 | `status_lock` across `Pull()` | `DrainPipeline` | Intra-pipeline task parallelism |
-| `ExecuteLegacy` + run()-only mocks | `test_graph.cpp`, examples | Before deleting Legacy |
-| Holders on every edge | `Graph::AddEdge` | After Legacy deletion |
+| ~~`ExecuteLegacy` + run()-only mocks~~ | ~~`test_graph.cpp`, examples~~ | **DONE — deleted** |
+| Holders on every edge | `Graph::AddEdge` | Can now be addressed (no Legacy dependency) |
 | `/verify-operator` + `/review-mem` not run on Stage 5/6 | noted in todo review log | Optional; Stage 5/6 was mostly tests + 10-line flip |
 
 ## What to do next
@@ -128,7 +130,8 @@ Tests worth knowing:
    still show `[ ] REVIEW GATE` in places — cosmetic).
 2. Mark Phase 2 as landed in `docs/dev/sirius-replication-plan.md` scorecard:
    `2 — Pipelines | ☑ | fused pipeline beats thread-per-operator (~5× recorded)`.
-3. Optionally migrate `test_graph` / examples to pipeline roles and delete `ExecuteLegacy()`.
+3. ~~Optionally migrate `test_graph` / examples to pipeline roles and delete `ExecuteLegacy()`.~~
+   **DONE — Legacy executor and all `run()`-based operators have been deleted.**
 
 ### Next real work — Replication Phase 3 (hint chain)
 
@@ -169,7 +172,7 @@ Phase 1 (bridge) comes next; the pipeline chassis is ready for either.
 
 1. Benchmark the axis the engines differ on (batch count, not just row count).
 2. Flipping a default means auditing every caller's **contract**, not just call sites
-   (`ExecuteLegacy` exists because of this).
+   (`ExecuteLegacy` existed because of this; it was subsequently deleted once all callers migrated).
 
 ## Bigger picture
 

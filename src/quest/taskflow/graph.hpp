@@ -12,8 +12,7 @@
 /// Key responsibilities:
 /// - Building the graph topology (edge specs; holders materialize in Prepare)
 /// - Managing operator lifecycle and connections
-/// - Scheduling parallel execution while respecting data dependencies
-/// - Tracking execution state and coordinating thread completion
+/// - Preparing pipelines and resolved edge configurations
 ///
 /// Lifecycle (Phase 2.5):
 /// @code
@@ -32,7 +31,6 @@
 #include <set>
 #include <string>
 #include <string_view>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -147,9 +145,6 @@ class Graph : public std::enable_shared_from_this<Graph> {
   // ===========================================================================
 
   [[nodiscard]] Status Execute();
-  [[nodiscard]] Status ExecuteLegacy();
-  [[nodiscard]] Status ExecutePipelined();
-  void FinalizeWorkflow();
 
   // ===========================================================================
   // Graph Query API
@@ -255,8 +250,6 @@ class EdgeTuner {
   Graph* graph_;
   Graph::EdgeSpec* spec_;
 };
-
-using ExecutionThread = std::jthread;
 
 }  // namespace quest::taskflow
 

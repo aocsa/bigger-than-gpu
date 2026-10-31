@@ -4,7 +4,6 @@
 /// @file operator.hpp
 /// @brief Base Operator class and SimpleOperator template for the execution graph.
 
-#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -24,12 +23,6 @@ namespace quest::taskflow {
 // Forward declarations
 class Graph;
 
-/// @brief Execution status returned by an operator's run() method.
-enum class ExecutionStatus : std::uint8_t {
-  Stop,    ///< Error: graph scheduler will not proceed with downstream operators.
-  Proceed  ///< Success: graph scheduler continues.
-};
-
 /// @brief Pair type for referencing a specific named port on an operator.
 using OperatorPortPair = std::pair<class Operator*, std::string>;
 
@@ -40,9 +33,7 @@ using OperatorPortPair = std::pair<class Operator*, std::string>;
 /// @brief Abstract base class for all operators in the execution graph.
 class Operator {
  public:
-  Operator(std::uint32_t operator_id,
-           std::string expression_string,
-           OperatorType operator_type);
+  Operator(std::uint32_t operator_id, std::string expression_string, OperatorType operator_type);
 
   virtual ~Operator() = default;
 
@@ -50,13 +41,6 @@ class Operator {
   Operator& operator=(const Operator&) = delete;
   Operator(Operator&&) noexcept = delete;
   Operator& operator=(Operator&&) noexcept = delete;
-
-  // ===========================================================================
-  // Core Interface (must be implemented by derived classes)
-  // ===========================================================================
-
-  [[nodiscard]] virtual ExecutionStatus run() = 0;
-  [[nodiscard]] virtual bool can_you_throttle_my_input() const = 0;
 
   // ===========================================================================
   // Port Contracts (§4.1 of graph-builder-dsl.md)
@@ -74,21 +58,16 @@ class Operator {
   ///
   /// Empty means undeclared (any name allowed — legacy behavior).
   /// GraphBuilder::Build() validates edge target port names against this list.
-  [[nodiscard]] virtual std::vector<std::string_view> DeclaredInputPorts() const {
-    return {};
-  }
+  [[nodiscard]] virtual std::vector<std::string_view> DeclaredInputPorts() const { return {}; }
 
   /// @brief Required EdgeConfig for the given input port (config resolution layer 4).
   ///
   /// The author's explicit Edge/Chain calls (layer 3) override this; explicit
   /// contradictions without .Config() are a Build() error.
-  [[nodiscard]] virtual EdgeConfig InputEdgeContract(std::string_view /*port*/) const {
-    return {};
-  }
+  [[nodiscard]] virtual EdgeConfig InputEdgeContract(std::string_view /*port*/) const { return {}; }
 
   /// @brief Estimates output row count. Default assumes 1:1 ratio with input.
-  [[nodiscard]] virtual std::pair<bool, std::uint64_t>
-  GetEstimatedOutputNumRows() const;
+  [[nodiscard]] virtual std::pair<bool, std::uint64_t> GetEstimatedOutputNumRows() const;
 
   /// @brief Indicates whether this operator is a pipeline breaker.
   ///
@@ -117,8 +96,7 @@ class Operator {
 
   /// @brief The execute role: passthrough by default; correct for operators
   ///        whose work happens in their source or sink role.
-  [[nodiscard]] virtual Result<cache::DataBlockPtr> ProcessBatch(
-      cache::DataBlockPtr input);
+  [[nodiscard]] virtual Result<cache::DataBlockPtr> ProcessBatch(cache::DataBlockPtr input);
 
   /// @brief Default consults OperatorType; blocking operators override once finalized.
   [[nodiscard]] virtual bool IsSource() const noexcept {
@@ -135,8 +113,7 @@ class Operator {
   ///
   /// Default returns an error — only sources and finalized blocking operators
   /// may be asked for batches.
-  [[nodiscard]] virtual Result<std::optional<cache::DataBlockPtr>>
-  GetNextBatch();
+  [[nodiscard]] virtual Result<std::optional<cache::DataBlockPtr>> GetNextBatch();
 
   /// @brief Default: blocking operators are sinks; terminal collectors should override.
   [[nodiscard]] virtual bool IsSink() const noexcept { return IsBlocking(); }
@@ -160,9 +137,7 @@ class Operator {
   [[nodiscard]] OperatorType type() const noexcept { return operator_type_; }
   void set_type(OperatorType new_type) noexcept { operator_type_ = new_type; }
 
-  [[nodiscard]] std::string_view expression() const noexcept {
-    return expression_string_;
-  }
+  [[nodiscard]] std::string_view expression() const noexcept { return expression_string_; }
 
   /// @brief Unique log/debug identifier: "{operator_type}_{operator_id}".
   [[nodiscard]] std::string MessageId() const;
@@ -187,33 +162,22 @@ class Operator {
   /// @brief Returns the primary input cache; multi-input operators use input()[port] instead.
   [[nodiscard]] std::shared_ptr<cache::IBatchHolder> InputCache();
 
-  [[nodiscard]] std::shared_ptr<cache::IBatchHolder> OutputCache(
-      const std::string& cache_id = "");
-
   [[nodiscard]] Status AddToOutput(std::shared_ptr<cache::DataBlock> data,
-                                    const std::string& cache_id = "");
-
-  /// @brief Blocks until downstream has consumed enough to allow more output (backpressure).
-  void WaitIfOutputSaturated(const std::string& cache_id = "");
+                                   const std::string& cache_id = "");
 
   // ===========================================================================
   // Input Status
   // ===========================================================================
 
-  [[nodiscard]] bool InputAllFinished() const {
-    return input_port_.AllFinished();
-  }
+  [[nodiscard]] bool InputAllFinished() const { return input_port_.AllFinished(); }
 
-  [[nodiscard]] std::size_t TotalInputRowsAdded() const {
-    return input_port_.TotalRowsAdded();
-  }
+  [[nodiscard]] std::size_t TotalInputRowsAdded() const { return input_port_.TotalRowsAdded(); }
 
   [[nodiscard]] bool InputCacheFinished(const std::string& port_name) const {
     return input_port_.IsFinished(port_name);
   }
 
-  [[nodiscard]] std::size_t InputCacheNumRowsAdded(
-      const std::string& port_name) const {
+  [[nodiscard]] std::size_t InputCacheNumRowsAdded(const std::string& port_name) const {
     return input_port_.RowsAdded(port_name);
   }
 
@@ -225,32 +189,14 @@ class Operator {
     parent_operator_id_ = parent_operator_id;
   }
 
-  [[nodiscard]] bool has_parent() const noexcept {
-    return parent_operator_id_ >= 0;
-  }
+  [[nodiscard]] bool has_parent() const noexcept { return parent_operator_id_ >= 0; }
 
-  [[nodiscard]] std::int32_t parent_id() const noexcept {
-    return parent_operator_id_;
-  }
+  [[nodiscard]] std::int32_t parent_id() const noexcept { return parent_operator_id_; }
 
   /// @brief Called automatically when the operator is added to a graph.
-  void set_graph(std::shared_ptr<Graph> owning_graph) {
-    owning_graph_ = owning_graph;
-  }
+  void set_graph(std::shared_ptr<Graph> owning_graph) { owning_graph_ = owning_graph; }
 
-  [[nodiscard]] std::shared_ptr<Graph> graph() const {
-    return owning_graph_.lock();
-  }
-
-  // ===========================================================================
-  // Execution State
-  // ===========================================================================
-
-  [[nodiscard]] bool is_done() const noexcept {
-    return execution_completed_.load();
-  }
-
-  void mark_done() noexcept { execution_completed_.store(true); }
+  [[nodiscard]] std::shared_ptr<Graph> graph() const { return owning_graph_.lock(); }
 
  protected:
   std::uint32_t operator_id_;
@@ -260,26 +206,20 @@ class Operator {
   Port output_port_{this};
   std::int32_t parent_operator_id_{-1};
   std::weak_ptr<Graph> owning_graph_;  // weak to avoid circular ownership
-  std::atomic<bool> execution_completed_{false};
 };
 
 // =============================================================================
 // Simple Operator Template
 // =============================================================================
 
-/// @brief Base for stateless operators (Filter, Project, Cast): run() pulls from input,
-///        calls ProcessBatch(), and pushes with flow control.
+/// @brief Base for stateless pipeline operators such as Filter, Project, and Cast.
 class SimpleOperator : public Operator {
  public:
   using Operator::Operator;
 
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
-  [[nodiscard]] ExecutionStatus run() override;
-
  protected:
   // Redeclared pure so subclasses cannot accidentally inherit the passthrough default.
-  [[nodiscard]] Result<cache::DataBlockPtr> ProcessBatch(
-      cache::DataBlockPtr input) override = 0;
+  [[nodiscard]] Result<cache::DataBlockPtr> ProcessBatch(cache::DataBlockPtr input) override = 0;
 };
 
 }  // namespace quest::taskflow

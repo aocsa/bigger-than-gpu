@@ -32,8 +32,6 @@ class FilterOperator : public SimpleOperator {
         predicate_(std::move(predicate)),
         memory_manager_(std::move(memory_manager)) {}
 
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
-
  protected:
   [[nodiscard]] Result<cache::DataBlockPtr> ProcessBatch(cache::DataBlockPtr input) override {
     auto host_result = execution::EnsureHostBlock(std::move(input));

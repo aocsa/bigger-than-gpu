@@ -41,8 +41,6 @@ class LimitOperator : public SimpleOperator {
         remaining_(limit),
         memory_manager_(std::move(memory_manager)) {}
 
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
-
   /// @brief Rows still available to claim (for tests / introspection).
   [[nodiscard]] std::size_t remaining() const noexcept {
     return remaining_.load(std::memory_order_relaxed);

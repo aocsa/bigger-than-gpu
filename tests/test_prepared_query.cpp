@@ -25,8 +25,6 @@ class MockSource : public Operator {
  public:
   explicit MockSource(std::uint32_t id) : Operator(id, "mock_source", OperatorType::TableScan) {}
 
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return false; }
   [[nodiscard]] bool IsSource() const noexcept override { return true; }
 
   [[nodiscard]] Result<std::optional<std::shared_ptr<DataBlock>>> GetNextBatch() override {
@@ -38,8 +36,6 @@ class MockSink : public Operator {
  public:
   explicit MockSink(std::uint32_t id) : Operator(id, "mock_sink", OperatorType::Output) {}
 
-  [[nodiscard]] ExecutionStatus run() override { return ExecutionStatus::Proceed; }
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
   [[nodiscard]] bool IsSink() const noexcept override { return true; }
 
   [[nodiscard]] Status Sink(std::shared_ptr<DataBlock> /*batch*/) override { return Status::OK(); }

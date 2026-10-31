@@ -36,8 +36,6 @@ class UnionOperator : public SimpleOperator {
   explicit UnionOperator(std::uint32_t operator_id)
       : SimpleOperator(operator_id, "Union", OperatorType::Union) {}
 
-  [[nodiscard]] bool can_you_throttle_my_input() const override { return true; }
-
   /// @brief Streaming merge, not a blocking pipeline breaker (see class note).
   [[nodiscard]] bool IsBlocking() const noexcept override { return false; }
 

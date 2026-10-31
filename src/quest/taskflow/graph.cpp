@@ -1,14 +1,11 @@
 #include "quest/taskflow/graph.hpp"
 
-#include <algorithm>
 #include <deque>
 #include <format>
-#include <mutex>
 #include <print>
 #include <utility>
 
 #include "quest/taskflow/meta_pipeline.hpp"
-#include "quest/taskflow/pipeline_executor.hpp"
 
 namespace quest::taskflow {
 
@@ -336,19 +333,6 @@ EdgeTuner& EdgeTuner::Config(EdgeConfig config) noexcept {
 // Graph Execution
 // =============================================================================
 
-void Graph::FinalizeWorkflow() {
-  for (auto& [operator_id, current_operator] : operator_lookup_table_) {
-    if (current_operator != nullptr && GetOutgoingEdges(current_operator).empty()) {
-      auto current_id = static_cast<std::int32_t>(current_operator->id());
-      Edge terminal_edge{.source_operator_id = current_id,
-                         .target_operator_id = -1,  // Sentinel indicates terminal
-                         .source_port_name = std::to_string(current_operator->id()),
-                         .target_port_name = ""};
-      outgoing_edges_[current_id].insert(terminal_edge);
-    }
-  }
-}
-
 Status Graph::Execute() {
   // Phase 2.5: Execute is sugar for Prepare({}, {}).Execute().
   auto prepared = Prepare(QueryStats{}, HardwareInfo{});
@@ -356,95 +340,6 @@ Status Graph::Execute() {
     return std::unexpected(prepared.error());
   }
   return prepared->Execute();
-}
-
-Status Graph::ExecuteLegacy() {
-  // Holders are deferred from AddEdge; materialize before run()-based I/O.
-  Materialize();
-  FinalizeWorkflow();
-
-  std::vector<ExecutionThread> execution_threads;
-  std::set<std::pair<std::size_t, std::size_t>> processed_edges;
-  std::deque<std::size_t> ready_operator_queue;
-  std::mutex queue_mutex;
-
-  for (const auto& edge : GetOutgoingEdges(kGraphEntryPointId)) {
-    ready_operator_queue.push_back(edge.target_operator_id);
-  }
-
-  while (!ready_operator_queue.empty()) {
-    std::size_t current_operator_id;
-    {
-      std::lock_guard<std::mutex> lock(queue_mutex);
-      if (ready_operator_queue.empty()) {
-        break;
-      }
-      current_operator_id = ready_operator_queue.front();
-      ready_operator_queue.pop_front();
-    }
-
-    auto* current_operator = GetNode(current_operator_id);
-    if (current_operator == nullptr) {
-      continue;
-    }
-
-    auto dependency_edges = GetIncomingEdges(current_operator);
-    bool all_dependencies_satisfied =
-        dependency_edges.empty() ||
-        std::all_of(
-            dependency_edges.begin(), dependency_edges.end(), [&processed_edges](const Edge& dep) {
-              return processed_edges.contains({dep.source_operator_id, dep.target_operator_id});
-            });
-
-    if (!all_dependencies_satisfied) {
-      // Re-queue and retry once upstream edges complete.
-      std::lock_guard<std::mutex> lock(queue_mutex);
-      ready_operator_queue.push_back(current_operator_id);
-      continue;
-    }
-
-    for (const auto& edge : GetOutgoingEdges(current_operator)) {
-      auto edge_key =
-          std::make_pair(current_operator_id, static_cast<std::size_t>(edge.target_operator_id));
-
-      if (processed_edges.contains(edge_key)) {
-        continue;
-      }
-
-      processed_edges.insert(edge_key);
-
-      if (edge.target_operator_id >= 0) {
-        std::lock_guard<std::mutex> lock(queue_mutex);
-        ready_operator_queue.push_back(edge.target_operator_id);
-      }
-
-      execution_threads.emplace_back(
-          [current_operator, current_operator_id, target = edge.target_operator_id]() {
-            auto execution_status = current_operator->run();
-
-            if (execution_status == ExecutionStatus::Proceed) {
-              current_operator->output().Finish();
-              current_operator->mark_done();
-            } else if (target >= 0) {
-              std::println(stderr, "ERROR: Operator {} did not finish successfully",
-                           current_operator_id);
-            }
-          });
-    }
-  }
-
-  for (auto& thread : execution_threads) {
-    if (thread.joinable()) {
-      thread.join();
-    }
-  }
-
-  return Status::OK();
-}
-
-Status Graph::ExecutePipelined() {
-  // Alias for Execute(); kept for direct callers until D4 consolidation.
-  return Execute();
 }
 
 // =============================================================================
@@ -503,14 +398,7 @@ EdgeConfig Graph::GetEdgeConfig(std::int32_t source_operator_id,
 std::vector<Operator*> Graph::GetTerminalOperators() const {
   std::vector<Operator*> terminals;
   for (auto* current_operator : registered_operators_) {
-    // Only edges to real operators count: FinalizeWorkflow() marks
-    // terminals with sentinel edges (target -1), and those must not make
-    // an operator look non-terminal — otherwise building pipelines after
-    // the legacy Execute() path silently finds no terminals at all.
-    auto outgoing = GetOutgoingEdges(current_operator);
-    bool has_real_consumer = std::ranges::any_of(
-        outgoing, [](const Edge& edge) { return edge.target_operator_id >= 0; });
-    if (!has_real_consumer) {
+    if (GetOutgoingEdges(current_operator).empty()) {
       terminals.push_back(current_operator);
     }
   }

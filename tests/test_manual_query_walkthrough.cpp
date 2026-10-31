@@ -235,7 +235,7 @@ TEST(ManualQueryWalkthroughTest, ManualAssemblyEndToEnd) {
 
   // ==========================================================================
   // Stage 5 — pipelines, made visible.
-  // (Graph::ExecutePipelined calls this internally; doing it by hand lets
+  // (Graph::Execute calls this internally; doing it by hand lets
   //  us LOOK at the structure: the streaming chain fused into one
   //  pipeline, the collector alone in a second one, gated FULL.)
   // ==========================================================================

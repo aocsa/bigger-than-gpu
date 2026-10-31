@@ -1,8 +1,8 @@
 #include "quest/taskflow/operator.hpp"
 
-#include "quest/taskflow/graph.hpp"
-
 #include <format>
+
+#include "quest/taskflow/graph.hpp"
 
 namespace quest::taskflow {
 
@@ -10,8 +10,7 @@ namespace quest::taskflow {
 // Operator Implementation
 // =============================================================================
 
-Operator::Operator(std::uint32_t operator_id,
-                   std::string expression_string,
+Operator::Operator(std::uint32_t operator_id, std::string expression_string,
                    OperatorType operator_type)
     : operator_id_(operator_id),
       expression_string_(std::move(expression_string)),
@@ -27,8 +26,7 @@ std::pair<bool, std::uint64_t> Operator::GetEstimatedOutputNumRows() const {
     return {true, TotalInputRowsAdded()};
   }
   if (auto owning_graph = owning_graph_.lock()) {
-    return owning_graph->EstimateInputRowCount(
-        static_cast<std::int32_t>(operator_id_));
+    return owning_graph->EstimateInputRowCount(static_cast<std::int32_t>(operator_id_));
   }
   return {false, 0};
 }
@@ -45,16 +43,15 @@ Result<cache::DataBlockPtr> Operator::ProcessBatch(cache::DataBlockPtr input) {
 
 Result<std::optional<cache::DataBlockPtr>> Operator::GetNextBatch() {
   // Only sources (and finalized blocking operators) produce batches.
-  return Status::Invalid(std::format(
-      "Operator {} ({}) is not a source; GetNextBatch is not supported",
-      operator_id_, to_string(operator_type_)));
+  return Status::Invalid(
+      std::format("Operator {} ({}) is not a source; GetNextBatch is not supported", operator_id_,
+                  to_string(operator_type_)));
 }
 
 Status Operator::Sink(cache::DataBlockPtr /*batch*/) {
   // Only sinks (blocking operators, collectors) may be fed final batches.
-  return Status::Invalid(std::format(
-      "Operator {} ({}) is not a sink; Sink is not supported",
-      operator_id_, to_string(operator_type_)));
+  return Status::Invalid(std::format("Operator {} ({}) is not a sink; Sink is not supported",
+                                     operator_id_, to_string(operator_type_)));
 }
 
 Status Operator::FinalizeSink() {
@@ -65,74 +62,14 @@ std::shared_ptr<cache::IBatchHolder> Operator::InputCache() {
   return input_port_.get(std::to_string(operator_id_));
 }
 
-std::shared_ptr<cache::IBatchHolder> Operator::OutputCache(
-    const std::string& cache_id) {
-  std::string port_name =
-      cache_id.empty() ? std::to_string(operator_id_) : cache_id;
-  return output_port_.get(port_name);
-}
-
-Status Operator::AddToOutput(std::shared_ptr<cache::DataBlock> data,
-                               const std::string& cache_id) {
-  std::string port_name =
-      cache_id.empty() ? std::to_string(operator_id_) : cache_id;
+Status Operator::AddToOutput(std::shared_ptr<cache::DataBlock> data, const std::string& cache_id) {
+  std::string port_name = cache_id.empty() ? std::to_string(operator_id_) : cache_id;
   auto& batch_holder = output_port_.get(port_name);
   if (!batch_holder) {
-    return Status::Invalid(std::format(
-        "Output cache '{}' not found for operator {}", port_name, operator_id_));
+    return Status::Invalid(
+        std::format("Output cache '{}' not found for operator {}", port_name, operator_id_));
   }
   return batch_holder->Add(std::move(data));
-}
-
-void Operator::WaitIfOutputSaturated(const std::string& cache_id) {
-  std::string port_name =
-      cache_id.empty() ? std::to_string(operator_id_) : cache_id;
-  auto& batch_holder = output_port_.get(port_name);
-  if (batch_holder) {
-    batch_holder->WaitIfSaturated();
-  }
-}
-
-// =============================================================================
-// SimpleOperator Implementation
-// =============================================================================
-
-ExecutionStatus SimpleOperator::run() {
-  auto input_batch_holder = InputCache();
-  if (!input_batch_holder) {
-    return ExecutionStatus::Stop;
-  }
-
-  while (true) {
-    auto message_result = input_batch_holder->Pull();
-
-    if (!message_result.has_value()) {
-      // ErrorCode::Invalid signals normal end-of-stream from the holder.
-      if (message_result.error().code() == ErrorCode::Invalid) {
-        break;
-      }
-      return ExecutionStatus::Stop;
-    }
-
-    auto& data = message_result.value();
-    if (!data) {
-      continue;
-    }
-
-    auto processed_result = ProcessBatch(data);
-    if (!processed_result.has_value()) {
-      return ExecutionStatus::Stop;
-    }
-
-    auto add_status = AddToOutput(std::move(processed_result.value()));
-    if (!add_status.ok()) {
-      return ExecutionStatus::Stop;
-    }
-
-    WaitIfOutputSaturated();
-  }
-
-  return ExecutionStatus::Proceed;
 }
 
 }  // namespace quest::taskflow

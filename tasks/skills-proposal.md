@@ -22,9 +22,10 @@ same checklist. This is the highest-ROI skill.
 **Trigger**: "new operator", "add operator", "create operator", "implement X operator"
 
 **What it does**:
-1. Ask: name, port count, transform description
-2. Generate: enum entry, operator subclass, `run()` + `can_you_throttle_my_input()`
-3. Generate: test file with empty/null/backpressure cases
+1. Ask: name, role (streaming/source/blocking), port count, transform description
+2. Generate: enum entry, operator subclass with pipeline-role methods (`ProcessBatch` /
+   `IsSource`+`GetNextBatch` / `IsSink`+`Sink`+`FinalizeSink` as applicable)
+3. Generate: test file wired via `GraphBuilder`/`PreparedQuery` with empty/null/EOS/backpressure cases
 4. Register in CMakeLists.txt
 5. Build and verify
 
@@ -45,8 +46,8 @@ matter: backpressure, spill boundaries, null columns, concurrent access.
 2. Backpressure: downstream BatchHolder full
 3. Spill boundary: force 84% → 86% memory mid-operation
 4. Type edge cases: NULL columns, zero-length strings, INT64_MAX
-5. Concurrent access: two operators sharing a BatchHolder
-6. Throttle compliance: does `can_you_throttle_my_input()` actually pause?
+5. Concurrent access: two operators sharing a BatchHolder (via Graph::Execute)
+6. Pipeline role contract: does each role method (`ProcessBatch`/`GetNextBatch`/`Sink`/`FinalizeSink`) satisfy its invariants?
 7. Verdict: PASS / PARTIAL / FAIL
 
 **Source pattern**: Prompts.md Example 3 (Adversarial Operator Verifier)
