@@ -316,57 +316,6 @@ template <typename T>
   return std::unexpected<Error>{error};
 }
 
-}// namespace quest
-
-
-
-
-// --- Macros ---
-
-// QASSERT - Return Invalid status with formatted message if condition fails
-#define QASSERT(condition, ...)                                 \
-  do {                                                           \
-    if (!(condition)) [[unlikely]] {                             \
-      return ::quest::Status::Invalid(std::format(__VA_ARGS__)); \
-    }                                                            \
-  } while (false)
-
-// =============================================================================
-// Modern GUARD_ASSIGN macro (replaces QTRY)
-// =============================================================================
-
-// Internal helper to generate unique variable names
-#define QUEST_CONCAT_IMPL(x, y) x##y
-#define QUEST_CONCAT(x, y) QUEST_CONCAT_IMPL(x, y)
-#define QUEST_UNIQUE_VAR(prefix) QUEST_CONCAT(prefix, __COUNTER__)
-
-// GUARD_ASSIGN - Assign value or return error
-// Usage: GUARD_ASSIGN(auto value, SomeOperation());
-// Usage: GUARD_ASSIGN(existing_var, SomeOperation());
-//
-// This macro extracts the value from a Result<T> or Status and assigns it to lhs.
-// If the result contains an error, it propagates the error by returning early.
-// Compatible with std::expected and works without compiler extensions.
-#define GUARD_ASSIGN(lhs, rexpr)                                      \
-    GUARD_ASSIGN_IMPL(QUEST_UNIQUE_VAR(_result_), lhs, rexpr)
-
-#define GUARD_ASSIGN_IMPL(result_var, lhs, rexpr)                     \
-    auto result_var = (rexpr);                                                 \
-    if (!result_var) [[unlikely]] {                                            \
-        return std::unexpected(result_var.error());                            \
-    }                                                                          \
-    lhs = std::move(*result_var)
-
-// GUARD_OK - Return early if status is not OK
-// Usage: GUARD_OK(SomeOperation());
-// For Status/Result<void> types where you don't need to extract a value
-#define GUARD_OK(expr)                                              \
-    do {                                                                       \
-        auto _status_result_ = (expr);                                         \
-        if (!_status_result_) [[unlikely]] {                                   \
-            return std::unexpected(_status_result_.error());                   \
-        }                                                                      \
-    } while (false)
-
+}  // namespace quest
 
 #endif  // QUEST_RESULT_HPP_

@@ -197,87 +197,6 @@ TEST(ResultTest, MonadicOrElse) {
 }
 
 // =============================================================================
-// GUARD_ASSIGN Macro Tests
-// =============================================================================
-
-Result<int> ParseInt(const std::string& input) {
-    if (input.empty()) {
-        return Status::Invalid("Empty string");
-    }
-    try {
-        return std::stoi(input);
-    } catch (...) {
-        return Status::Invalid("Parse error");
-    }
-}
-
-Result<int> DoubleValue(const std::string& input) {
-    GUARD_ASSIGN(auto val, ParseInt(input));
-    return val * 2;
-}
-
-TEST(MacroTest, GuardAssignSuccess) {
-    auto result = DoubleValue("5");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result, 10);
-}
-
-TEST(MacroTest, GuardAssignError) {
-    auto result = DoubleValue("");
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error().message(), "Empty string");
-}
-
-// =============================================================================
-// QASSERT Macro Tests
-// =============================================================================
-
-Result<int> ValidatePositive(int value) {
-    QASSERT(value > 0, "Value must be positive, got {}", value);
-    return value;
-}
-
-TEST(MacroTest, QassertSuccess) {
-    auto result = ValidatePositive(5);
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result, 5);
-}
-
-TEST(MacroTest, QassertFailure) {
-    auto result = ValidatePositive(-5);
-    EXPECT_FALSE(result.has_value());
-    EXPECT_TRUE(result.error().message().find("must be positive") != std::string::npos);
-    EXPECT_TRUE(result.error().message().find("-5") != std::string::npos);
-}
-
-// =============================================================================
-// GUARD_OK Macro Tests
-// =============================================================================
-
-Status ValidateInput(const std::string& input) {
-    QASSERT(!input.empty(), "Input cannot be empty");
-    QASSERT(input.length() < 100, "Input too long");
-    return {};  // Default-constructed Status is ok
-}
-
-Result<std::string> ProcessInput(const std::string& input) {
-    GUARD_OK(ValidateInput(input));
-    return input;
-}
-
-TEST(MacroTest, GuardOkSuccess) {
-    auto result = ProcessInput("test");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result, "test");
-}
-
-TEST(MacroTest, GuardOkFailure) {
-    auto result = ProcessInput("");
-    EXPECT_FALSE(result.has_value());
-    EXPECT_TRUE(result.error().message().find("cannot be empty") != std::string::npos);
-}
-
-// =============================================================================
 // Ok Helper Function Tests
 // =============================================================================
 
@@ -561,46 +480,6 @@ TEST(ResultTest, ErrorPropagationChain) {
 }
 
 // =============================================================================
-// Additional Macro Tests
-// =============================================================================
-
-Result<int> MultipleGuardAssigns(const std::string& a, const std::string& b) {
-    GUARD_ASSIGN(auto val_a, ParseInt(a));
-    GUARD_ASSIGN(auto val_b, ParseInt(b));
-    return val_a + val_b;
-}
-
-TEST(MacroTest, MultipleGuardAssignSuccess) {
-    auto result = MultipleGuardAssigns("10", "20");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result, 30);
-}
-
-TEST(MacroTest, MultipleGuardAssignFirstFails) {
-    auto result = MultipleGuardAssigns("", "20");
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error().message(), "Empty string");
-}
-
-TEST(MacroTest, MultipleGuardAssignSecondFails) {
-    auto result = MultipleGuardAssigns("10", "");
-    EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error().message(), "Empty string");
-}
-
-Result<int> GuardAssignWithExistingVar(const std::string& input) {
-    int val = 0;
-    GUARD_ASSIGN(val, ParseInt(input));
-    return val * 3;
-}
-
-TEST(MacroTest, GuardAssignWithExistingVariable) {
-    auto result = GuardAssignWithExistingVar("7");
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result, 21);
-}
-
-// =============================================================================
 // Err Helper Function Tests
 // =============================================================================
 
@@ -610,6 +489,17 @@ TEST(HelperTest, ErrFunction) {
     EXPECT_FALSE(result.has_value());
     EXPECT_EQ(result.error().code(), ErrorCode::Invalid);
     EXPECT_EQ(result.error().message(), "error message");
+}
+
+Result<int> ParseInt(const std::string& input) {
+    if (input.empty()) {
+        return Status::Invalid("Empty string");
+    }
+    try {
+        return std::stoi(input);
+    } catch (...) {
+        return Status::Invalid("Parse error");
+    }
 }
 
 // =============================================================================
