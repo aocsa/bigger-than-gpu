@@ -16,7 +16,6 @@
 #include "quest/datasource/record_batch.hpp"
 #include "quest/logical_plan/logical_expr.hpp"
 #include "quest/logical_plan/logical_plan.hpp"
-#include "quest/physical_plan/physical_plan.hpp"
 #include "quest/tests/utils.hpp"
 
 using namespace quest;
@@ -201,10 +200,11 @@ TEST_F(QueryIntegrationTest, QueryBuilderComplexCondition) {
   EXPECT_NE(plan, nullptr);
 }
 
-TEST_F(QueryIntegrationTest, QueryBuilderToPhysicalPlan) {
-  auto result = QueryBuilder::From(data_source_, "employees")
-                    .Select({"id", "name"})
-                    .BuildPhysicalPlan();
+TEST_F(QueryIntegrationTest, QueryBuilderToGraph) {
+  auto plan = QueryBuilder::From(data_source_, "employees")
+                  .Select({"id", "name"})
+                  .BuildLogicalPlan();
+  auto result = execution::CreateGraph(*plan);
 
   EXPECT_TRUE(result.has_value());
   EXPECT_NE(result.value(), nullptr);
@@ -411,7 +411,7 @@ TEST_F(ParquetIntegrationTest, EndToEndQuery) {
   auto builder_result = QueryBuilder::FromParquet(employees_file().string());
   ASSERT_TRUE(builder_result.has_value());
 
-  auto batches = std::move(builder_result.value()).ExecuteCollect();
+  auto batches = std::move(builder_result.value()).ExecuteOnGraph();
 
   ASSERT_TRUE(batches.has_value());
   EXPECT_GT(batches.value().size(), 0U);
@@ -439,8 +439,9 @@ TEST_F(ParquetIntegrationTest, QueryWithFilter) {
   builder_result = QueryBuilder::FromParquet(employees_file().string());
   ASSERT_TRUE(builder_result.has_value());
 
-  // Build physical plan (can't actually filter without running, but plan
-  // builds)
-  auto plan = std::move(builder_result.value()).BuildPhysicalPlan();
+  // Lower to an executable graph (can't actually filter without running, but
+  // the plan lowers)
+  auto logical = std::move(builder_result.value()).BuildLogicalPlan();
+  auto plan = execution::CreateGraph(*logical);
   EXPECT_TRUE(plan.has_value());
 }

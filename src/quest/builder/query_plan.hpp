@@ -5,40 +5,21 @@
 #define QUEST_QUERY_PLAN_HPP
 
 /// @file query_plan.hpp
-/// @brief Shared query plan building logic used by both sync and streaming query builders.
+/// @brief Query plan building logic behind QueryBuilder's fluent API.
 
-#include <concepts>
 #include <cstddef>
-#include <functional>
 #include <initializer_list>
 #include <memory>
 #include <string>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
 #include "quest/builder/expr_builder.hpp"
 #include "quest/datasource/data_source.hpp"
 #include "quest/logical_plan/logical_plan.hpp"
-#include "quest/physical_plan/physical_plan.hpp"
 #include "quest/result.hpp"
 
 namespace quest {
-
-// =============================================================================
-// Execution Concepts
-// =============================================================================
-
-/// @brief Concept for callable types that accept RecordBatch.
-template <typename F>
-concept BatchCallback = std::invocable<F, datasource::RecordBatch> &&
-                        std::same_as<std::invoke_result_t<F, datasource::RecordBatch>, void>;
-
-/// @brief Concept for callable types that accept RecordBatch and return control flow.
-template <typename F>
-concept BatchCallbackWithControl =
-    std::invocable<F, datasource::RecordBatch> &&
-    std::convertible_to<std::invoke_result_t<F, datasource::RecordBatch>, bool>;
 
 // =============================================================================
 // Query Plan
@@ -46,9 +27,8 @@ concept BatchCallbackWithControl =
 
 /// @brief Shared query plan that holds the logical plan and provides plan-building methods.
 ///
-/// Both QueryBuilder and StreamingQueryBuilder compose this class to share the
-/// fluent API for constructing queries. QueryPlan owns the logical plan and
-/// provides factory methods, filtering, projection, and plan extraction.
+/// QueryBuilder composes this class for the fluent API. QueryPlan owns the
+/// logical plan and provides factory methods, filtering, projection, and plan extraction.
 class QueryPlan {
  public:
   // Rule of Five: Move-only (plan ownership)
@@ -137,10 +117,6 @@ class QueryPlan {
 
   [[nodiscard]] LogicalPlanPtr BuildLogicalPlan() && { return std::move(plan_); }
 
-  [[nodiscard]] Result<PhysicalPlanPtr> BuildPhysicalPlan() && {
-    return CreatePhysicalPlan(*plan_);
-  }
-
   // ===========================================================================
   // Utility Methods
   // ===========================================================================
@@ -155,7 +131,6 @@ class QueryPlan {
   template <typename>
   friend class QueryBuilderOf;
   friend class QueryBuilder;
-  friend class StreamingQueryBuilder;
 
   explicit QueryPlan(LogicalPlanPtr plan) noexcept : plan_(std::move(plan)) {}
 

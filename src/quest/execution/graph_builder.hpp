@@ -12,9 +12,10 @@
 #include <utility>
 #include <vector>
 
+#include "quest/logical_plan/logical_expr.hpp"
 #include "quest/logical_plan/logical_plan.hpp"
 #include "quest/memory/memory_resource.hpp"
-#include "quest/physical_plan/physical_plan.hpp"
+#include "quest/physical_plan/expressions/physical_expr.hpp"
 #include "quest/quest.hpp"
 #include "quest/result.hpp"
 #include "quest/taskflow/graph.hpp"
@@ -25,6 +26,88 @@
 #include "quest/taskflow/operators/project_operator.hpp"
 #include "quest/taskflow/operators/table_scan_operator.hpp"
 #include "quest/taskflow/operators/union_operator.hpp"
+
+namespace quest {
+
+/// @brief Resolve a logical expression against @p input's schema into an
+/// evaluable physical expression.
+[[nodiscard]] inline Result<ExpressionPtr> CreatePhysicalExpr(const LogicalExpr& expr,
+                                                              const LogicalPlan& input) {
+  if (const auto* literal = dynamic_cast<const Literal*>(&expr)) {
+    return std::make_unique<LiteralExpression>(literal->value());
+  }
+
+  if (const auto* col_idx = dynamic_cast<const ColumnIndex*>(&expr)) {
+    return std::make_unique<ColumnExpression>(col_idx->index());
+  }
+
+  if (const auto* col = dynamic_cast<const Column*>(&expr)) {
+    auto index = input.schema().GetFieldIndex(col->name());
+    if (!index) {
+      return std::unexpected(Status::SchemaError("No column named: " + col->name()));
+    }
+    return std::make_unique<ColumnExpression>(*index);
+  }
+
+  if (const auto* binary = dynamic_cast<const BinaryExpr*>(&expr)) {
+    auto left_result = CreatePhysicalExpr(binary->left(), input);
+    if (!left_result) {
+      return std::unexpected(left_result.error());
+    }
+    auto right_result = CreatePhysicalExpr(binary->right(), input);
+    if (!right_result) {
+      return std::unexpected(right_result.error());
+    }
+
+    auto left = std::move(*left_result);
+    auto right = std::move(*right_result);
+
+    if (dynamic_cast<const Eq*>(binary)) {
+      return std::make_unique<EqExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Neq*>(binary)) {
+      return std::make_unique<NeqExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Lt*>(binary)) {
+      return std::make_unique<LtExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const LtEq*>(binary)) {
+      return std::make_unique<LtEqExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Gt*>(binary)) {
+      return std::make_unique<GtExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const GtEq*>(binary)) {
+      return std::make_unique<GtEqExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const And*>(binary)) {
+      return std::make_unique<AndExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Or*>(binary)) {
+      return std::make_unique<OrExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Add*>(binary)) {
+      return std::make_unique<AddExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Subtract*>(binary)) {
+      return std::make_unique<SubtractExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Multiply*>(binary)) {
+      return std::make_unique<MultiplyExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Divide*>(binary)) {
+      return std::make_unique<DivideExpression>(std::move(left), std::move(right));
+    }
+    if (dynamic_cast<const Modulo*>(binary)) {
+      return std::make_unique<ModuloExpression>(std::move(left), std::move(right));
+    }
+  }
+
+  return std::unexpected(
+      Status::PhysicalPlanError("Cannot create physical expression from: " + expr.ToString()));
+}
+
+}  // namespace quest
 
 namespace quest::execution {
 
@@ -211,8 +294,7 @@ namespace detail {
 /// @brief Translate a supported LogicalPlan into a push-pipeline ExecutableGraph.
 ///
 /// Supported: Scan, Selection, Projection, Limit, Union (and trees thereof).
-/// Unsupported nodes return an error — callers fall back to the callback
-/// physical engine.
+/// Unsupported nodes return an error.
 [[nodiscard]] inline Result<ExecutableGraphPtr> CreateGraph(
     const LogicalPlan& plan,
     std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr) {

@@ -21,7 +21,7 @@ Requires C++23 (GCC 13+ or Clang 17+) and CMake 3.25+.
 
 ## Usage
 
-### Query Builder (sync)
+### Query Builder
 
 ```cpp
 #include "quest/builder/query_builder.hpp"
@@ -30,21 +30,7 @@ using namespace quest;
 auto batches = std::move(QueryBuilder::FromParquet("data.parquet").value())
     .Where(Col("age") > Lit(21))
     .Select({"id", "name"})
-    .ExecuteCollect();
-```
-
-### Streaming Query Builder (pull-based with backpressure)
-
-```cpp
-#include "quest/builder/streaming_query_builder.hpp"
-using namespace quest;
-
-for (auto batch : std::move(StreamingQueryBuilder::FromParquet("data.parquet").value())
-         .Where(Col("salary") > Lit(50000))
-         .Select({"id", "name"})
-         .ExecuteStream()) {
-    if (batch) process(std::move(*batch));
-}
+    .ExecuteOnGraph();
 ```
 
 ### Dataflow DSL
@@ -64,7 +50,7 @@ graph += link(sort, merge, EdgeConfig::Concatenating());
 ## Architecture
 
 ```
-QueryBuilder → LogicalPlan → PhysicalPlan → TaskFlow Graph → Cache → Memory
+QueryBuilder → LogicalPlan → TaskFlow Graph → Cache → Memory
 ```
 
 Three subsystems:
@@ -78,9 +64,9 @@ For detailed architecture, class diagrams, and design patterns: [`docs/dev/ARCHI
 
 ```
 src/quest/
-├── builder/        # QueryBuilder, StreamingQueryBuilder, ExprBuilder
+├── builder/        # QueryBuilder, ExprBuilder
 ├── logical_plan/   # Scan, Selection, Projection nodes
-├── physical_plan/  # ScanExec, SelectionExec, ProjectionExec
+├── physical_plan/  # Physical expressions evaluated by operators
 ├── taskflow/       # Graph, Operator, Port, DSL (>>, +=)
 ├── cache/          # BatchHolder, DataBlock, BlockingQueue
 ├── datasource/     # Parquet reader, column vectors, schema

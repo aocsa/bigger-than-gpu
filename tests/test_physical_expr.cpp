@@ -1,8 +1,8 @@
 // Copyright 2024
 // Licensed under the Apache License, Version 2.0
 
-/// @file test_physical_plan.cpp
-/// @brief Unit tests for PhysicalPlan and physical expressions.
+/// @file test_physical_expr.cpp
+/// @brief Unit tests for physical expressions and CreatePhysicalExpr.
 
 #include <gtest/gtest.h>
 
@@ -12,10 +12,10 @@
 
 #include "quest/datasource/column_vector.hpp"
 #include "quest/datasource/record_batch.hpp"
+#include "quest/execution/graph_builder.hpp"
 #include "quest/logical_plan/logical_expr.hpp"
 #include "quest/logical_plan/logical_plan.hpp"
 #include "quest/physical_plan/expressions/physical_expr.hpp"
-#include "quest/physical_plan/physical_plan.hpp"
 #include "quest/tests/utils.hpp"
 
 using namespace quest;

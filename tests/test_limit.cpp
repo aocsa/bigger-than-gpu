@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// @file test_limit.cpp
-/// @brief Phase 2.7 Stage F1: TruncateRecordBatch, LimitOperator, LimitExec, e2e Limit.
+/// @brief Phase 2.7 Stage F1: TruncateRecordBatch, LimitOperator, e2e Limit.
 
 #include <gtest/gtest.h>
 
@@ -17,7 +17,6 @@
 #include "quest/execution/batch_kernels.hpp"
 #include "quest/execution/graph_builder.hpp"
 #include "quest/logical_plan/logical_plan.hpp"
-#include "quest/physical_plan/physical_plan.hpp"
 #include "quest/taskflow/meta_pipeline.hpp"
 #include "quest/taskflow/operators/limit_operator.hpp"
 #include "quest/taskflow/pipeline.hpp"
@@ -44,66 +43,6 @@ namespace {
   }
   return total;
 }
-
-/// @brief Stub physical source that emits a fixed list of batches (one-shot).
-class VectorSourceExec : public PhysicalPlan {
- public:
-  VectorSourceExec(Schema schema, std::vector<RecordBatch> batches)
-      : schema_(std::move(schema)), batches_(std::move(batches)) {}
-
-  [[nodiscard]] Schema schema() const override { return schema_; }
-
-  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override { return {}; }
-
-  [[nodiscard]] Status Execute(const ResultCallback& callback) override {
-    for (auto& batch : batches_) {
-      if (!callback(std::move(batch))) {
-        break;
-      }
-    }
-    batches_.clear();
-    return Status::OK();
-  }
-
-  [[nodiscard]] std::string ToString() const override { return "VectorSourceExec"; }
-
- private:
-  Schema schema_;
-  std::vector<RecordBatch> batches_;
-};
-
-/// @brief Physical source that regenerates fixed-size batches and counts yields.
-///
-/// Used to prove LimitExec early-stop (yield count) and re-Execute (remaining_ reset).
-class CountingBatchSourceExec : public PhysicalPlan {
- public:
-  CountingBatchSourceExec(Schema schema, std::size_t batch_count, std::size_t rows_per_batch)
-      : schema_(std::move(schema)), batch_count_(batch_count), rows_per_batch_(rows_per_batch) {}
-
-  [[nodiscard]] Schema schema() const override { return schema_; }
-
-  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override { return {}; }
-
-  [[nodiscard]] std::size_t yield_count() const noexcept { return yield_count_; }
-
-  [[nodiscard]] Status Execute(const ResultCallback& callback) override {
-    for (std::size_t i = 0; i < batch_count_; ++i) {
-      ++yield_count_;
-      if (!callback(MakeTestRecordBatch(rows_per_batch_))) {
-        break;
-      }
-    }
-    return Status::OK();
-  }
-
-  [[nodiscard]] std::string ToString() const override { return "CountingBatchSourceExec"; }
-
- private:
-  Schema schema_;
-  std::size_t batch_count_;
-  std::size_t rows_per_batch_;
-  std::size_t yield_count_{0};
-};
 
 /// @brief Graph source that counts GetNextBatch calls.
 class CountingVectorSource : public Operator {
@@ -254,7 +193,7 @@ TEST(LimitOperatorTest, ExhaustedSubsequentBatchesEmpty) {
 }
 
 // =============================================================================
-// Logical / physical
+// Logical plan
 // =============================================================================
 
 TEST(LimitPlanTest, LogicalSchemaAndToString) {
@@ -272,69 +211,6 @@ TEST(LimitPlanTest, LogicalSchemaAndToString) {
   EXPECT_EQ(limit->limit(), 2U);
   EXPECT_EQ(limit->ToString(), "Limit: 2");
   ASSERT_EQ(limit->Children().size(), 1U);
-}
-
-TEST(LimitPlanTest, LimitExecCollectsFirstN) {
-  auto batch = MakeTestRecordBatch(10);
-  auto input = std::make_unique<VectorSourceExec>(batch.schema(), std::vector<RecordBatch>{batch});
-  LimitExec limit(std::move(input), 4);
-
-  std::size_t total = 0;
-  ASSERT_OK(limit.Execute([&](RecordBatch b) {
-    total += b.num_rows();
-    return true;
-  }));
-  EXPECT_EQ(total, 4U);
-  EXPECT_EQ(limit.ToString(), "LimitExec(4)");
-}
-
-TEST(LimitPlanTest, CreatePhysicalPlanBuildsLimitExec) {
-  if (!std::filesystem::exists(EmployeesParquet())) {
-    GTEST_SKIP() << "missing " << EmployeesParquet();
-  }
-  auto plan =
-      QueryBuilder::FromParquet(EmployeesParquet().string()).value().Limit(5).BuildLogicalPlan();
-  ASSERT_OK_AND_ASSIGN(auto physical, CreatePhysicalPlan(*plan));
-  EXPECT_NE(dynamic_cast<LimitExec*>(physical.get()), nullptr);
-  EXPECT_EQ(physical->ToString(), "LimitExec(5)");
-}
-
-TEST(LimitPlanTest, LimitExecStopsUpstreamAfterLimit) {
-  // 10 batches of 3 rows; Limit(4) needs only 2 batches (3+1), not all 10.
-  auto schema = MakeTestRecordBatch(1).schema();
-  auto source = std::make_unique<CountingBatchSourceExec>(schema, /*batch_count=*/10,
-                                                          /*rows_per_batch=*/3);
-  CountingBatchSourceExec* observer = source.get();
-  LimitExec limit(std::move(source), 4);
-
-  std::size_t total = 0;
-  ASSERT_OK(limit.Execute([&](RecordBatch b) {
-    total += b.num_rows();
-    return true;
-  }));
-  EXPECT_EQ(total, 4U);
-  EXPECT_EQ(observer->yield_count(), 2U);
-}
-
-TEST(LimitPlanTest, LimitExecReExecuteResetsRemaining) {
-  auto schema = MakeTestRecordBatch(1).schema();
-  auto source = std::make_unique<CountingBatchSourceExec>(schema, /*batch_count=*/5,
-                                                          /*rows_per_batch=*/3);
-  LimitExec limit(std::move(source), 4);
-
-  auto collect = [&]() -> std::size_t {
-    std::size_t total = 0;
-    EXPECT_TRUE(limit
-                    .Execute([&](RecordBatch b) {
-                      total += b.num_rows();
-                      return true;
-                    })
-                    .has_value());
-    return total;
-  };
-
-  EXPECT_EQ(collect(), 4U);
-  EXPECT_EQ(collect(), 4U);
 }
 
 // =============================================================================
@@ -413,10 +289,15 @@ TEST(LimitE2ETest, GraphRowCountMatchesLimit) {
       QueryBuilder::FromParquet(path).value().Select({"id"}).Limit(kLimit).ExecuteOnGraph());
   EXPECT_EQ(TotalRows(graph_batches), kLimit);
 
-  ASSERT_OK_AND_ASSIGN(
-      auto callback_batches,
-      QueryBuilder::FromParquet(path).value().Select({"id"}).Limit(kLimit).ExecuteCollect());
-  EXPECT_EQ(TotalRows(callback_batches), kLimit);
+  // The file's ids are 1..100000 in row order; Limit keeps the first rows.
+  std::vector<int64_t> ids;
+  for (const auto& batch : graph_batches) {
+    ASSERT_EQ(batch.num_columns(), 1U);
+    for (std::size_t i = 0; i < batch.num_rows(); ++i) {
+      ids.push_back(std::get<int64_t>(batch.column(0).GetValue(i)));
+    }
+  }
+  EXPECT_EQ(ids, (std::vector<int64_t>{1, 2, 3}));
 }
 
 TEST(LimitE2ETest, LimitZero) {
@@ -428,10 +309,6 @@ TEST(LimitE2ETest, LimitZero) {
   ASSERT_OK_AND_ASSIGN(auto graph_batches,
                        QueryBuilder::FromParquet(path).value().Limit(0).ExecuteOnGraph());
   EXPECT_EQ(TotalRows(graph_batches), 0U);
-
-  ASSERT_OK_AND_ASSIGN(auto callback_batches,
-                       QueryBuilder::FromParquet(path).value().Limit(0).ExecuteCollect());
-  EXPECT_EQ(TotalRows(callback_batches), 0U);
 }
 
 TEST(LimitE2ETest, LimitExceedsTotalRows) {
@@ -440,10 +317,10 @@ TEST(LimitE2ETest, LimitExceedsTotalRows) {
   }
 
   const auto path = EmployeesParquet().string();
-  ASSERT_OK_AND_ASSIGN(auto all_batches, QueryBuilder::FromParquet(path).value().ExecuteCollect());
-  const auto total = TotalRows(all_batches);
+  constexpr std::size_t kTotalRows = 100000;
 
-  ASSERT_OK_AND_ASSIGN(auto graph_batches,
-                       QueryBuilder::FromParquet(path).value().Limit(total + 100).ExecuteOnGraph());
-  EXPECT_EQ(TotalRows(graph_batches), total);
+  ASSERT_OK_AND_ASSIGN(
+      auto graph_batches,
+      QueryBuilder::FromParquet(path).value().Limit(kTotalRows + 100).ExecuteOnGraph());
+  EXPECT_EQ(TotalRows(graph_batches), kTotalRows);
 }

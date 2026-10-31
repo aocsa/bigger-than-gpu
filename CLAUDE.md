@@ -13,17 +13,17 @@ Source lives in `src/quest/`; umbrella header is `quest.hpp`, error type is `res
 
 | Dir | Role |
 |---|---|
-| `builder/` | User-facing fluent API: `QueryBuilder`, `StreamingQueryBuilder`, `ExprBuilder`, `QueryPlan`, `Generator` |
+| `builder/` | User-facing fluent API: `QueryBuilder`, `ExprBuilder`, `QueryPlan` |
 | `logical_plan/` | Logical plan nodes and expressions |
-| `physical_plan/` | Physical plan and `expressions/physical_expr.hpp` |
+| `physical_plan/` | Physical expressions: `expressions/physical_expr.hpp` |
 | `taskflow/` | Execution engine: `Graph`, `GraphBuilder`, `Pipeline`, `MetaPipeline`, `PipelineExecutor`, `PreparedQuery`, `Port`, `Operator`, `OperatorType` |
 | `taskflow/operators/` | Concrete operators: TableScan, Generate, Filter, Project, Limit, Union, Print, Collector |
 | `cache/` | `DataBlock`, `BatchHolder` (CPU/Disk tiers, spill), `BlockingQueue` |
 | `memory/` | `MemoryResourceManager` |
 | `datasource/` | `DataSource`, schema, column vectors, record batches + serializer; `parquet/` reader |
-| `execution/` | Batch kernels, bloom filter, graph-builder helpers |
+| `execution/` | Batch kernels, bloom filter, `graph_builder.hpp` (`CreateGraph`, `CreatePhysicalExpr`) |
 
-Query flow: `QueryBuilder` -> logical plan -> physical plan -> `GraphBuilder` -> `Graph` of
+Query flow: `QueryBuilder::ExecuteOnGraph` -> logical plan -> `execution::CreateGraph` -> `Graph` of
 `Operator`s split into `Pipeline`s by `MetaPipeline` -> `PipelineExecutor` runs them
 (sources `GetNextBatch`, streaming ops `ProcessBatch`, blocking ops `Sink`/`FinalizeSink`).
 

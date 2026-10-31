@@ -5,16 +5,8 @@
 #define QUEST_QUERY_BUILDER_HPP
 
 /// @file query_builder.hpp
-/// @brief Synchronous query builder with push-based execution.
-///
-/// Provides three execution modes:
-/// 1. **Callback**: Execute() - push-based, caller provides callback
-/// 2. **Early termination**: ExecuteWithControl() - callback returns bool to stop
-/// 3. **Collect all**: ExecuteCollect() - collects all results into memory
-///
-/// For pull-based streaming with backpressure, see streaming_query_builder.hpp.
+/// @brief Fluent query builder; ExecuteOnGraph() runs the query on the taskflow engine.
 
-#include <functional>
 #include <initializer_list>
 #include <memory>
 #include <string>
@@ -29,10 +21,10 @@
 namespace quest {
 
 // =============================================================================
-// Query Builder (Synchronous Execution)
+// Query Builder
 // =============================================================================
 
-/// @brief Synchronous query builder for push-based execution.
+/// @brief Fluent query builder executed on the taskflow Graph engine.
 ///
 /// Example:
 /// @code
@@ -42,7 +34,7 @@ namespace quest {
 ///   auto batches = std::move(result.value())
 ///       .Where(Col("salary") > Lit(50000))
 ///       .Select({"id", "name", "salary"})
-///       .ExecuteCollect();
+///       .ExecuteOnGraph();
 /// @endcode
 class QueryBuilder {
  public:
@@ -108,108 +100,28 @@ class QueryBuilder {
 
   [[nodiscard]] LogicalPlanPtr BuildLogicalPlan() && { return std::move(plan_).BuildLogicalPlan(); }
 
-  [[nodiscard]] Result<PhysicalPlanPtr> BuildPhysicalPlan() && {
-    return std::move(plan_).BuildPhysicalPlan();
-  }
-
   // ===========================================================================
-  // Execution Methods (Synchronous / Push-based)
+  // Execution
   // ===========================================================================
 
-  /// Push-based execution: callback invoked for each result batch.
-  template <BatchCallback F>
-  [[nodiscard]] Status Execute(F&& callback) && {
-    auto physical_result = CreatePhysicalPlan(plan_.plan());
-    if (!physical_result) {
-      return std::unexpected(physical_result.error());
-    }
-    return physical_result.value()->Execute(
-        [&callback](datasource::RecordBatch batch) {
-          std::forward<F>(callback)(std::move(batch));
-          return true;
-        });
-  }
-
-  /// Push-based execution with early termination: callback returns false to stop.
-  template <BatchCallbackWithControl F>
-  [[nodiscard]] Status ExecuteWithControl(F&& callback) && {
-    auto physical_result = CreatePhysicalPlan(plan_.plan());
-    if (!physical_result) {
-      return std::unexpected(physical_result.error());
-    }
-
-    bool cancelled = false;
-    auto status = physical_result.value()->Execute(
-        [&callback, &cancelled](datasource::RecordBatch batch) {
-          if (!std::forward<F>(callback)(std::move(batch))) {
-            cancelled = true;
-            return false;  // Stop Scan — do not drain remaining batches.
-          }
-          return true;
-        });
-
-    if (cancelled) {
-      return Status::Cancelled("Query execution cancelled by callback");
-    }
-    return status;
-  }
-
-  /// Collects all results into memory. For large datasets prefer StreamingQueryBuilder::ExecuteStream().
-  [[nodiscard]] Result<std::vector<datasource::RecordBatch>> ExecuteCollect() && {
-    std::vector<datasource::RecordBatch> results;
-    auto physical_result = CreatePhysicalPlan(plan_.plan());
-    if (!physical_result) {
-      return std::unexpected(physical_result.error());
-    }
-    auto status = physical_result.value()->Execute(
-        [&results](datasource::RecordBatch batch) {
-          results.push_back(std::move(batch));
-          return true;
-        });
-    if (!status) {
-      return std::unexpected(status.error());
-    }
-    return results;
-  }
-
-  /// @brief Execute via the push-pipeline Graph engine (Phase 1 bridge).
+  /// @brief Execute via the push-pipeline Graph engine.
   ///
-  /// Tries `CreateGraph` → `Graph::Execute()` (PipelineExecutor). On an
-  /// unsupported logical node, falls back to the callback physical plan —
-  /// Sirius create_plan → CPU fallback discipline at CPU scale.
-  ///
-  /// Default `Execute` / `ExecuteCollect` are unchanged.
+  /// Lowers the plan with `CreateGraph` and runs `Graph::Execute()` (PipelineExecutor).
   ///
   /// @param memory_manager Optional memory manager (spill budget).
-  /// @return Collected RecordBatches, or error.
+  /// @return Collected RecordBatches, or the lowering/execution error.
   [[nodiscard]] Result<std::vector<datasource::RecordBatch>> ExecuteOnGraph(
       std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr) && {
     auto graph_result = execution::CreateGraph(plan_.plan(), std::move(memory_manager));
-    if (graph_result) {
-      auto exec = std::move(*graph_result);
-      auto status = exec->Execute();
-      if (!status) {
-        return std::unexpected(status.error());
-      }
-      return exec->collector().CollectBatches();
-    }
-
-    // Unsupported plan → callback engine (executor of last resort).
-    std::vector<datasource::RecordBatch> results;
-    auto physical_result = CreatePhysicalPlan(plan_.plan());
-    if (!physical_result) {
-      // Prefer the CreateGraph error (unsupported node) when both fail.
+    if (!graph_result) {
       return std::unexpected(graph_result.error());
     }
-    auto status = physical_result.value()->Execute(
-        [&results](datasource::RecordBatch batch) {
-          results.push_back(std::move(batch));
-          return true;
-        });
+    auto exec = std::move(*graph_result);
+    auto status = exec->Execute();
     if (!status) {
       return std::unexpected(status.error());
     }
-    return results;
+    return exec->collector().CollectBatches();
   }
 
   // ===========================================================================

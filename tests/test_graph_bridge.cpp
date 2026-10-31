@@ -31,9 +31,6 @@ namespace {
          "employees_uncompressed.parquet";
 }
 
-[[nodiscard]] std::string BatchFingerprint(const RecordBatch& batch) {
-  return batch.ToCSV();
-}
 
 }  // namespace
 
@@ -67,18 +64,12 @@ TEST(GraphBridgeTest, CreateGraphBuildsFusedPipelinePlusCollectorPipeline) {
   EXPECT_EQ(collector->FullBarrierProducers()[0], producer.get());
 }
 
-TEST(GraphBridgeTest, ParquetQueryParityCallbackVsGraph) {
+TEST(GraphBridgeTest, ParquetFilterProjectReturnsExpectedRows) {
   if (!std::filesystem::exists(EmployeesParquet())) {
     GTEST_SKIP() << "missing " << EmployeesParquet();
   }
 
   const auto path = EmployeesParquet().string();
-
-  ASSERT_OK_AND_ASSIGN(auto callback_batches, QueryBuilder::FromParquet(path)
-                                                  .value()
-                                                  .Where(Col("salary") > Lit(60000.0))
-                                                  .Select({"id", "name", "salary"})
-                                                  .ExecuteCollect());
 
   ASSERT_OK_AND_ASSIGN(auto graph_batches, QueryBuilder::FromParquet(path)
                                                .value()
@@ -86,10 +77,38 @@ TEST(GraphBridgeTest, ParquetQueryParityCallbackVsGraph) {
                                                .Select({"id", "name", "salary"})
                                                .ExecuteOnGraph());
 
-  ASSERT_EQ(callback_batches.size(), graph_batches.size());
-  for (size_t i = 0; i < callback_batches.size(); ++i) {
-    EXPECT_EQ(BatchFingerprint(callback_batches[i]), BatchFingerprint(graph_batches[i]));
+  // Expected values computed independently from the Parquet file (DuckDB).
+  std::size_t rows = 0;
+  int64_t id_sum = 0;
+  int64_t salary_sum = 0;
+  int64_t prev_id = 0;
+  for (const auto& batch : graph_batches) {
+    ASSERT_EQ(batch.num_columns(), 3U);
+    for (std::size_t i = 0; i < batch.num_rows(); ++i) {
+      const auto id = std::get<int64_t>(batch.column(0).GetValue(i));
+      const auto salary = std::get<int64_t>(batch.column(2).GetValue(i));
+      EXPECT_GT(salary, 60000);
+      EXPECT_GT(id, prev_id) << "rows must keep file order";
+      prev_id = id;
+      id_sum += id;
+      salary_sum += salary;
+      ++rows;
+    }
   }
+  EXPECT_EQ(rows, 86290U);
+  EXPECT_EQ(id_sum, 4312145559);
+  EXPECT_EQ(salary_sum, 13367835741);
+
+  ASSERT_FALSE(graph_batches.empty());
+  const auto& first = graph_batches.front();
+  EXPECT_EQ(std::get<int64_t>(first.column(0).GetValue(0)), 2);
+  EXPECT_EQ(std::get<std::string>(first.column(1).GetValue(0)), "Otapxhbqkl");
+  EXPECT_EQ(std::get<int64_t>(first.column(2).GetValue(0)), 100169);
+  const auto& last = graph_batches.back();
+  const auto last_row = last.num_rows() - 1;
+  EXPECT_EQ(std::get<int64_t>(last.column(0).GetValue(last_row)), 100000);
+  EXPECT_EQ(std::get<std::string>(last.column(1).GetValue(last_row)), "Bpqguwmolp");
+  EXPECT_EQ(std::get<int64_t>(last.column(2).GetValue(last_row)), 123265);
 }
 
 TEST(GraphBridgeTest, ArithmeticProjectionViaCreatePhysicalExpr) {

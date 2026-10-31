@@ -85,10 +85,11 @@ TEST_F(QueryBuilderTest, SelectAndWhere) {
   EXPECT_NE(plan, nullptr);
 }
 
-TEST_F(QueryBuilderTest, BuildPhysicalPlan) {
-  auto result = QueryBuilder::From(data_source_, "test")
-                    .Select({"id", "name"})
-                    .BuildPhysicalPlan();
+TEST_F(QueryBuilderTest, LowersToGraph) {
+  auto plan = QueryBuilder::From(data_source_, "test")
+                  .Select({"id", "name"})
+                  .BuildLogicalPlan();
+  auto result = execution::CreateGraph(*plan);
 
   EXPECT_TRUE(result.has_value());
   EXPECT_NE(result.value(), nullptr);
@@ -130,7 +131,7 @@ TEST_F(QueryBuilderParquetTest, FromParquetInvalid) {
   EXPECT_FALSE(result.has_value());
 }
 
-TEST_F(QueryBuilderParquetTest, ExecuteCollect) {
+TEST_F(QueryBuilderParquetTest, ExecuteOnGraph) {
   if (!std::filesystem::exists(employees_file())) {
     GTEST_SKIP() << "Test file not found: " << employees_file();
   }
@@ -138,7 +139,7 @@ TEST_F(QueryBuilderParquetTest, ExecuteCollect) {
   auto builder_result = QueryBuilder::FromParquet(employees_file().string());
   ASSERT_TRUE(builder_result.has_value());
 
-  auto batches = std::move(builder_result.value()).ExecuteCollect();
+  auto batches = std::move(builder_result.value()).ExecuteOnGraph();
 
   EXPECT_TRUE(batches.has_value());
   EXPECT_GT(batches.value().size(), 0U);
@@ -200,48 +201,4 @@ TEST_F(QueryBuilderTest, SchemaAccess) {
 TEST_F(QueryBuilderTest, BoolConversion) {
   auto builder = QueryBuilder::From(data_source_, "test");
   EXPECT_TRUE(static_cast<bool>(builder));
-}
-
-// =============================================================================
-// ExecuteWithControl Tests (Early Termination)
-// =============================================================================
-
-TEST_F(QueryBuilderParquetTest, ExecuteWithControlContinue) {
-  if (!std::filesystem::exists(employees_file())) {
-    GTEST_SKIP() << "Test file not found: " << employees_file();
-  }
-
-  auto builder_result = QueryBuilder::FromParquet(employees_file().string());
-  ASSERT_TRUE(builder_result.has_value());
-
-  int batch_count = 0;
-  auto status = std::move(builder_result.value())
-                    .ExecuteWithControl([&batch_count](RecordBatch /*batch*/) {
-                      ++batch_count;
-                      return true;  // Continue
-                    });
-
-  EXPECT_TRUE(status.ok());
-  EXPECT_GT(batch_count, 0);
-}
-
-TEST_F(QueryBuilderParquetTest, ExecuteWithControlStop) {
-  if (!std::filesystem::exists(employees_file())) {
-    GTEST_SKIP() << "Test file not found: " << employees_file();
-  }
-
-  auto builder_result = QueryBuilder::FromParquet(employees_file().string());
-  ASSERT_TRUE(builder_result.has_value());
-
-  int batch_count = 0;
-  auto status = std::move(builder_result.value())
-                    .ExecuteWithControl([&batch_count](RecordBatch /*batch*/) {
-                      ++batch_count;
-                      return false;  // Stop after first batch
-                    });
-
-  // Should be cancelled after first batch
-  EXPECT_FALSE(status.ok());
-  EXPECT_EQ(status.code(), ErrorCode::Cancelled);
-  EXPECT_EQ(batch_count, 1);
 }

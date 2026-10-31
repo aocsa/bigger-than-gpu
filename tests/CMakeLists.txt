@@ -53,25 +53,17 @@ add_executable(test_expr_builder test_expr_builder.cpp)
 target_link_libraries(test_expr_builder PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_expr_builder DISCOVERY_TIMEOUT 60)
 
-add_executable(test_generator test_generator.cpp)
-target_link_libraries(test_generator PRIVATE quest::quest GTest::gtest GTest::gtest_main)
-gtest_discover_tests(test_generator DISCOVERY_TIMEOUT 60)
-
 add_executable(test_query_builder test_query_builder.cpp)
 target_link_libraries(test_query_builder PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_query_builder DISCOVERY_TIMEOUT 60)
-
-add_executable(test_streaming_query_builder test_streaming_query_builder.cpp)
-target_link_libraries(test_streaming_query_builder PRIVATE quest::quest GTest::gtest GTest::gtest_main)
-gtest_discover_tests(test_streaming_query_builder DISCOVERY_TIMEOUT 60)
 
 add_executable(test_logical_plan test_logical_plan.cpp)
 target_link_libraries(test_logical_plan PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_logical_plan DISCOVERY_TIMEOUT 60)
 
-add_executable(test_physical_plan test_physical_plan.cpp)
-target_link_libraries(test_physical_plan PRIVATE quest::quest GTest::gtest GTest::gtest_main)
-gtest_discover_tests(test_physical_plan DISCOVERY_TIMEOUT 60)
+add_executable(test_physical_expr test_physical_expr.cpp)
+target_link_libraries(test_physical_expr PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_physical_expr DISCOVERY_TIMEOUT 60)
 
 add_executable(test_query_integration test_query_integration.cpp)
 target_link_libraries(test_query_integration PRIVATE quest::quest GTest::gtest GTest::gtest_main)

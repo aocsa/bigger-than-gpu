@@ -83,7 +83,7 @@ TEST(BindableScanTest, ReadsFewerColumns) {
   const auto path = EmployeesParquet().string();
 
   // Full scan tells us the source column count.
-  ASSERT_OK_AND_ASSIGN(auto all_batches, QueryBuilder::FromParquet(path).value().ExecuteCollect());
+  ASSERT_OK_AND_ASSIGN(auto all_batches, QueryBuilder::FromParquet(path).value().ExecuteOnGraph());
   ASSERT_FALSE(all_batches.empty());
   const std::size_t source_columns = all_batches.front().num_columns();
   ASSERT_GT(source_columns, 1U);
@@ -159,7 +159,7 @@ TEST(BindableScanTest, OutputSchemaIsProjected) {
   EXPECT_EQ(batches.front().num_columns(), 1U);
 }
 
-TEST(BindableScanTest, ParityWithUnfoldedCallback) {
+TEST(BindableScanTest, ReorderedFoldReturnsExpectedRows) {
   if (!std::filesystem::exists(EmployeesParquet())) {
     GTEST_SKIP() << "missing " << EmployeesParquet();
   }
@@ -167,12 +167,17 @@ TEST(BindableScanTest, ParityWithUnfoldedCallback) {
 
   ASSERT_OK_AND_ASSIGN(auto graph_batches,
                        QueryBuilder::FromParquet(path).value().Select({"name", "id"}).ExecuteOnGraph());
-  ASSERT_OK_AND_ASSIGN(auto callback_batches,
-                       QueryBuilder::FromParquet(path).value().Select({"name", "id"}).ExecuteCollect());
 
-  EXPECT_EQ(TotalRows(graph_batches), TotalRows(callback_batches));
+  EXPECT_EQ(TotalRows(graph_batches), 100000U);
   ASSERT_FALSE(graph_batches.empty());
-  ASSERT_FALSE(callback_batches.empty());
-  EXPECT_EQ(graph_batches.front().num_columns(), callback_batches.front().num_columns());
-  EXPECT_EQ(graph_batches.front().num_columns(), 2U);
+  const auto& first = graph_batches.front();
+  const auto& last = graph_batches.back();
+  ASSERT_EQ(first.num_columns(), 2U);
+  EXPECT_EQ(first.schema().field(0).name, "name");
+  EXPECT_EQ(first.schema().field(1).name, "id");
+  EXPECT_EQ(std::get<std::string>(first.column(0).GetValue(0)), "Nscgvnttbc");
+  EXPECT_EQ(std::get<int64_t>(first.column(1).GetValue(0)), 1);
+  ASSERT_GT(last.num_rows(), 0U);
+  EXPECT_EQ(std::get<std::string>(last.column(0).GetValue(last.num_rows() - 1)), "Bpqguwmolp");
+  EXPECT_EQ(std::get<int64_t>(last.column(1).GetValue(last.num_rows() - 1)), 100000);
 }

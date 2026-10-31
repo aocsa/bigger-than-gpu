@@ -203,5 +203,3 @@ static_assert(LiteralValue<double>);
 static_assert(LiteralValue<bool>);
 static_assert(LiteralValue<std::string>);
 static_assert(!LiteralValue<std::vector<int>>);
-static_assert(BatchCallback<std::function<void(RecordBatch)>>);
-static_assert(BatchCallbackWithControl<std::function<bool(RecordBatch)>>);

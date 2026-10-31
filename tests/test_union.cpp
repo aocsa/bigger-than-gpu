@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// @file test_union.cpp
-/// @brief Phase 2.7 Stage F2: Union logical/physical/operator + multi-input
+/// @brief Phase 2.7 Stage F2: Union logical/operator + multi-input
 ///        named-port drain end-to-end.
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -16,7 +17,6 @@
 #include "quest/cache/data_block.hpp"
 #include "quest/execution/graph_builder.hpp"
 #include "quest/logical_plan/logical_plan.hpp"
-#include "quest/physical_plan/physical_plan.hpp"
 #include "quest/taskflow/meta_pipeline.hpp"
 #include "quest/taskflow/operators/union_operator.hpp"
 #include "quest/tests/utils.hpp"
@@ -42,32 +42,6 @@ namespace {
   return total;
 }
 
-/// @brief Stub physical source that emits a fixed list of batches (one-shot).
-class VectorSourceExec : public PhysicalPlan {
- public:
-  VectorSourceExec(Schema schema, std::vector<RecordBatch> batches)
-      : schema_(std::move(schema)), batches_(std::move(batches)) {}
-
-  [[nodiscard]] Schema schema() const override { return schema_; }
-  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override { return {}; }
-
-  [[nodiscard]] Status Execute(const ResultCallback& callback) override {
-    for (auto& batch : batches_) {
-      if (!callback(std::move(batch))) {
-        break;
-      }
-    }
-    batches_.clear();
-    return Status::OK();
-  }
-
-  [[nodiscard]] std::string ToString() const override { return "VectorSourceExec"; }
-
- private:
-  Schema schema_;
-  std::vector<RecordBatch> batches_;
-};
-
 /// @brief Finds the single pipeline whose sink is the given operator type.
 [[nodiscard]] const Pipeline* FindPipelineBySinkType(const std::vector<PipelinePtr>& pipelines,
                                                      OperatorType type) {
@@ -77,6 +51,17 @@ class VectorSourceExec : public PhysicalPlan {
     }
   }
   return nullptr;
+}
+
+/// @brief Flattens the single Int64 column of @p batches in emission order.
+[[nodiscard]] std::vector<int64_t> Int64Column(const std::vector<RecordBatch>& batches) {
+  std::vector<int64_t> values;
+  for (const auto& batch : batches) {
+    for (std::size_t i = 0; i < batch.num_rows(); ++i) {
+      values.push_back(std::get<int64_t>(batch.column(0).GetValue(i)));
+    }
+  }
+  return values;
 }
 
 }  // namespace
@@ -138,56 +123,6 @@ TEST(UnionOperatorTest, ContractAndPassthrough) {
 }
 
 // =============================================================================
-// Physical UnionAllExec
-// =============================================================================
-
-TEST(UnionExecTest, ConcatenatesLeftThenRight) {
-  auto left_batch = MakeTestRecordBatch(3);
-  auto right_batch = MakeTestRecordBatch(5);
-  auto left =
-      std::make_unique<VectorSourceExec>(left_batch.schema(), std::vector<RecordBatch>{left_batch});
-  auto right = std::make_unique<VectorSourceExec>(right_batch.schema(),
-                                                  std::vector<RecordBatch>{right_batch});
-  UnionAllExec union_all(std::move(left), std::move(right));
-
-  std::vector<std::size_t> sizes;
-  ASSERT_OK(union_all.Execute([&](RecordBatch b) {
-    sizes.push_back(b.num_rows());
-    return true;
-  }));
-  ASSERT_EQ(sizes.size(), 2U);
-  EXPECT_EQ(sizes[0], 3U);  // left first
-  EXPECT_EQ(sizes[1], 5U);  // then right
-  EXPECT_EQ(union_all.ToString(), "UnionAllExec");
-}
-
-TEST(UnionExecTest, CreatePhysicalPlanBuildsUnionAllExec) {
-  if (!std::filesystem::exists(EmployeesParquet())) {
-    GTEST_SKIP() << "missing " << EmployeesParquet();
-  }
-  auto plan = QueryBuilder::FromParquet(EmployeesParquet().string())
-                  .value()
-                  .UnionAll(QueryBuilder::FromParquet(EmployeesParquet().string()).value())
-                  .BuildLogicalPlan();
-  ASSERT_OK_AND_ASSIGN(auto physical, CreatePhysicalPlan(*plan));
-  EXPECT_NE(dynamic_cast<UnionAllExec*>(physical.get()), nullptr);
-}
-
-TEST(UnionExecTest, SchemaMismatchRejectedByPhysicalPlan) {
-  if (!std::filesystem::exists(EmployeesParquet())) {
-    GTEST_SKIP() << "missing " << EmployeesParquet();
-  }
-  // Left projects one column; right keeps the full schema → mismatch.
-  auto plan = QueryBuilder::FromParquet(EmployeesParquet().string())
-                  .value()
-                  .Select({"id"})
-                  .UnionAll(QueryBuilder::FromParquet(EmployeesParquet().string()).value())
-                  .BuildLogicalPlan();
-  auto physical = CreatePhysicalPlan(*plan);
-  EXPECT_FALSE(physical.has_value());
-}
-
-// =============================================================================
 // Gate + shape
 // =============================================================================
 
@@ -239,18 +174,33 @@ TEST(UnionE2ETest, GraphRowCountIsSumOfInputs) {
     GTEST_SKIP() << "missing " << EmployeesParquet();
   }
   const auto path = EmployeesParquet().string();
-
-  ASSERT_OK_AND_ASSIGN(auto one, QueryBuilder::FromParquet(path).value().ExecuteCollect());
-  const auto single_rows = TotalRows(one);
+  constexpr std::size_t kSingleRows = 100000;
 
   ASSERT_OK_AND_ASSIGN(auto graph_batches, QueryBuilder::FromParquet(path)
                                                .value()
                                                .UnionAll(QueryBuilder::FromParquet(path).value())
                                                .ExecuteOnGraph());
-  EXPECT_EQ(TotalRows(graph_batches), 2 * single_rows);
+  EXPECT_EQ(TotalRows(graph_batches), 2 * kSingleRows);
 }
 
-TEST(UnionE2ETest, GraphParityWithCallbackEngine) {
+TEST(UnionE2ETest, ConcatenatesLeftThenRight) {
+  if (!std::filesystem::exists(EmployeesParquet())) {
+    GTEST_SKIP() << "missing " << EmployeesParquet();
+  }
+  const auto path = EmployeesParquet().string();
+
+  ASSERT_OK_AND_ASSIGN(
+      auto graph_batches,
+      QueryBuilder::FromParquet(path)
+          .value()
+          .Select({"id"})
+          .Limit(3)
+          .UnionAll(QueryBuilder::FromParquet(path).value().Select({"id"}).Limit(5))
+          .ExecuteOnGraph());
+  EXPECT_EQ(Int64Column(graph_batches), (std::vector<int64_t>{1, 2, 3, 1, 2, 3, 4, 5}));
+}
+
+TEST(UnionE2ETest, SelectUnionReturnsEveryRowOfBothInputs) {
   if (!std::filesystem::exists(EmployeesParquet())) {
     GTEST_SKIP() << "missing " << EmployeesParquet();
   }
@@ -262,11 +212,13 @@ TEST(UnionE2ETest, GraphParityWithCallbackEngine) {
                            .Select({"id"})
                            .UnionAll(QueryBuilder::FromParquet(path).value().Select({"id"}))
                            .ExecuteOnGraph());
-  ASSERT_OK_AND_ASSIGN(auto callback_batches,
-                       QueryBuilder::FromParquet(path)
-                           .value()
-                           .Select({"id"})
-                           .UnionAll(QueryBuilder::FromParquet(path).value().Select({"id"}))
-                           .ExecuteCollect());
-  EXPECT_EQ(TotalRows(graph_batches), TotalRows(callback_batches));
+  ASSERT_FALSE(graph_batches.empty());
+  EXPECT_EQ(graph_batches.front().num_columns(), 1U);
+
+  // The file's ids are 1..100000 in row order: expect that run twice.
+  const auto ids = Int64Column(graph_batches);
+  ASSERT_EQ(ids.size(), 200000U);
+  for (std::size_t i = 0; i < ids.size(); ++i) {
+    ASSERT_EQ(ids[i], static_cast<int64_t>(i % 100000) + 1) << "row " << i;
+  }
 }

@@ -17,7 +17,7 @@
 ///   Test 2 (ManualAssemblyEndToEnd) — every layer explicit: logical plan
 ///     -> physical expressions -> operators -> Graph wiring ->
 ///     MetaPipeline::Build (shape asserted) -> PipelineExecutor ->
-///     collection, checked against the real fluent API as the oracle.
+///     collection, checked against the real fluent API and known row counts.
 ///
 /// Nothing here is the recommended way to run a query — that is exactly
 /// one line of QueryBuilder. This file exists to show what that line does.
@@ -32,9 +32,9 @@
 
 #include "quest/builder/query_builder.hpp"        // the oracle (fluent API)
 #include "quest/datasource/data_source.hpp"       // ParquetDataSource
+#include "quest/execution/graph_builder.hpp"      // CreatePhysicalExpr
 #include "quest/logical_plan/logical_expr.hpp"    // col(), lit(), gt()
 #include "quest/logical_plan/logical_plan.hpp"    // Scan, Selection, Projection
-#include "quest/physical_plan/physical_plan.hpp"  // CreatePhysicalExpr
 #include "quest/taskflow/graph_builder.hpp"       // GraphBuilder (Phase 2.5 D3)
 #include "quest/taskflow/meta_pipeline.hpp"       // MetaPipeline::Build
 #include "quest/taskflow/operators/collector_operator.hpp"
@@ -56,6 +56,7 @@ namespace {
 }
 
 constexpr double kSalaryThreshold = 50000.0;
+constexpr std::size_t kRowsAboveThreshold = 90966;  // of 100000 rows in the file
 const std::vector<std::string> kSelectedColumns = {"id", "name", "salary"};
 
 }  // namespace
@@ -140,13 +141,14 @@ TEST(ManualQueryWalkthroughTest, RolesOnlyNoEngine) {
 
   EXPECT_GT(batches_seen, 0U);
   EXPECT_GT(collector.total_rows(), 0U);
+  EXPECT_EQ(collector.total_rows(), kRowsAboveThreshold);
 
   // Same rows as the real query — the loop above IS the query.
   ASSERT_OK_AND_ASSIGN(auto oracle, QueryBuilder::FromParquet(EmployeesParquet().string())
                                         .value()
                                         .Where(Col("salary") > Lit(kSalaryThreshold))
                                         .Select({"id", "name", "salary"})
-                                        .ExecuteCollect());
+                                        .ExecuteOnGraph());
   std::size_t oracle_rows = 0;
   for (const auto& batch : oracle) {
     oracle_rows += batch.num_rows();
@@ -272,7 +274,13 @@ TEST(ManualQueryWalkthroughTest, ManualAssemblyEndToEnd) {
                                                 .value()
                                                 .Where(Col("salary") > Lit(kSalaryThreshold))
                                                 .Select({"id", "name", "salary"})
-                                                .ExecuteCollect());
+                                                .ExecuteOnGraph());
+
+  std::size_t manual_rows = 0;
+  for (const auto& batch : manual_batches) {
+    manual_rows += batch.num_rows();
+  }
+  EXPECT_EQ(manual_rows, kRowsAboveThreshold);
 
   ASSERT_EQ(manual_batches.size(), oracle_batches.size());
   for (std::size_t i = 0; i < manual_batches.size(); ++i) {
