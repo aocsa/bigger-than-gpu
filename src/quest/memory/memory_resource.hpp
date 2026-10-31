@@ -123,7 +123,7 @@ struct DiskMemoryConfig {
   std::filesystem::path base_path{"/tmp/quest_cache"};  ///< Base directory for cache files
   std::size_t max_bytes{0};                             ///< 0 = use available disk space
   double saturation_threshold{0.90};                    ///< Threshold for disk full warning
-  bool cleanup_on_destroy{true};                        ///< Remove cache files on destruction
+  bool cleanup_on_destroy{true};                        ///< Remove this instance's spill files on destruction
 };
 
 /// @brief Memory resource for Disk storage tier
@@ -157,6 +157,7 @@ class DiskMemoryResource final : public MemoryResource {
 
  private:
   DiskMemoryConfig config_;
+  std::filesystem::path spill_dir_;
   mutable std::mutex mutex_;
   std::atomic<std::size_t> used_bytes_{0};
   std::atomic<std::size_t> peak_bytes_{0};

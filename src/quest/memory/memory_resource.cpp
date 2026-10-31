@@ -5,9 +5,10 @@
 #include <fstream>
 #include <stdexcept>
 
+#include <unistd.h>
+
 #ifdef __linux__
 #include <sys/statvfs.h>
-#include <unistd.h>
 #endif
 
 namespace quest::memory {
@@ -107,9 +108,18 @@ void CPUMemoryResource::record_deallocation(std::size_t bytes) {
 // DiskMemoryResource Implementation
 // =============================================================================
 
+namespace {
+// Several resources (queries, processes) may share one base_path; each spills into and cleans
+// up only its own subdirectory.
+std::filesystem::path unique_spill_dir(const std::filesystem::path& base_path) {
+    static std::atomic<std::uint64_t> next_instance{0};
+    return base_path / std::format("quest_{}_{}", ::getpid(), next_instance.fetch_add(1));
+}
+}  // namespace
+
 DiskMemoryResource::DiskMemoryResource(DiskMemoryConfig config)
-    : config_(std::move(config)) {
-    std::filesystem::create_directories(config_.base_path);
+    : config_(std::move(config)), spill_dir_(unique_spill_dir(config_.base_path)) {
+    std::filesystem::create_directories(spill_dir_);
     
     if (config_.max_bytes == 0) {
         config_.max_bytes = get_available_disk_space(config_.base_path);
@@ -119,8 +129,7 @@ DiskMemoryResource::DiskMemoryResource(DiskMemoryConfig config)
 DiskMemoryResource::~DiskMemoryResource() {
     if (config_.cleanup_on_destroy) {
         std::error_code ec;
-        std::filesystem::remove_all(config_.base_path, ec);
-        // Ignore errors during cleanup
+        std::filesystem::remove_all(spill_dir_, ec);
     }
 }
 
@@ -156,7 +165,7 @@ void DiskMemoryResource::set_saturation_threshold(double threshold) {
 std::filesystem::path DiskMemoryResource::generate_cache_path(std::string_view prefix) {
     std::uint64_t counter = file_counter_.fetch_add(1);
     auto filename = std::format("{}_{}.cache", prefix, counter);
-    return config_.base_path / filename;
+    return spill_dir_ / filename;
 }
 
 void DiskMemoryResource::record_file_created(

@@ -213,21 +213,22 @@ class DiskMemoryResourceTest : public ::testing::Test {
 TEST_F(DiskMemoryResourceTest, DefaultConstruction) {
   auto config = MakeConfig("test_disk_1");
 
+  std::filesystem::path spill_dir;
   {
     DiskMemoryResource resource(config);
 
     EXPECT_EQ(resource.tier(), MemoryTier::Disk);
     EXPECT_EQ(resource.name(), "DiskMemoryResource");
     EXPECT_EQ(resource.base_path(), config.base_path);
-    EXPECT_TRUE(std::filesystem::exists(config.base_path));
+    spill_dir = resource.generate_cache_path().parent_path();
+    EXPECT_TRUE(std::filesystem::exists(spill_dir));
 
     auto stats = resource.stats();
     EXPECT_GT(stats.total_bytes, 0U);
     EXPECT_EQ(stats.used_bytes, 0U);
   }
 
-  // After destruction with cleanup_on_destroy
-  EXPECT_FALSE(std::filesystem::exists(config.base_path));
+  EXPECT_FALSE(std::filesystem::exists(spill_dir));
 }
 
 TEST_F(DiskMemoryResourceTest, WithMaxBytes) {
@@ -255,7 +256,7 @@ TEST_F(DiskMemoryResourceTest, GenerateCachePath) {
   EXPECT_NE(path2, path3);
 
   // Paths should be in base directory
-  EXPECT_EQ(path1.parent_path(), config.base_path);
+  EXPECT_EQ(path1.parent_path().parent_path(), config.base_path);
 }
 
 TEST_F(DiskMemoryResourceTest, RecordFileOperations) {

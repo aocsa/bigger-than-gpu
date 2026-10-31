@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 #include "quest/memory/memory_resource.hpp"
@@ -188,20 +189,22 @@ TEST(DiskMemoryResourceTest, DefaultConstruction) {
   config.base_path = std::filesystem::temp_directory_path() / "test_disk_resource_1";
   config.cleanup_on_destroy = true;
 
+  std::filesystem::path spill_dir;
   {
     DiskMemoryResource resource(config);
 
     EXPECT_EQ(resource.tier(), MemoryTier::Disk);
     EXPECT_EQ(resource.name(), "DiskMemoryResource");
     EXPECT_EQ(resource.base_path(), config.base_path);
-    EXPECT_TRUE(std::filesystem::exists(config.base_path));
+    spill_dir = resource.generate_cache_path().parent_path();
+    EXPECT_TRUE(std::filesystem::exists(spill_dir));
 
     auto stats = resource.stats();
     EXPECT_GT(stats.total_bytes, 0U);
     EXPECT_EQ(stats.used_bytes, 0U);
-  }  // Resource destroyed, should clean up
+  }
 
-  EXPECT_FALSE(std::filesystem::exists(config.base_path));
+  EXPECT_FALSE(std::filesystem::exists(spill_dir));
 }
 
 TEST(DiskMemoryResourceTest, WithConfig) {
@@ -233,8 +236,24 @@ TEST(DiskMemoryResourceTest, GenerateCachePath) {
   EXPECT_NE(path1, path2);
   EXPECT_NE(path2, path3);
 
-  // Paths should be in the base directory
-  EXPECT_EQ(path1.parent_path(), config.base_path);
+  EXPECT_EQ(path1.parent_path().parent_path(), config.base_path);
+}
+
+TEST(DiskMemoryResourceTest, InstancesSharingBasePathDoNotClobberEachOther) {
+  DiskMemoryConfig config;
+  config.base_path = std::filesystem::temp_directory_path() / "test_disk_resource_shared";
+  config.cleanup_on_destroy = true;
+
+  DiskMemoryResource survivor(config);
+  const auto survivor_file = survivor.generate_cache_path("spill");
+  std::ofstream(survivor_file) << "data";
+
+  {
+    DiskMemoryResource other(config);
+    EXPECT_NE(other.generate_cache_path("spill"), survivor.generate_cache_path("spill"));
+  }
+
+  EXPECT_TRUE(std::filesystem::exists(survivor_file));
 }
 
 TEST(DiskMemoryResourceTest, RecordFileOperations) {

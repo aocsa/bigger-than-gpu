@@ -120,7 +120,10 @@ TEST(HostMemoryBlockTest, RecordBatchIntegrity) {
 class DiskBlockTest : public ::testing::Test {
  protected:
   void SetUp() override {
-    temp_dir_ = std::filesystem::temp_directory_path() / "test_cache_data";
+    // ctest runs each case in its own process, concurrently; a shared dir would be torn down
+    // under a sibling.
+    temp_dir_ = std::filesystem::temp_directory_path() / "test_cache_data" /
+                ::testing::UnitTest::GetInstance()->current_test_info()->name();
     std::filesystem::create_directories(temp_dir_);
   }
 
