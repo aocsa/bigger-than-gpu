@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cassert>
 #include <memory>
 #include <sstream>
@@ -85,10 +86,10 @@ class RecordBatch {
 
   const auto& schema = batches[0]->schema();
   const size_t num_cols = schema.num_fields();
-  for (size_t i = 1; i < batches.size(); ++i) {
-    if (batches[i]->schema().num_fields() != num_cols) {
-      return Error::SchemaError("Concatenate schema mismatch");
-    }
+  if (std::ranges::any_of(batches, [&](const RecordBatch* batch) {
+        return batch->schema().num_fields() != num_cols;
+      })) {
+    return Error::SchemaError("Concatenate schema mismatch");
   }
 
   std::vector<ColumnVectorPtr> columns;

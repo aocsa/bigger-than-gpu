@@ -42,10 +42,6 @@ class RecordBatchSerializer {
   [[nodiscard]] static Result<RecordBatch> DeserializeFromFile(const std::string& filename);
 
  private:
-  static void WriteDataType(std::vector<uint8_t>& buffer, DataType type);
-
-  static Result<DataType> ReadDataType(const std::vector<uint8_t>& buffer, size_t& offset);
-
   static Status WriteColumn(std::vector<uint8_t>& buffer, const ColumnVector& column, size_t num_rows);
 
 

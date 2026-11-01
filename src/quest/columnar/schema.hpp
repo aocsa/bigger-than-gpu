@@ -72,8 +72,7 @@ class Schema {
   }
 
   std::optional<size_t> GetFieldIndex(const std::string& name) const {
-    auto it = std::ranges::find_if(
-        fields_, [&name](const Field& f) { return f.name == name; });
+    auto it = std::ranges::find(fields_, name, &Field::name);
     if (it != fields_.end()) {
       return static_cast<size_t>(std::distance(fields_.begin(), it));
     }

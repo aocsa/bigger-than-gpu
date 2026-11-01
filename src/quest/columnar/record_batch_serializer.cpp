@@ -16,6 +16,9 @@ namespace quest::columnar {
 
 namespace {
 
+// Spill writes a DataType as its three bytes: id, precision, scale.
+static_assert(sizeof(DataType) == 3 && std::is_trivially_copyable_v<DataType>);
+
 template <typename T>
 void WriteValue(std::vector<uint8_t>& buffer, const T& value) {
   const uint8_t* ptr = reinterpret_cast<const uint8_t*>(&value);
@@ -57,7 +60,7 @@ Result<std::vector<uint8_t>> RecordBatchSerializer::Serialize(const RecordBatch&
     WriteValue(buffer, name_len);
     buffer.insert(buffer.end(), field.name.begin(), field.name.end());
 
-    WriteDataType(buffer, field.data_type);
+    WriteValue(buffer, field.data_type);
 
     uint8_t rep = static_cast<uint8_t>(field.repetition);
     WriteValue(buffer, rep);
@@ -106,8 +109,9 @@ Result<RecordBatch> RecordBatchSerializer::Deserialize(const std::vector<uint8_t
     std::string name(buffer.begin() + offset, buffer.begin() + offset + *name_len);
     offset += *name_len;
 
-    auto data_type = ReadDataType(buffer, offset);
+    auto data_type = ReadValue<DataType>(buffer, offset);
     if (!data_type) return std::unexpected(data_type.error());
+    if (data_type->id > TypeId::kDecimal) return Error::Invalid("Unknown type index");
 
     auto rep = ReadValue<uint8_t>(buffer, offset);
     if (!rep) return std::unexpected(rep.error());
@@ -157,26 +161,6 @@ Result<RecordBatch> RecordBatchSerializer::DeserializeFromFile(const std::string
   }
 
   return Deserialize(buffer);
-}
-
-void RecordBatchSerializer::WriteDataType(std::vector<uint8_t>& buffer, DataType type) {
-  WriteValue(buffer, std::to_underlying(type.id));
-  WriteValue(buffer, type.precision);
-  WriteValue(buffer, type.scale);
-}
-
-Result<DataType> RecordBatchSerializer::ReadDataType(const std::vector<uint8_t>& buffer,
-                                                     size_t& offset) {
-  auto tag = ReadValue<std::underlying_type_t<TypeId>>(buffer, offset);
-  if (!tag) return std::unexpected(tag.error());
-  if (*tag > std::to_underlying(TypeId::kDecimal)) {
-    return Error::Invalid("Unknown type index");
-  }
-  auto precision = ReadValue<uint8_t>(buffer, offset);
-  if (!precision) return std::unexpected(precision.error());
-  auto scale = ReadValue<uint8_t>(buffer, offset);
-  if (!scale) return std::unexpected(scale.error());
-  return DataType{static_cast<TypeId>(*tag), *precision, *scale};
 }
 
 Status RecordBatchSerializer::WriteColumn(std::vector<uint8_t>& buffer, const ColumnVector& column,
