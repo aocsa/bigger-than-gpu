@@ -1876,10 +1876,11 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 <header>
   <h1>Typed Arrow-Style Columns in QUEST</h1>
   <doc-changes new="6" changed="52"></doc-changes>
-  <details class="thread"><summary>Why · 3 requests</summary>
+  <details class="thread"><summary>Why · 4 requests</summary>
     <doc-quote via="prompt" from="the user">instead of using variant, see the image, we can make a more robust implementation more like arrow but simpler with support of NULLs, we want to be performant but we don't want a large implementation we want a cleanest implementation with things like type dispatching and modern c++23 features. 1. Primitive &amp; Numeric Types. don't include decimal. 2. Binary &amp; String Types. Only string type 3. Temporal Types: Date and Timestamp only 4. Nested &amp; Complex Types. Dont include</doc-quote>
     <doc-quote via="prompt" from="the user">do we have enought data type support to run these queries. TPC-H Q1, Q3, Q5, Q6, Q10 and Q12</doc-quote>
     <doc-quote via="prompt" from="the user">dont support decimal yet, just use float64</doc-quote>
+    <doc-quote via="prompt" from="the user">add support for Decimal for support tpch queries</doc-quote>
   </details>
 </header>
 
@@ -1951,7 +1952,7 @@ constexpr decltype(auto) VisitType(DataType type, F&& f) {
 
     <doc-claim at="src/quest/columnar/column_vector.hpp:243">
       <p><b>column_vector.hpp:243</b> · AppendColumnValues()</p>
-      <doc-code src="src/quest/columnar/column_vector.hpp" lines="243-268" hl="252" file="src/quest/columnar/column_vector.hpp" start="243" sha="c76c5e7"><script type="text/plain">[[nodiscard]] inline Status AppendColumnValues(ColumnVector& dest, const ColumnVector& src) {
+      <doc-code src="src/quest/columnar/column_vector.hpp" ref="be19376" lines="243-268" hl="252" file="src/quest/columnar/column_vector.hpp" start="243" sha="be19376"><script type="text/plain">[[nodiscard]] inline Status AppendColumnValues(ColumnVector& dest, const ColumnVector& src) {
   return std::visit(
       [&dest, &src](const auto& type_tag) -> Status {
         using TypeTag = std::decay_t<decltype(type_tag)>;
@@ -2033,18 +2034,12 @@ constexpr decltype(auto) VisitType(DataType type, F&& f) {
 // A Timestamp compares only with a Timestamp, like Date32 today. No arithmetic.
 </script>
     </doc-code>
-    <doc-ask id="ts-unit">
-      <p>What does a Timestamp store?</p>
-      <label><input type="radio" name="ts-unit" value="micros" checked> Microseconds only, no time zone <small>same as DuckDB TIMESTAMP</small></label>
-      <label><input type="radio" name="ts-unit" value="unit"> A unit parameter: s, ms, us or ns <small>DataType becomes a struct</small></label>
-      <label><input type="radio" name="ts-unit" value="tz"> A unit and a time zone <small>needs time zone rules; much larger</small></label>
-    </doc-ask>
-    <div data-if="ts-unit!=micros"><doc-note tone="warn">Then <code>DataType</code> becomes <code>struct { DataType id; TimeUnit unit; }</code> and each comparison of types changes.</doc-note></div>
+    <doc-note tone="ok"><strong>Decided</strong> Microseconds only, no time zone.</doc-note>
   </doc-claim>
 
   <doc-claim>
     <p>The type set has no unsigned integer types.</p>
-    <doc-code src="src/quest/io/parquet/metadata.cpp" lines="28-35" hl="31-32" file="src/quest/io/parquet/metadata.cpp" start="28" sha="c76c5e7+wt"><script type="text/plain">    case 19: return LogicalType::kJson;
+    <doc-code src="src/quest/io/parquet/metadata.cpp" ref="be19376" lines="28-35" hl="31-32" file="src/quest/io/parquet/metadata.cpp" start="28" sha="be19376"><script type="text/plain">    case 19: return LogicalType::kJson;
     case 20: return LogicalType::kBson;
     default:
       if (converted >= 11 && converted <= 18) {  // UINT_8 .. INT_64
@@ -2054,11 +2049,7 @@ constexpr decltype(auto) VisitType(DataType type, F&& f) {
   }</script>
       <doc-pin line="31" tone="warn" title="The sign is lost here today">A UINT_32 above 2^31 reads as negative.</doc-pin>
     </doc-code>
-    <doc-ask id="unsigned">
-      <p>What happens to Parquet unsigned integer columns?</p>
-      <label><input type="radio" name="unsigned" value="widen" checked> Widen them: UINT_8/16 to Int32, UINT_32 to Int64 <small>UINT_64 columns fail with TypeError</small></label>
-      <label><input type="radio" name="unsigned" value="add"> Add UInt8, UInt16, UInt32 and UInt64 <small>4 more types; more promotion rules</small></label>
-    </doc-ask>
+    <doc-note tone="ok"><strong>Decided</strong> UINT_8/16 read as Int32, UINT_32 widens to Int64, UINT_64 fails.</doc-note>
   </doc-claim>
 
   <doc-claim>
@@ -2087,42 +2078,113 @@ constexpr decltype(auto) VisitType(DataType type, F&& f) {
 </script>
       <doc-pin line="93" title="Returns Result now"><code>LeafDataType()</code> at metadata.cpp:78 also returns a Result.</doc-pin>
     </doc-code>
-    <doc-ask id="parquet-types">
-      <p>What happens to Parquet BYTE_ARRAY, INT96 and FIXED_LEN_BYTE_ARRAY?</p>
-      <label><input type="radio" name="parquet-types" value="map" checked> String, Timestamp and an error <small>FLBA holds Decimal and UUID, both out of scope</small></label>
-      <label><input type="radio" name="parquet-types" value="string"> All three become String with raw bytes <small>as today; INT96 dates read as 12-byte junk</small></label>
-      <label><input type="radio" name="parquet-types" value="reject"> All three fail with TypeError <small>BYTE_ARRAY without a UTF8 annotation also fails</small></label>
-    </doc-ask>
+    <doc-note tone="ok"><strong>Decided</strong> BYTE_ARRAY is String, INT96 is Timestamp, FIXED_LEN_BYTE_ARRAY fails.</doc-note>
 
     <doc-claim at="src/quest/io/parquet/column_reader.cpp:464">
       <p><b>column_reader.cpp:464</b> · DecodeInt96Values()</p>
-      <doc-code src="src/quest/io/parquet/column_reader.cpp" lines="464-489" hl="483-484" file="src/quest/io/parquet/column_reader.cpp" start="464" sha="c76c5e7+wt"><script type="text/plain">
-Status ColumnReader::DecodeFixedLenByteArrayValues(
+      <doc-code src="src/quest/io/parquet/column_reader.cpp" ref="be19376" lines="464-489" hl="483-484" file="src/quest/io/parquet/column_reader.cpp" start="464" sha="be19376"><script type="text/plain">Status ColumnReader::DecodeInt96Values(
     Encoding /*encoding*/, std::span<const uint8_t> data, size_t num_values,
     const std::vector<int32_t>& def_levels, ColumnVector* column) {
+  // INT96 is typically used for timestamps, treat as binary.
   auto* str_col = dynamic_cast<StringColumnVector*>(column);
   if (!str_col) {
-    return Error::TypeError("Column type mismatch for fixed len byte array");
+    return Error::TypeError("Column type mismatch for INT96");
   }
 
-  int32_t type_length = field_.type_length.value_or(0);
+  constexpr size_t INT96_SIZE = 12;
   size_t pos = 0;
 
   return ProcessWithDefLevels(
       num_values, def_levels,
-      [&data, &pos, type_length]() -> Result<std::string> {
-        if (pos + type_length > data.size()) {
-          return std::unexpected(Error::PageDecodeError(
-              "Not enough data for fixed len byte array"));
+      [&data, &pos]() -> Result<std::string> {
+        if (pos + INT96_SIZE > data.size()) {
+          return std::unexpected(
+              Error::PageDecodeError("Not enough data for INT96"));
         }
         std::string value(reinterpret_cast<const char*>(data.data() + pos),
-                          type_length);
-        pos += type_length;
+                          INT96_SIZE);
+        pos += INT96_SIZE;
         return value;
       },
       [str_col](std::string val) { str_col->Append(std::move(val)); },
       [str_col]() { str_col->AppendNull(); });</script>
         <doc-pin line="483" title="Becomes a Timestamp">Nanos of the day, then the Julian day.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>A <code>Decimal</code> is an int64 with a precision and scale, typed as DuckDB types it.</p>
+    <doc-mock frame="terminal" title="duckdb · typeof() on TPC-H DECIMAL(15,2) columns" w="480"><template>1 - l_discount                       DECIMAL(16,2)
+l_extendedprice * (1 - l_discount)   DECIMAL(18,4)
+  ... * (1 + l_tax)                  DECIMAL(18,6)
+l_extendedprice / l_quantity         DOUBLE
+0.05                                 DECIMAL(3,2)
+SUM(l_extendedprice)                 <span class="y">DECIMAL(38,2)</span>
+AVG(l_extendedprice)                 DOUBLE
+MIN(l_extendedprice)                 DECIMAL(15,2)</template></doc-mock>
+    <doc-ask id="decimal-sum">
+      <p>What does SUM of a Decimal produce?</p>
+      <label><input type="radio" name="decimal-sum" value="int64" checked> DECIMAL(18,s) in an int64; overflow is an error <small>one storage type; Q1 fits up to approximately SF 170</small></label>
+      <label><input type="radio" name="decimal-sum" value="int128"> DECIMAL(38,s) in an int128, as DuckDB <small>a second storage type and its arithmetic</small></label>
+    </doc-ask>
+
+    <doc-claim at="src/quest/columnar/types.hpp:35">
+      <p><b>types.hpp:35</b> · DataType</p>
+      <doc-code title="columnar/types.hpp · sketch" lang="cpp" hl="5-10">
+<script type="text/plain">
+// The spill tag: append only.
+enum class TypeId : std::uint8_t {
+  kBool, kInt8, kInt16, kInt32, kInt64, kFloat, kDouble,
+  kString, kDate32, kTimestamp, kDecimal,
+};
+
+/// @brief A type: the id, plus precision (at most 18) and scale for kDecimal.
+struct DataType {
+  TypeId id;
+  std::uint8_t precision = 0;
+  std::uint8_t scale = 0;
+  // One per id, so DataType::kInt32 code still compiles.
+  static const DataType kBool, kInt32, kString;  // …
+  [[nodiscard]] static constexpr DataType Decimal(std::uint8_t p, std::uint8_t s);
+  constexpr bool operator==(const DataType&) const = default;
+};
+
+struct Decimal64 {  // the CType of kDecimal: unscaled / 10^scale
+  std::int64_t unscaled;
+  auto operator<=>(const Decimal64&) const = default;
+};
+</script>
+        <doc-pin line="12" title="VisitType switches on id">TypeTraits are keyed by TypeId; the precision and scale ride along in the DataType.</doc-pin>
+      </doc-code>
+    </doc-claim>
+
+    <doc-claim at="src/quest/plan/binary_op.hpp:69">
+      <p><b>binary_op.hpp:69</b> · BinaryResultType()</p>
+      <doc-code title="plan/binary_op.hpp · sketch of the Decimal rules" lang="cpp">
+<script type="text/plain">
+// Decimal(p1, s1) op Decimal(p2, s2).
+// An integer operand is Decimal(10 or 19, 0) first.
+//   + and -  : scale max(s1, s2),
+//              precision min(18, max(p1 - s1, p2 - s2) + scale + 1)
+//   *        : scale s1 + s2 (an error above 18), precision min(18, p1 + p2)
+//   /        : Double
+//   compare  : both rescaled to max(s1, s2)
+//   with a Float or Double operand: Double
+// Every int64 step checks for overflow and fails with OutOfRange,
+// as integers do today.
+</script>
+      </doc-code>
+    </doc-claim>
+
+    <doc-claim at="src/quest/io/parquet/metadata.cpp:886">
+      <p><b>metadata.cpp:886</b> · ResolveLeafType()</p>
+      <doc-code src="src/quest/io/parquet/metadata.cpp" lines="884-888" hl="886-887" file="src/quest/io/parquet/metadata.cpp" start="884" sha="cf8d379"><script type="text/plain">  const bool is_int64 = elem.type == PhysicalType::kInt64;
+  // QUEST has no Decimal type: an INT32/INT64 DECIMAL reads as Double (value / 10^scale).
+  if (logical == LogicalType::kDecimal) {
+    return LeafType{DataType::kDouble, Conversion::kDecimal, elem.scale.value_or(0)};
+  }</script>
+        <doc-pin line="887" title="Becomes Decimal(p, s)">INT32 widens to int64. Precision above 18 fails, like FIXED_LEN_BYTE_ARRAY.</doc-pin>
       </doc-code>
     </doc-claim>
   </doc-claim>
@@ -2178,7 +2240,7 @@ using ColumnVectorPtr = std::shared_ptr<const ColumnVector>;
 
     <doc-claim at="src/quest/columnar/column_vector.hpp:60">
       <p><b>column_vector.hpp:60</b> · class ColumnVector</p>
-      <doc-code src="src/quest/columnar/column_vector.hpp" lines="60-68" hl="65" file="src/quest/columnar/column_vector.hpp" start="60" sha="c76c5e7"><script type="text/plain">class ColumnVector {
+      <doc-code src="src/quest/columnar/column_vector.hpp" ref="be19376" lines="60-68" hl="65" file="src/quest/columnar/column_vector.hpp" start="60" sha="be19376"><script type="text/plain">class ColumnVector {
  public:
   virtual ~ColumnVector() = default;
 
@@ -2220,31 +2282,31 @@ class ColumnBuilder {
 
     <doc-claim at="src/quest/io/parquet/column_reader.cpp:294">
       <p><b>column_reader.cpp:294</b> · DecodeFixedWidthValues()</p>
-      <doc-code src="src/quest/io/parquet/column_reader.cpp" lines="293-317" hl="297,315-316" file="src/quest/io/parquet/column_reader.cpp" start="293" sha="c76c5e7+wt"><script type="text/plain">      return DecodeFixedLenByteArrayValues(encoding, data, num_values,
-                                           def_levels, column);
-    case PhysicalType::kInt96:
-      return DecodeInt96Values(encoding, data, num_values, def_levels,
-                               column);
-  }
-  return {};
-}
-
-Status ColumnReader::DecodeBooleanValues(
-    Encoding /*encoding*/, std::span<const uint8_t> data, size_t num_values,
+      <doc-code src="src/quest/io/parquet/column_reader.cpp" ref="be19376" lines="293-317" hl="297,315-316" file="src/quest/io/parquet/column_reader.cpp" start="293" sha="be19376"><script type="text/plain">template <typename T>
+Status ColumnReader::DecodeFixedWidthValues(
+    Encoding encoding, std::span<const uint8_t> data, size_t num_values,
     const std::vector<int32_t>& def_levels, ColumnVector* column) {
-  auto* typed_col = dynamic_cast<TypedColumnVector<bool>*>(column);
+  auto* typed_col = dynamic_cast<TypedColumnVector<T>*>(column);
   if (!typed_col) {
-    return Error::TypeError("Column type mismatch for boolean");
+    return Error::TypeError("Column type mismatch");
   }
 
-  PlainDecoder<bool> decoder;
+  bool use_dictionary = (encoding == Encoding::kPlainDictionary ||
+                         encoding == Encoding::kRleDictionary);
+
+  if (use_dictionary) {
+    return DecodeDictionaryValues<T>(data, num_values, def_levels, typed_col);
+  }
+
+  PlainDecoder<T> decoder;
   decoder.SetData(data);
-  decoder.SetNumValues(num_values);
 
   return ProcessWithDefLevels(
       num_values, def_levels,
       [&decoder]() { return decoder.ReadValue(); },
-      [typed_col](bool val) { typed_col->Append(val); },</script>
+      [typed_col](T val) { typed_col->Append(val); },
+      [typed_col]() { typed_col->AppendNull(); });
+}</script>
         <doc-pin line="297" title="The cast goes">The reader gets a <code>ColumnBuilder&lt;T&gt;&amp;</code>.</doc-pin>
       </doc-code>
     </doc-claim>
@@ -2262,16 +2324,12 @@ Status ColumnReader::DecodeBooleanValues(
 }
 </script>
     </doc-code>
-    <doc-ask id="validity">
-      <p>How does a column mark its null rows?</p>
-      <label><input type="radio" name="validity" value="bitmap" checked> A bitmap: 1 bit for each row, as in Arrow <small>8 times smaller; spill copies it as-is</small></label>
-      <label><input type="radio" name="validity" value="bytes"> A byte mask: 1 byte for each row <small>simpler loops; 8 times more memory</small></label>
-    </doc-ask>
+    <doc-note tone="ok"><strong>Decided</strong> A bitmap, 1 bit for each row, as in Arrow.</doc-note>
   </doc-claim>
 
   <doc-claim>
     <p>String offsets are 64-bit, because Sort and HashJoin concatenate all input.</p>
-    <doc-code src="src/quest/taskflow/operators/sort_operator.cpp" lines="72-80" hl="75" file="src/quest/taskflow/operators/sort_operator.cpp" start="72" sha="c76c5e7"><script type="text/plain">    hosts.push_back(std::move(*host));
+    <doc-code src="src/quest/taskflow/operators/sort_operator.cpp" ref="be19376" lines="72-80" hl="75" file="src/quest/taskflow/operators/sort_operator.cpp" start="72" sha="be19376"><script type="text/plain">    hosts.push_back(std::move(*host));
   }
   batches_.clear();
   auto merged = columnar::ConcatenateRecordBatches(inputs);
@@ -2307,7 +2365,7 @@ Status ColumnReader::DecodeBooleanValues(
 
     <doc-claim at="src/quest/columnar/record_batch_serializer.cpp:213">
       <p><b>record_batch_serializer.cpp:213</b> · WriteColumnValues()</p>
-      <doc-code src="src/quest/columnar/record_batch_serializer.cpp" lines="213-226" hl="222" file="src/quest/columnar/record_batch_serializer.cpp" start="213" sha="c76c5e7"><script type="text/plain">Status RecordBatchSerializer::WriteColumnValues(std::vector<uint8_t>& buffer,
+      <doc-code src="src/quest/columnar/record_batch_serializer.cpp" ref="be19376" lines="213-226" hl="222" file="src/quest/columnar/record_batch_serializer.cpp" start="213" sha="be19376"><script type="text/plain">Status RecordBatchSerializer::WriteColumnValues(std::vector<uint8_t>& buffer,
                                                 const ColumnVector& column, size_t num_rows) {
   const DataType& type = column.GetType();
 
@@ -2330,7 +2388,7 @@ Status ColumnReader::DecodeBooleanValues(
 <!-- ═════ 3 · KERNELS ═════ -->
 <doc-claim>
   <p>Kernels read typed views; no hot path makes a per-row <code>Value</code>.</p>
-  <doc-calls title="Hot paths" caption="Each red row reads a variant for each cell today.">
+  <doc-calls ref="be19376" title="Hot paths" caption="Each red row reads a variant for each cell today.">
 <script type="text/plain">
 ~ FilterRecordBatch(batch, expr)               @ src/quest/execution/kernels/batch_kernels.cpp:81
 -   mask_col.GetValue(i)                       @ src/quest/execution/kernels/batch_kernels.cpp:92
@@ -2353,7 +2411,7 @@ Status ColumnReader::DecodeBooleanValues(
 -   values.push_back(column.GetValue(row))     @ src/quest/taskflow/operators/sort_operator.cpp:91
 </script>
   
-<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:81" data-start="75" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:81" data-start="75" data-sha="be19376">
           return GatherTyped<std::string>(col, indices, columnar::StringType{});
         }
       },
@@ -2368,7 +2426,7 @@ Result<columnar::RecordBatch> FilterRecordBatch(
   }
 
 </script>
-<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:92" data-start="86" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:92" data-start="86" data-sha="be19376">
   }
 
   auto& mask_col = **mask_result;
@@ -2383,7 +2441,7 @@ Result<columnar::RecordBatch> FilterRecordBatch(
     }
   }
 </script>
-<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:53" data-start="47" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:53" data-start="47" data-sha="be19376">
       plan::physical::ColumnData{std::move(data)}, std::move(type),
       has_null ? std::move(validity) : std::vector<bool>{});
 }
@@ -2398,7 +2456,7 @@ std::shared_ptr<columnar::ColumnVector> GatherColumn(
         if constexpr (std::is_same_v<TypeTag, columnar::BoolType>) {
           return GatherTyped<bool>(col, indices, type_tag);
 </script>
-<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:26" data-start="20" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:26" data-start="20" data-sha="be19376">
   std::vector<T> data;
   data.reserve(indices.size());
   std::vector<bool> validity;
@@ -2413,7 +2471,7 @@ std::shared_ptr<columnar::ColumnVector> GatherColumn(
       // Binary and fixed-width byte types are carried as strings.
       if (std::holds_alternative<std::monostate>(val)) {
 </script>
-<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:16" data-start="10" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:16" data-start="10" data-sha="be19376">
 #include <variant>
 
 namespace quest::execution {
@@ -2428,7 +2486,7 @@ template <typename T>
   data.reserve(indices.size());
   std::vector<bool> validity;
 </script>
-<script type="text/plain" data-excerpt="src/quest/plan/physical/expressions/physical_expr.cpp:415" data-start="409" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/plan/physical/expressions/physical_expr.cpp:415" data-start="409" data-sha="be19376">
 }
 
 // =============================================================================
@@ -2443,7 +2501,7 @@ Result<std::shared_ptr<ColumnVector>> BinaryExpression::Evaluate(
   }
   auto right_result = right_->Evaluate(input);
 </script>
-<script type="text/plain" data-excerpt="src/quest/plan/physical/expressions/physical_expr.cpp:50" data-start="44" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/plan/physical/expressions/physical_expr.cpp:50" data-start="44" data-sha="be19376">
                                                             size_t num_rows, DataType type,
                                                             Fn fn) {
   std::vector<T> values(num_rows);
@@ -2458,7 +2516,7 @@ Result<std::shared_ptr<ColumnVector>> BinaryExpression::Evaluate(
       values[i] = **row;
     } else {
 </script>
-<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:129" data-start="123" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:129" data-start="123" data-sha="be19376">
   std::vector<std::shared_ptr<columnar::ColumnVector>> new_columns;
   new_columns.reserve(batch.num_columns());
   for (size_t col_idx = 0; col_idx < batch.num_columns(); ++col_idx) {
@@ -2473,7 +2531,7 @@ Result<columnar::RecordBatch> ProjectRecordBatch(
   std::vector<std::shared_ptr<columnar::ColumnVector>> columns;
   columns.reserve(expressions.size());
 </script>
-<script type="text/plain" data-excerpt="src/quest/plan/physical/expressions/physical_expr.cpp:40" data-start="34" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/plan/physical/expressions/physical_expr.cpp:40" data-start="34" data-sha="be19376">
           return false;
         }
       },
@@ -2488,7 +2546,7 @@ template <typename T, typename Fn>
                                                             Fn fn) {
   std::vector<T> values(num_rows);
 </script>
-<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_join_operator.cpp:107" data-start="101" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_join_operator.cpp:107" data-start="101" data-sha="be19376">
     }
   }
   finalized_ = true;
@@ -2503,7 +2561,7 @@ Result<cache::DataBlockPtr> HashJoinOperator::ProcessBatch(cache::DataBlockPtr i
   if (!host_result) {
     return std::unexpected(host_result.error());
 </script>
-<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_join_operator.cpp:39" data-start="33" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_join_operator.cpp:39" data-start="33" data-sha="be19376">
                     columnar::GetTypeName(type)));
   }
   return column;
@@ -2518,7 +2576,7 @@ Result<cache::DataBlockPtr> HashJoinOperator::ProcessBatch(cache::DataBlockPtr i
   }
   if (const auto* key = std::get_if<std::int32_t>(&value)) {
 </script>
-<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_aggregate_operator.cpp:156" data-start="150" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_aggregate_operator.cpp:156" data-start="150" data-sha="be19376">
   for (const auto& value : key) {
     seed ^= HashValue(value) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
   }
@@ -2533,7 +2591,7 @@ Status HashAggregateOperator::Sink(cache::DataBlockPtr batch) {
     return {};
   }
 </script>
-<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_aggregate_operator.cpp:216" data-start="210" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_aggregate_operator.cpp:216" data-start="210" data-sha="be19376">
 
   GroupTable local;
   std::vector<Value> key;
@@ -2548,7 +2606,7 @@ Status HashAggregateOperator::Sink(cache::DataBlockPtr batch) {
     }
     auto& states = local.groups[entry->second].states;
 </script>
-<script type="text/plain" data-excerpt="src/quest/taskflow/operators/sort_operator.cpp:51" data-start="45" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/taskflow/operators/sort_operator.cpp:51" data-start="45" data-sha="be19376">
   }
   std::lock_guard lock(mutex_);
   batches_.push_back(std::move(batch));
@@ -2563,7 +2621,7 @@ Status SortOperator::FinalizeSink() {
   if (batches_.empty()) {
     finalized_.store(true);
 </script>
-<script type="text/plain" data-excerpt="src/quest/taskflow/operators/sort_operator.cpp:91" data-start="85" data-sha="c76c5e7">
+<script type="text/plain" data-excerpt="src/quest/taskflow/operators/sort_operator.cpp:91" data-start="85" data-sha="be19376">
       return Error::SchemaError(std::format("SortOperator: column '{}' not found", key.column));
     }
     const auto& column = merged->column(*index);
@@ -2598,7 +2656,7 @@ Status SortOperator::FinalizeSink() {
 
     <doc-claim at="src/quest/execution/kernels/batch_kernels.cpp:26">
       <p><b>batch_kernels.cpp:26</b> · GatherTyped()</p>
-      <doc-code src="src/quest/execution/kernels/batch_kernels.cpp" lines="20-44" hl="26,30-31" file="src/quest/execution/kernels/batch_kernels.cpp" start="20" sha="c76c5e7"><script type="text/plain">  std::vector<T> data;
+      <doc-code src="src/quest/execution/kernels/batch_kernels.cpp" ref="be19376" lines="20-44" hl="26,30-31" file="src/quest/execution/kernels/batch_kernels.cpp" start="20" sha="be19376"><script type="text/plain">  std::vector<T> data;
   data.reserve(indices.size());
   std::vector<bool> validity;
   validity.reserve(indices.size());
@@ -2655,7 +2713,7 @@ return VisitType(*type, [&]<typename Tag>(Tag) {
 
     <doc-claim at="src/quest/plan/physical/expressions/physical_expr.cpp:50">
       <p><b>physical_expr.cpp:50</b> · MapRows()</p>
-      <doc-code src="src/quest/plan/physical/expressions/physical_expr.cpp" lines="41-64" hl="50" file="src/quest/plan/physical/expressions/physical_expr.cpp" start="41" sha="c76c5e7"><script type="text/plain">template <typename T, typename Fn>
+      <doc-code src="src/quest/plan/physical/expressions/physical_expr.cpp" ref="be19376" lines="41-64" hl="50" file="src/quest/plan/physical/expressions/physical_expr.cpp" start="41" sha="be19376"><script type="text/plain">template <typename T, typename Fn>
 [[nodiscard]] Result<std::shared_ptr<ColumnVector>> MapRows(const ColumnVector& left,
                                                             const ColumnVector& right,
                                                             size_t num_rows, DataType type,
@@ -2686,7 +2744,7 @@ return VisitType(*type, [&]<typename Tag>(Tag) {
 
   <doc-claim>
     <p>Hash join reads its keys as one <code>int64_t</code> view for each batch.</p>
-    <doc-code src="src/quest/taskflow/operators/hash_join_operator.cpp" lines="38-50" hl="41" file="src/quest/taskflow/operators/hash_join_operator.cpp" start="38" sha="c76c5e7"><script type="text/plain">/// @brief The key at @p row widened to int64, or nullopt if it is null.
+    <doc-code src="src/quest/taskflow/operators/hash_join_operator.cpp" ref="be19376" lines="38-50" hl="41" file="src/quest/taskflow/operators/hash_join_operator.cpp" start="38" sha="be19376"><script type="text/plain">/// @brief The key at @p row widened to int64, or nullopt if it is null.
 [[nodiscard]] std::optional<std::int64_t> KeyAt(const columnar::ColumnVector& column,
                                                 std::size_t row) {
   const auto value = column.GetValue(row);
@@ -2730,7 +2788,7 @@ class GroupStates {
 
     <doc-claim at="src/quest/taskflow/operators/hash_aggregate_operator.hpp:86">
       <p><b>hash_aggregate_operator.hpp:86</b> · Group</p>
-      <doc-code src="src/quest/taskflow/operators/hash_aggregate_operator.hpp" lines="77-99" hl="81,86,98" file="src/quest/taskflow/operators/hash_aggregate_operator.hpp" start="77" sha="c76c5e7"><script type="text/plain">  struct AggregateState {
+      <doc-code src="src/quest/taskflow/operators/hash_aggregate_operator.hpp" ref="be19376" lines="77-99" hl="81,86,98" file="src/quest/taskflow/operators/hash_aggregate_operator.hpp" start="77" sha="be19376"><script type="text/plain">  struct AggregateState {
     std::int64_t count = 0;  ///< non-null inputs (rows for COUNT(*))
     std::int64_t int_sum = 0;
     double double_sum = 0.0;
@@ -2779,7 +2837,7 @@ using RowOrder = std::function<std::weak_ordering(std::size_t, std::size_t)>;
 
     <doc-claim at="src/quest/taskflow/operators/sort_operator.cpp:91">
       <p><b>sort_operator.cpp:91</b> · FinalizeSink()</p>
-      <doc-code src="src/quest/taskflow/operators/sort_operator.cpp" lines="81-92" hl="81,91" file="src/quest/taskflow/operators/sort_operator.cpp" start="81" sha="c76c5e7"><script type="text/plain">  std::vector<std::vector<columnar::Value>> key_values;
+      <doc-code src="src/quest/taskflow/operators/sort_operator.cpp" ref="be19376" lines="81-92" hl="81,91" file="src/quest/taskflow/operators/sort_operator.cpp" start="81" sha="be19376"><script type="text/plain">  std::vector<std::vector<columnar::Value>> key_values;
   for (const auto& key : keys_) {
     auto index = merged->schema().GetFieldIndex(key.column);
     if (!index) {
@@ -2817,12 +2875,7 @@ class Scalar {
 };
 </script>
   </doc-code>
-  <doc-ask id="value">
-    <p>Does the per-row <code>Value</code> variant stay?</p>
-    <label><input type="radio" name="value" value="drop" checked> Remove it; literals hold a <code>Scalar</code> <small>no variant is left in the code base</small></label>
-    <label><input type="radio" name="value" value="keep"> Keep it for literals, tests and printing only <small>171 test GetValue calls stay; hot paths still drop it</small></label>
-  </doc-ask>
-  <div data-if="value=keep"><doc-note tone="info">Then claim 4.2 goes, step 6 only deletes <code>GetValue</code> from <code>src/</code>, and <code>Scalar</code> is not added.</doc-note></div>
+    <doc-note tone="ok"><strong>Decided</strong> Remove it; literals hold a <code>Scalar</code>.</doc-note>
 
   <doc-claim>
     <p>A literal broadcasts as a constant column and never enters a <code>RecordBatch</code>.</p>
@@ -2842,7 +2895,7 @@ for (const auto& expr : expressions) {
 
     <doc-claim at="src/quest/plan/physical/expressions/physical_expr.hpp:35">
       <p><b>physical_expr.hpp:35</b> · ColumnData</p>
-      <doc-code src="src/quest/plan/physical/expressions/physical_expr.hpp" lines="35-50" hl="35" file="src/quest/plan/physical/expressions/physical_expr.hpp" start="35" sha="c76c5e7"><script type="text/plain">using ColumnData = std::variant<std::vector<bool>, std::vector<int8_t>,
+      <doc-code src="src/quest/plan/physical/expressions/physical_expr.hpp" ref="be19376" lines="35-50" hl="35" file="src/quest/plan/physical/expressions/physical_expr.hpp" start="35" sha="be19376"><script type="text/plain">using ColumnData = std::variant<std::vector<bool>, std::vector<int8_t>,
                                 std::vector<int16_t>, std::vector<int32_t>,
                                 std::vector<int64_t>, std::vector<float>,
                                 std::vector<double>, std::vector<std::string>,
@@ -2894,7 +2947,7 @@ Q12   2       1      <span class="g">runs today, matches DuckDB</span>
 <span class="dim">Step 7 is done: all five pass on today's code.</span></template></doc-mock>
 
   <doc-claim>
-    <p>The reader turns each DECIMAL(15,2) column into Double.</p>
+    <p>The reader reads each INT32 and INT64 DECIMAL column as Decimal.</p>
     <doc-mock frame="terminal" title="duckdb · parquet_schema(lineitem)" w="480"><template>name             type   converted_type  scale
 l_quantity       INT64  DECIMAL         2
 l_extendedprice  INT64  DECIMAL         2
@@ -2903,24 +2956,27 @@ l_tax            INT64  DECIMAL         2
 <span class="dim">also c_acctbal, o_totalprice, s_acctbal …</span>
 
 <span class="r">today: QUEST reads 1234.56 as Int64 123456</span></template></doc-mock>
-    <doc-note tone="ok"><strong>Decided</strong> No Decimal type. The reader divides by 10^scale and stores float64. Tests compare money with DuckDB within 0.01.</doc-note>
+    <doc-note tone="info"><strong>Changed</strong> This replaces the float64 choice. Tests then compare money with DuckDB as exact text; only AVG stays Double.</doc-note>
   </doc-claim>
 
   <doc-claim>
-    <p>The change lands in 7 steps; each step ends with all tests green.</p>
-    <doc-mock frame="terminal" title="steps, in order" w="480"><template><b>1 Types</b>        DataType, TypeTraits, VisitType. Parquet
-               BYTE_ARRAY, FLBA, DECIMAL to Double.
-<b>2 Buffers</b>      The largest step. A final ColumnVector
-               moves all producers at once: reader,
-               generate, results, literals, INT96,
-               approximately 140 test lines.
-<b>3 Kernels</b>      Filter, gather, concatenate, spill, size.
-<b>4 Expressions</b>  Cast, compare, arithmetic, CASE on views.
-<b>5 Operators</b>    Join, aggregate, sort. No GetValue in src/.
-<b>6 Scalar</b>       Literals; tests use Get&lt;T&gt;. Value goes.
-<b>7 TPC-H</b>        6 tables at SF 0.01; 1 test per query.
+    <p>The change lands in 8 steps; each step ends with all tests green.</p>
+    <doc-mock frame="terminal" title="steps, in order" w="480"><template><span class="g">✓</span> <b>1 Types</b>      DataType, TypeTraits, VisitType, Parquet
+<span class="g">✓</span> <b>2 Buffers</b>    ColumnVector, ColumnBuilder, ColumnView
+  <b>3 Decimal</b>    DataType with precision and scale,
+               Decimal64 arithmetic, SUM, Parquet
+  <b>4 Kernels</b>    Filter, gather, concatenate, spill, size.
+  <b>5 Expressions</b> Cast, compare, arithmetic, CASE on views.
+  <b>6 Operators</b>  Join, aggregate, sort. No GetValue in src/.
+  <b>7 Scalar</b>     Literals; tests use Get&lt;T&gt;. Value goes.
+<span class="g">✓</span> <b>8 TPC-H</b>      6 tables at SF 0.01; 1 test per query.
 
 <span class="dim">each step: build -Werror, ctest, Q12 at SF 1</span></template></doc-mock>
+    <doc-ask id="decimal-order">
+      <p>When does Decimal land?</p>
+      <label><input type="radio" name="decimal-order" value="next" checked> Next, as step 3 <small>the kernel rewrites then handle Decimal once</small></label>
+      <label><input type="radio" name="decimal-order" value="last"> Last, after the Value variant goes <small>the kernels change twice</small></label>
+    </doc-ask>
   </doc-claim>
 
   <doc-claim>
@@ -2986,7 +3042,7 @@ class ColumnView {
   <ul>
     <li>Logical plan nodes, <code>QueryBuilder</code> and <code>PipelineExecutor</code>.</li>
     <li>Three-valued AND/OR, null on division by zero, overflow errors.</li>
-    <li>No Decimal, Binary, nested types, unsigned types or time zones. DECIMAL columns read as Double.</li>
+    <li>No Binary, nested types, unsigned types or time zones. No Decimal above 18 digits.</li>
     <li>No Arrow dependency and no SIMD intrinsics.</li>
     <li>Parquet page decode, except the two reader fixes above.</li>
   </ul>
