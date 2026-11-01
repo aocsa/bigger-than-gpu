@@ -486,3 +486,22 @@ TEST(ParquetTypeMappingTest, UnsupportedColumnsFailToOpen) {
     EXPECT_EQ(reader.error().code(), ErrorCode::TypeError) << name;
   }
 }
+
+TEST(ParquetTypeMappingTest, DictionaryEncodedInt96ReadsAsTimestamp) {
+  ASSERT_OK_AND_ASSIGN(auto reader, ParquetFileReader::Open(TypesFile("int96_dictionary.parquet")));
+  ASSERT_OK_AND_ASSIGN(auto batch, reader.ReadRowGroup(0, {}));
+  ASSERT_EQ(batch.num_rows(), 4U);
+  const Value later{Timestamp{1'704'164'645'500'000}};
+  EXPECT_EQ(batch.column(0).GetValue(0), later);
+  EXPECT_EQ(batch.column(0).GetValue(1), Value{Timestamp{-1}});
+  EXPECT_EQ(batch.column(0).GetValue(2), later);
+  EXPECT_EQ(batch.column(0).GetValue(3), later);
+}
+
+TEST(ParquetTypeMappingTest, MillisOutOfMicrosRangeIsOutOfRange) {
+  ASSERT_OK_AND_ASSIGN(auto reader,
+                       ParquetFileReader::Open(TypesFile("timestamp_ms_infinity.parquet")));
+  auto batch = reader.ReadRowGroup(0, {});
+  ASSERT_FALSE(batch.has_value());
+  EXPECT_EQ(batch.error().code(), ErrorCode::OutOfRange);
+}

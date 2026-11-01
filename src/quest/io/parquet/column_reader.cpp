@@ -49,33 +49,106 @@ template <typename ReadFn, typename AppendFn, typename AppendNullFn>
   return {};
 }
 
-/// @brief @p in with @p convert applied to each value, as a column of @p type.
+/// @brief @p in with @p convert (From -> Result<To>) applied to each value, as a column of
+/// @p type.
 template <typename To, typename From, typename Convert>
-[[nodiscard]] std::shared_ptr<ColumnVector> ConvertValues(const ColumnVector& in, DataType type,
-                                                          Convert convert) {
+[[nodiscard]] Result<std::shared_ptr<ColumnVector>> ConvertValues(const ColumnVector& in,
+                                                                  DataType type, Convert convert) {
   // ReadAll decoded @p in as the column's physical type, From.
   const auto& from = static_cast<const TypedColumnVector<From>&>(in);
   auto out = std::make_shared<TypedColumnVector<To>>(type, from.size());
   for (size_t i = 0; i < from.size(); ++i) {
     if (from.IsNull(i)) {
       out->AppendNull();
-    } else {
-      out->Append(convert(from.GetTypedValue(i)));
+      continue;
     }
+    Result<To> value = convert(from.GetTypedValue(i));
+    if (!value) {
+      return std::unexpected(std::move(value).error());
+    }
+    out->Append(*value);
   }
   return out;
 }
 
-[[nodiscard]] constexpr int64_t ToMicros(int64_t value, TimeUnit unit) noexcept {
+[[nodiscard]] Result<int64_t> ToMicros(int64_t value, TimeUnit unit) {
   switch (unit) {
-    case TimeUnit::kMillis:
-      return value * 1000;
+    case TimeUnit::kMillis: {
+      int64_t micros = 0;
+      if (__builtin_mul_overflow(value, int64_t{1000}, &micros)) {
+        return Error::OutOfRange("TIMESTAMP(MILLIS) value out of the microsecond range");
+      }
+      return micros;
+    }
     case TimeUnit::kMicros:
       return value;
-    case TimeUnit::kNanos:
-      return value >= 0 ? value / 1000 : (value - 999) / 1000;  // floor
+    case TimeUnit::kNanos: {
+      const int64_t micros = value / 1000;
+      return value % 1000 < 0 ? micros - 1 : micros;  // floor, not toward zero
+    }
   }
   std::unreachable();
+}
+
+/// @brief The legacy Impala/Spark INT96 timestamp at @p pos: 8 bytes of nanoseconds in the
+/// day, then the 4-byte Julian day. Advances @p pos by 12.
+[[nodiscard]] Result<columnar::Timestamp> ReadInt96(std::span<const uint8_t> bytes, size_t& pos) {
+  constexpr size_t kInt96Size = 12;
+  constexpr int64_t kUnixEpochJulianDay = 2440588;
+  constexpr int64_t kMicrosPerDay = 86'400'000'000;
+  if (pos + kInt96Size > bytes.size()) {
+    return Error::PageDecodeError("Not enough data for INT96");
+  }
+  int64_t nanos_of_day = 0;
+  int32_t julian_day = 0;
+  std::memcpy(&nanos_of_day, bytes.data() + pos, sizeof(nanos_of_day));
+  std::memcpy(&julian_day, bytes.data() + pos + sizeof(nanos_of_day), sizeof(julian_day));
+  pos += kInt96Size;
+  int64_t micros = 0;
+  if (__builtin_mul_overflow(julian_day - kUnixEpochJulianDay, kMicrosPerDay, &micros) ||
+      __builtin_add_overflow(micros, nanos_of_day / 1000, &micros)) {
+    return Error::OutOfRange("INT96 timestamp out of the microsecond range");
+  }
+  return columnar::Timestamp{micros};
+}
+
+/// @brief Decodes a dictionary data page (a bit width, then RLE/bit-packed indices) into
+/// @p column, looking each index up in @p dictionary.
+template <typename T>
+[[nodiscard]] Status DecodeDictionaryIndices(std::span<const T> dictionary,
+                                             std::span<const uint8_t> data, size_t num_values,
+                                             const std::vector<int32_t>& def_levels,
+                                             TypedColumnVector<T>* column) {
+  if (data.empty()) {
+    return {};
+  }
+  int bit_width = data[0];
+  auto indices_data = data.subspan(1);
+
+  RleBitPackingDecoder index_decoder(bit_width);
+  size_t non_null_count =
+      def_levels.empty()
+          ? num_values
+          : std::count_if(def_levels.begin(), def_levels.end(),
+                          [](int32_t level) { return level == 1; });
+  index_decoder.SetData(indices_data, non_null_count);
+
+  return ProcessWithDefLevels(
+      num_values, def_levels,
+      [&index_decoder, &dictionary]() -> Result<T> {
+        auto idx_result = index_decoder.ReadValue();
+        if (!idx_result.has_value()) {
+          return std::unexpected(idx_result.error());
+        }
+        int32_t idx = idx_result.value();
+        if (idx < 0 || static_cast<size_t>(idx) >= dictionary.size()) {
+          return std::unexpected(
+              Error::OutOfRange("Dictionary index out of range"));
+        }
+        return dictionary[idx];
+      },
+      [column](T val) { column->Append(val); },
+      [column]() { column->AppendNull(); });
 }
 
 }  // namespace
@@ -145,23 +218,31 @@ Result<std::shared_ptr<ColumnVector>> ColumnReader::ReadAll() {
   return column;
 }
 
-std::shared_ptr<ColumnVector> ColumnReader::Convert(const ColumnVector& physical) const {
+Result<std::shared_ptr<ColumnVector>> ColumnReader::Convert(const ColumnVector& physical) const {
   using Conversion = LeafType::Conversion;
   const bool is_int64 = column_meta_.type == PhysicalType::kInt64;
   switch (leaf_.conversion) {
     case Conversion::kDecimal: {
       // Division keeps 7 / 100 equal to the literal 0.07; multiplying by 0.01 does not.
       const double divisor = std::pow(10.0, leaf_.decimal_scale);
-      auto to_double = [divisor](auto unscaled) { return static_cast<double>(unscaled) / divisor; };
+      auto to_double = [divisor](auto unscaled) -> Result<double> {
+        return static_cast<double>(unscaled) / divisor;
+      };
       return is_int64 ? ConvertValues<double, int64_t>(physical, leaf_.type, to_double)
                       : ConvertValues<double, int32_t>(physical, leaf_.type, to_double);
     }
     case Conversion::kTimestamp:
       return ConvertValues<columnar::Timestamp, int64_t>(
           physical, leaf_.type,
-          [unit = leaf_.unit](int64_t value) { return columnar::Timestamp{ToMicros(value, unit)}; });
+          [unit = leaf_.unit](int64_t value) -> Result<columnar::Timestamp> {
+            auto micros = ToMicros(value, unit);
+            if (!micros) {
+              return std::unexpected(std::move(micros).error());
+            }
+            return columnar::Timestamp{*micros};
+          });
     case Conversion::kUInt32:
-      return ConvertValues<int64_t, int32_t>(physical, leaf_.type, [](int32_t value) {
+      return ConvertValues<int64_t, int32_t>(physical, leaf_.type, [](int32_t value) -> Result<int64_t> {
         return static_cast<int64_t>(static_cast<uint32_t>(value));
       });
     case Conversion::kNone:
@@ -390,37 +471,8 @@ Status ColumnReader::DecodeDictionaryValues(
     return Error::ColumnDecodeError("Dictionary page shorter than its value count");
   }
 
-  // The data contains the bit width followed by RLE encoded indices.
-  if (data.empty()) {
-    return {};
-  }
-  int bit_width = data[0];
-  auto indices_data = data.subspan(1);
-
-  RleBitPackingDecoder index_decoder(bit_width);
-  size_t non_null_count =
-      def_levels.empty()
-          ? num_values
-          : std::count_if(def_levels.begin(), def_levels.end(),
-                          [](int32_t level) { return level == 1; });
-  index_decoder.SetData(indices_data, non_null_count);
-
-  return ProcessWithDefLevels(
-      num_values, def_levels,
-      [&index_decoder, &dictionary]() -> Result<T> {
-        auto idx_result = index_decoder.ReadValue();
-        if (!idx_result.has_value()) {
-          return std::unexpected(idx_result.error());
-        }
-        int32_t idx = idx_result.value();
-        if (idx < 0 || static_cast<size_t>(idx) >= dictionary.size()) {
-          return std::unexpected(
-              Error::OutOfRange("Dictionary index out of range"));
-        }
-        return dictionary[idx];
-      },
-      [column](T val) { column->Append(val); },
-      [column]() { column->AppendNull(); });
+  return DecodeDictionaryIndices(std::span<const T>(dictionary), data, num_values, def_levels,
+                                 column);
 }
 
 Status ColumnReader::DecodeBinaryValues(Encoding encoding,
@@ -498,33 +550,31 @@ Status ColumnReader::DecodeDictionaryBinaryValues(
 }
 
 Status ColumnReader::DecodeInt96Values(
-    Encoding /*encoding*/, std::span<const uint8_t> data, size_t num_values,
+    Encoding encoding, std::span<const uint8_t> data, size_t num_values,
     const std::vector<int32_t>& def_levels, ColumnVector* column) {
   auto* timestamps = dynamic_cast<TypedColumnVector<columnar::Timestamp>*>(column);
   if (!timestamps) {
     return Error::TypeError("Column type mismatch for INT96");
   }
 
-  // A legacy Impala/Spark timestamp: 8 bytes of nanoseconds in the day, then the Julian day.
-  constexpr size_t kInt96Size = 12;
-  constexpr int64_t kUnixEpochJulianDay = 2440588;
-  constexpr int64_t kMicrosPerDay = 86'400'000'000;
-  size_t pos = 0;
+  if (encoding == Encoding::kPlainDictionary || encoding == Encoding::kRleDictionary) {
+    std::vector<columnar::Timestamp> dictionary;
+    dictionary.reserve(static_cast<size_t>(dict_num_values_));
+    size_t pos = 0;
+    for (int32_t i = 0; i < dict_num_values_; ++i) {
+      auto value = ReadInt96(dictionary_data_, pos);
+      if (!value) {
+        return std::unexpected(std::move(value).error());
+      }
+      dictionary.push_back(*value);
+    }
+    return DecodeDictionaryIndices(std::span<const columnar::Timestamp>(dictionary), data,
+                                   num_values, def_levels, timestamps);
+  }
 
+  size_t pos = 0;
   return ProcessWithDefLevels(
-      num_values, def_levels,
-      [&data, &pos]() -> Result<columnar::Timestamp> {
-        if (pos + kInt96Size > data.size()) {
-          return std::unexpected(Error::PageDecodeError("Not enough data for INT96"));
-        }
-        int64_t nanos_of_day = 0;
-        int32_t julian_day = 0;
-        std::memcpy(&nanos_of_day, data.data() + pos, sizeof(nanos_of_day));
-        std::memcpy(&julian_day, data.data() + pos + sizeof(nanos_of_day), sizeof(julian_day));
-        pos += kInt96Size;
-        return columnar::Timestamp{(julian_day - kUnixEpochJulianDay) * kMicrosPerDay +
-                                   nanos_of_day / 1000};
-      },
+      num_values, def_levels, [&data, &pos]() { return ReadInt96(data, pos); },
       [timestamps](columnar::Timestamp value) { timestamps->Append(value); },
       [timestamps]() { timestamps->AppendNull(); });
 }

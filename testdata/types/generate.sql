@@ -12,3 +12,5 @@ COPY (SELECT * FROM (VALUES
 COPY (SELECT 1::UBIGINT AS u64) TO 'testdata/types/uint64.parquet' (FORMAT parquet);
 COPY (SELECT '6d2a1f3e-58b0-4a0c-9e5b-1f2d3c4b5a69'::UUID AS id)
   TO 'testdata/types/uuid.parquet' (FORMAT parquet);
+-- DuckDB writes infinity as INT64_MAX milliseconds, which overflows as microseconds.
+COPY (SELECT 'infinity'::TIMESTAMP_MS AS t) TO 'testdata/types/timestamp_ms_infinity.parquet' (FORMAT parquet);

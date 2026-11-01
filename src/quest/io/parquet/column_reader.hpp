@@ -48,7 +48,7 @@ class ColumnReader {
 
  private:
   /// @brief @p physical (decoded as the physical type) as the leaf's DataType.
-  [[nodiscard]] std::shared_ptr<ColumnVector> Convert(const ColumnVector& physical) const;
+  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Convert(const ColumnVector& physical) const;
 
   // ===========================================================================
   // Decompression
