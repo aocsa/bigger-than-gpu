@@ -129,6 +129,10 @@ class ThriftDecoder {
   [[nodiscard]] Status SkipStruct() noexcept;
 
  private:
+  /// @brief Reads a length-prefixed run of bytes.
+  /// @param too_long The error message when the run passes the end of the data.
+  [[nodiscard]] Result<std::span<const uint8_t>> ReadLengthPrefixed(const char* too_long) noexcept;
+
   std::span<const uint8_t> data_;
   size_t pos_;
 };
