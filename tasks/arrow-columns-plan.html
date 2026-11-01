@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Typed Columns Plan</title>
+<link rel="stylesheet" href="htmlplan.css">
+<script src="htmlplan.js" defer></script>
+<body>
+
+<header>
+  <h1>Typed Arrow-Style Columns in QUEST</h1>
+  <doc-changes new="1" changed="48"></doc-changes>
+  <details class="thread"><summary>Why · 1 request</summary>
+    <doc-quote via="prompt" from="the user">instead of using variant, see the image, we can make a more robust implementation more like arrow but simpler with support of NULLs, we want to be performant but we don't want a large implementation we want a cleanest implementation with things like type dispatching and modern c++23 features. 1. Primitive &amp; Numeric Types. don't include decimal. 2. Binary &amp; String Types. Only string type 3. Temporal Types: Date and Timestamp only 4. Nested &amp; Complex Types. Dont include</doc-quote>
+  </details>
+</header>
+
+<main>
+<doc-plan>
+
+<!-- ═════ 1 · TYPES ═════ -->
+<doc-claim>
+  <p>Each type has one <code>DataType</code> value and one C++ storage type.</p>
+  <doc-schema id="types" lang="cpp" title="columnar/types.hpp · sketch" caption="Ten types. The enum order is also the integer width order.">
+<script type="text/plain">
+// Append only: the spill format stores this value.
+enum class DataType : std::uint8_t {
+  kBool, kInt8, kInt16, kInt32, kInt64,
+  kFloat, kDouble, kString, kDate32, kTimestamp,
+};
+
+struct Date32 { std::int32_t days; auto operator<=>(const Date32&) const = default; };
+struct Timestamp {
+  std::int64_t micros;
+  auto operator<=>(const Timestamp&) const = default;
+};
+
+template <DataType> struct TypeTraits;  // one specialization per type, no macros
+template <> struct TypeTraits<DataType::kInt32> {
+  using CType = std::int32_t;           // what a kernel reads
+  static constexpr std::string_view kName = "Int32";
+};
+template <> struct TypeTraits<DataType::kString> {
+  using CType = std::string_view;       // a view into the column's chars buffer
+  static constexpr std::string_view kName = "String";
+};
+// … kBool → bool, kDouble → double, kDate32 → Date32,
+//   kTimestamp → Timestamp, and so on
+
+template <DataType Id> struct TypeTag : TypeTraits<Id> { static constexpr DataType kId = Id; };
+
+[[nodiscard]] constexpr bool IsInteger(DataType t) noexcept {
+  return t >= DataType::kInt8 && t <= DataType::kInt64;
+}
+[[nodiscard]] constexpr bool IsNumeric(DataType t) noexcept {
+  return t >= DataType::kInt8 && t <= DataType::kDouble;
+}
+</script>
+  </doc-schema>
+
+  <doc-claim>
+    <p>One <code>VisitType()</code> switch replaces each <code>std::visit</code> over types.</p>
+    <doc-code title="columnar/types.hpp · sketch" lang="cpp" hl="5,13-15">
+<script type="text/plain">
+/// @brief Calls @p f with the TypeTag of @p type. The only switch over DataType.
+template <typename F>
+constexpr decltype(auto) VisitType(DataType type, F&& f) {
+  switch (type) {
+    case DataType::kBool:      return f(TypeTag<DataType::kBool>{});
+    case DataType::kInt8:      return f(TypeTag<DataType::kInt8>{});
+    // … one line for each of the other 8 types
+    case DataType::kTimestamp: return f(TypeTag<DataType::kTimestamp>{});
+  }
+  std::unreachable();
+}
+
+[[nodiscard]] inline std::string_view GetTypeName(DataType type) {
+  return VisitType(type, []<typename Tag>(Tag) { return Tag::kName; });
+}
+</script>
+      <doc-pin line="14" title="A template lambda gets the C++ type"></doc-pin>
+    </doc-code>
+
+    <doc-claim at="src/quest/columnar/column_vector.hpp:243">
+      <p><b>column_vector.hpp:243</b> · AppendColumnValues()</p>
+      <doc-code src="src/quest/columnar/column_vector.hpp" lines="243-268" hl="252">
+        <doc-pin line="252" tone="risk" title="A variant for each row">Concatenate becomes one copy for each buffer.</doc-pin>
+      </doc-code>
+    </doc-claim>
+
+    <doc-claim at="src/quest/plan/binary_op.hpp:80">
+      <p><b>binary_op.hpp:80</b> · BinaryResultType()</p>
+      <doc-code diff file="src/quest/plan/binary_op.hpp" lang="cpp">
+<script type="text/plain">
+@@ -80,20 +80,10 @@
+-  auto is_int = [](const columnar::DataType& t) {
+-    return std::holds_alternative<columnar::Int8Type>(t) ||
+-           std::holds_alternative<columnar::Int16Type>(t) ||
+-           std::holds_alternative<columnar::Int32Type>(t) ||
+-           std::holds_alternative<columnar::Int64Type>(t);
+-  };
+-  auto is_float = [](const columnar::DataType& t) {
+-    return std::holds_alternative<columnar::FloatType>(t) ||
+-           std::holds_alternative<columnar::DoubleType>(t);
+-  };
+-  if (!(is_int(left) || is_float(left)) || !(is_int(right) || is_float(right))) {
++  if (!IsNumeric(left) || !IsNumeric(right)) {
+     return Error::TypeError("'" + std::string(ToString(op)) + "' needs numeric operands, got " +
+                             columnar::GetTypeName(left) + " and " +
+                             columnar::GetTypeName(right));
+   }
+-  if (is_float(left) || is_float(right) || op == BinaryOp::kDivide) {
+-    return columnar::DoubleType{};
++  if (!IsInteger(left) || !IsInteger(right) || op == BinaryOp::kDivide) {
++    return DataType::kDouble;
+   }
+-  // Int8Type..Int64Type are declared in width order in DataType.
+-  return left.index() >= right.index() ? left : right;
++  // kInt8..kInt64 are declared in width order.
++  return std::max(left, right);
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>A <code>Timestamp</code> holds microseconds since 1970-01-01, with no time zone.</p>
+    <doc-code title="io/parquet/column_reader.cpp · sketch" lang="cpp" hl="4-6">
+<script type="text/plain">
+// The reader converts each Parquet TIMESTAMP unit to micros once, at decode time.
+[[nodiscard]] constexpr std::int64_t ToMicros(std::int64_t v, TimeUnit unit) noexcept {
+  switch (unit) {
+    case TimeUnit::kMillis: return v * 1000;
+    case TimeUnit::kMicros: return v;
+    case TimeUnit::kNanos:  return v >= 0 ? v / 1000 : (v - 999) / 1000;  // floor
+  }
+  std::unreachable();
+}
+// isAdjustedToUTC=true and =false both read as the same Timestamp type.
+// A Timestamp compares only with a Timestamp, like Date32 today. No arithmetic.
+</script>
+    </doc-code>
+    <doc-ask id="ts-unit">
+      <p>What does a Timestamp store?</p>
+      <label><input type="radio" name="ts-unit" value="micros" checked> Microseconds only, no time zone <small>same as DuckDB TIMESTAMP</small></label>
+      <label><input type="radio" name="ts-unit" value="unit"> A unit parameter: s, ms, us or ns <small>DataType becomes a struct</small></label>
+      <label><input type="radio" name="ts-unit" value="tz"> A unit and a time zone <small>needs time zone rules; much larger</small></label>
+    </doc-ask>
+    <div data-if="ts-unit!=micros"><doc-note tone="warn">Then <code>DataType</code> becomes <code>struct { DataType id; TimeUnit unit; }</code> and each comparison of types changes.</doc-note></div>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The type set has no unsigned integer types.</p>
+    <doc-code src="src/quest/io/parquet/metadata.cpp" lines="28-35" hl="31-32">
+      <doc-pin line="31" tone="warn" title="The sign is lost here today">A UINT_32 above 2^31 reads as negative.</doc-pin>
+    </doc-code>
+    <doc-ask id="unsigned">
+      <p>What happens to Parquet unsigned integer columns?</p>
+      <label><input type="radio" name="unsigned" value="widen" checked> Widen them: UINT_8/16 to Int32, UINT_32 to Int64 <small>UINT_64 columns fail with TypeError</small></label>
+      <label><input type="radio" name="unsigned" value="add"> Add UInt8, UInt16, UInt32 and UInt64 <small>4 more types; more promotion rules</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The reader maps BYTE_ARRAY to String and INT96 to Timestamp.</p>
+    <doc-code diff file="src/quest/io/parquet/format.hpp" lang="cpp">
+<script type="text/plain">
+@@ -84,12 +84,12 @@
+     case PhysicalType::kInt96:
+-      return columnar::Int96Type{};
++      return DataType::kTimestamp;  // legacy Impala/Spark nanos, converted to micros
+     case PhysicalType::kFloat:
+-      return columnar::FloatType{};
++      return DataType::kFloat;
+     case PhysicalType::kDouble:
+-      return columnar::DoubleType{};
++      return DataType::kDouble;
+     case PhysicalType::kByteArray:
+-      return columnar::BinaryType{};
++      return DataType::kString;  // bytes as-is; no UTF-8 check
+     case PhysicalType::kFixedLenByteArray:
+-      return columnar::FixedLenByteArrayType{type_length};
++      return Error::TypeError("FIXED_LEN_BYTE_ARRAY columns are not supported");
+   }
+-  return columnar::BinaryType{};  // Default fallback
++  std::unreachable();
+</script>
+      <doc-pin line="93" title="Returns Result now"><code>LeafDataType()</code> at metadata.cpp:78 also returns a Result.</doc-pin>
+    </doc-code>
+    <doc-ask id="parquet-types">
+      <p>What happens to Parquet BYTE_ARRAY, INT96 and FIXED_LEN_BYTE_ARRAY?</p>
+      <label><input type="radio" name="parquet-types" value="map" checked> String, Timestamp and an error <small>FLBA holds Decimal and UUID, both out of scope</small></label>
+      <label><input type="radio" name="parquet-types" value="string"> All three become String with raw bytes <small>as today; INT96 dates read as 12-byte junk</small></label>
+      <label><input type="radio" name="parquet-types" value="reject"> All three fail with TypeError <small>BYTE_ARRAY without a UTF8 annotation also fails</small></label>
+    </doc-ask>
+
+    <doc-claim at="src/quest/io/parquet/column_reader.cpp:464">
+      <p><b>column_reader.cpp:464</b> · DecodeInt96Values()</p>
+      <doc-code src="src/quest/io/parquet/column_reader.cpp" lines="464-489" hl="483-484">
+        <doc-pin line="483" title="Becomes a Timestamp">Nanos of the day, then the Julian day.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 2 · LAYOUT ═════ -->
+<doc-claim>
+  <p>A column is a set of shared buffers: values, validity and offsets.</p>
+  <doc-mock frame="terminal" title="two batch columns in memory" w="470"><template><b>l_orderkey</b>  <span class="dim">Int64 · size 5 · null_count 0</span>
+  validity  <span class="dim">(none)</span>
+  values    [1, 1, 3, 3, 7]          <span class="dim">5 × 8 bytes</span>
+
+<b>l_shipmode</b>  <span class="dim">String · size 4 · null_count 1</span>
+  validity  <span class="y">1 0 1 1</span>                  <span class="dim">1 bit per row</span>
+  offsets   [0, 4, 4, 8, 11]         <span class="dim">size + 1 int64</span>
+  chars     "MAILSHIPAIR"            <span class="dim">one buffer</span>
+
+<b>mask</b>        <span class="dim">Bool · size 4 · null_count 0</span>
+  values    [1, 0, 1, 1]             <span class="dim">1 byte per row</span></template></doc-mock>
+
+  <doc-claim>
+    <p><code>ColumnVector</code> becomes one final class. <code>Finish()</code> makes it read-only.</p>
+    <doc-schema id="column" lang="cpp" title="columnar/column_vector.hpp · sketch" caption="No virtual functions. A batch shares a column with no copy.">
+<script type="text/plain">
+/// @brief Bytes that a column shares; the owner keeps the typed vector alive.
+struct Buffer {
+  std::shared_ptr<const void> owner;
+  std::span<const std::byte> bytes;
+};
+
+class ColumnVector final {
+ public:
+  [[nodiscard]] DataType type() const noexcept;
+  [[nodiscard]] std::size_t size() const noexcept;
+  [[nodiscard]] std::size_t null_count() const noexcept;
+  [[nodiscard]] bool IsNull(std::size_t i) const noexcept;  // false when there is no bitmap
+  template <typename T> [[nodiscard]] T Get(std::size_t i) const;  // T = TypeTraits CType
+  template <typename T> [[nodiscard]] ColumnView<T> View() const;  // kernels read this
+  [[nodiscard]] std::size_t size_in_bytes() const noexcept;        // sum of buffer sizes
+
+ private:
+  DataType type_;
+  std::size_t size_ = 0;
+  std::size_t null_count_ = 0;
+  bool constant_ = false;            // one stored row stands for size_ rows (literals)
+  Buffer validity_;                  // empty when null_count_ == 0
+  Buffer values_;                    // fixed-width values, or the String chars
+  Buffer offsets_;                   // String only: size_ + 1 int64 offsets
+};
+using ColumnVectorPtr = std::shared_ptr<const ColumnVector>;
+</script>
+    </doc-schema>
+
+    <doc-claim at="src/quest/columnar/column_vector.hpp:60">
+      <p><b>column_vector.hpp:60</b> · class ColumnVector</p>
+      <doc-code src="src/quest/columnar/column_vector.hpp" lines="60-68" hl="65">
+        <doc-pin line="65" tone="risk" title="One virtual call and one variant per cell">A String cell also copies.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Only a <code>ColumnBuilder&lt;T&gt;</code> makes a column.</p>
+    <doc-code title="columnar/column_vector.hpp · sketch" lang="cpp" hl="8,17">
+<script type="text/plain">
+template <typename T>  // T = TypeTraits CType; std::string_view for String
+class ColumnBuilder {
+ public:
+  ColumnBuilder(DataType type, std::size_t capacity);
+  void Append(T value);
+  void AppendNull();                          // makes the bitmap on the first null
+  /// @brief Moves the buffers into a read-only column; the builder is empty after.
+  [[nodiscard]] ColumnVectorPtr Finish() &&;
+
+ private:
+  // std::vector<bool> packs bits and has no data(), so Bool stores one byte per row.
+  using Storage = std::conditional_t<std::same_as<T, bool>, std::uint8_t, T>;
+  DataType type_;
+  std::vector<Storage> values_;               // not used for String
+  std::vector<std::int64_t> offsets_{0};      // String only
+  std::string chars_;                         // String only
+  std::vector<std::uint8_t> validity_;        // empty until the first null
+  std::size_t null_count_ = 0;
+};
+</script>
+    </doc-code>
+
+    <doc-claim at="src/quest/io/parquet/column_reader.cpp:294">
+      <p><b>column_reader.cpp:294</b> · DecodeFixedWidthValues()</p>
+      <doc-code src="src/quest/io/parquet/column_reader.cpp" lines="293-317" hl="297,315-316">
+        <doc-pin line="297" title="The cast goes">The reader gets a <code>ColumnBuilder&lt;T&gt;&amp;</code>.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>A column has a validity bitmap only when a row is null.</p>
+    <doc-code title="columnar/column_vector.hpp · sketch" lang="cpp" hl="2-3">
+<script type="text/plain">
+[[nodiscard]] inline bool ColumnVector::IsNull(std::size_t i) const noexcept {
+  if (null_count_ == 0) return false;          // most columns: no bitmap, no load
+  const std::size_t row = constant_ ? 0 : i;
+  const auto* bits = reinterpret_cast<const std::uint8_t*>(validity_.bytes.data());
+  return ((bits[row >> 3] >> (row & 7)) & 1) == 0;  // Arrow order: bit i set = row i valid
+}
+</script>
+    </doc-code>
+    <doc-ask id="validity">
+      <p>How does a column mark its null rows?</p>
+      <label><input type="radio" name="validity" value="bitmap" checked> A bitmap: 1 bit for each row, as in Arrow <small>8 times smaller; spill copies it as-is</small></label>
+      <label><input type="radio" name="validity" value="bytes"> A byte mask: 1 byte for each row <small>simpler loops; 8 times more memory</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim>
+    <p>String offsets are 64-bit, because Sort and HashJoin concatenate all input.</p>
+    <doc-code src="src/quest/taskflow/operators/sort_operator.cpp" lines="72-80" hl="75">
+      <doc-pin line="75" tone="warn" title="All sort input in one batch">At SF 20, l_comment alone is approximately 3.2 GB. Int32 offsets stop at 2 GB.</doc-pin>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Spill writes each buffer once, and DataBlock counts the real bytes.</p>
+    <doc-code diff file="src/quest/cache/data_block.cpp" lang="cpp">
+<script type="text/plain">
+@@ -49,11 +49,9 @@
+ std::size_t HostMemoryBlock::size_in_bytes() const noexcept {
+   if (!record_batch_) {
+     return 0;
+   }
+-  // Approximation: 8 bytes per value; actual serialized size may differ.
+   std::size_t size = 0;
+   for (std::size_t i = 0; i < record_batch_->num_columns(); ++i) {
+-    const auto& column = record_batch_->column(i);
+-    size += column.size() * 8;
++    size += record_batch_->column(i).size_in_bytes();
+   }
+   return size;
+</script>
+      <doc-pin line="55" title="Real bytes">A shared buffer counts twice. That is safe for spill.</doc-pin>
+    </doc-code>
+
+    <doc-claim at="src/quest/columnar/record_batch_serializer.cpp:213">
+      <p><b>record_batch_serializer.cpp:213</b> · WriteColumnValues()</p>
+      <doc-code src="src/quest/columnar/record_batch_serializer.cpp" lines="213-226" hl="222">
+        <doc-pin line="222" title="One GetValue for each row">The new format writes each buffer with one memcpy.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 3 · KERNELS ═════ -->
+<doc-claim>
+  <p>Kernels read typed views; no hot path makes a per-row <code>Value</code>.</p>
+  <doc-calls title="Hot paths" caption="Each red row reads a variant for each cell today.">
+<script type="text/plain">
+~ FilterRecordBatch(batch, expr)               @ src/quest/execution/kernels/batch_kernels.cpp:81
+-   mask_col.GetValue(i)                       @ src/quest/execution/kernels/batch_kernels.cpp:92
+~   GatherColumn(col, indices)                 @ src/quest/execution/kernels/batch_kernels.cpp:53
+-     col.GetValue(idx)                        @ src/quest/execution/kernels/batch_kernels.cpp:26
++     VisitType → **Gather<T>**(view, rows)    @ src/quest/execution/kernels/batch_kernels.cpp:16
+
+~ BinaryExpression::Evaluate(input)            @ src/quest/plan/physical/expressions/physical_expr.cpp:415
+-   MapRows(l, r, fn)                          @ src/quest/plan/physical/expressions/physical_expr.cpp:50
++   **Cast**(column, type)                     @ src/quest/execution/kernels/batch_kernels.cpp:129
++   **CompareViews<T, Op>**(l, r)              @ src/quest/plan/physical/expressions/physical_expr.cpp:40
+
+~ HashJoinOperator::ProcessBatch(input)        @ src/quest/taskflow/operators/hash_join_operator.cpp:107
+-   KeyAt(column, row)                         @ src/quest/taskflow/operators/hash_join_operator.cpp:39
+
+~ HashAggregateOperator::Sink(batch)           @ src/quest/taskflow/operators/hash_aggregate_operator.cpp:156
+-   key.push_back(column->GetValue(row))       @ src/quest/taskflow/operators/hash_aggregate_operator.cpp:216
+
+~ SortOperator::FinalizeSink()                 @ src/quest/taskflow/operators/sort_operator.cpp:51
+-   values.push_back(column.GetValue(row))     @ src/quest/taskflow/operators/sort_operator.cpp:91
+</script>
+  </doc-calls>
+
+  <doc-claim>
+    <p>Filter turns the bool mask into row indices, then gathers each column.</p>
+    <doc-code title="execution/kernels/batch_kernels.cpp · sketch" lang="cpp" hl="5-7">
+<script type="text/plain">
+[[nodiscard]] ColumnVectorPtr GatherColumn(const ColumnVector& col,
+                                           std::span<const std::uint32_t> rows) {
+  return VisitType(col.type(), [&]<typename Tag>(Tag) {
+    using T = Tag::CType;
+    const auto in = col.View<T>();
+    ColumnBuilder<T> out(col.type(), rows.size());
+    for (const auto r : rows) in.IsNull(r) ? out.AppendNull() : out.Append(in[r]);
+    return std::move(out).Finish();
+  });
+}
+</script>
+    </doc-code>
+
+    <doc-claim at="src/quest/execution/kernels/batch_kernels.cpp:26">
+      <p><b>batch_kernels.cpp:26</b> · GatherTyped()</p>
+      <doc-code src="src/quest/execution/kernels/batch_kernels.cpp" lines="20-44" hl="26,30-31">
+        <doc-pin line="30" tone="warn" title="Binary carried as String">This branch goes.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Compare, arithmetic and CASE cast operands to one type, then loop once.</p>
+    <doc-code title="plan/physical/expressions/physical_expr.cpp · sketch" lang="cpp" hl="14-17">
+<script type="text/plain">
+template <typename T, typename Op>
+[[nodiscard]] ColumnVectorPtr CompareViews(ColumnView<T> l, ColumnView<T> r, std::size_t n) {
+  ColumnBuilder<bool> out(DataType::kBool, n);
+  for (std::size_t i = 0; i < n; ++i) {
+    l.IsNull(i) || r.IsNull(i) ? out.AppendNull() : out.Append(Op{}(l[i], r[i]));
+  }
+  return std::move(out).Finish();
+}
+
+// BinaryExpression::Evaluate, comparison case:
+auto type = OperandType(op_, *l, *r);               // today's BinaryResultType rules
+if (!type) return std::unexpected(type.error());
+auto lc = Cast(*l, *type), rc = Cast(*r, *type);    // no copy when the type already matches
+return VisitType(*type, [&]<typename Tag>(Tag) {
+  using T = Tag::CType;
+  return CompareViews<T, Op>((*lc)->View<T>(), (*rc)->View<T>(), n);
+});
+</script>
+      <doc-pin line="13" title="Cast replaces ConvertTo and NumericAs">CASE also casts each THEN with it.</doc-pin>
+    </doc-code>
+
+    <doc-claim at="src/quest/plan/physical/expressions/physical_expr.cpp:50">
+      <p><b>physical_expr.cpp:50</b> · MapRows()</p>
+      <doc-code src="src/quest/plan/physical/expressions/physical_expr.cpp" lines="41-64" hl="50">
+        <doc-pin line="50" tone="risk" title="Two variants for each row">Each String compare in Q12 copies both strings.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Hash join reads its keys as one <code>int64_t</code> view for each batch.</p>
+    <doc-code src="src/quest/taskflow/operators/hash_join_operator.cpp" lines="38-50" hl="41">
+      <doc-pin line="41" title="Becomes one Cast for each batch">The loop then reads <code>View&lt;std::int64_t&gt;()</code>.</doc-pin>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Hash aggregate gives each row a group id, then updates typed states.</p>
+    <doc-code title="taskflow/operators/hash_aggregate_operator.cpp · sketch" lang="cpp" hl="2,12-14">
+<script type="text/plain">
+// Sink(): a row key is its key cells as bytes: a validity byte, then the value.
+// A String value has a length prefix, so ("ab","c") and ("a","bc") differ.
+std::vector<std::uint32_t> group_ids = local.FindOrInsert(key_columns);  // one pass
+
+for (std::size_t a = 0; a < aggregates_.size(); ++a) {
+  if (auto s = local.states[a]->Update(*inputs[a], group_ids); !s) return s;
+}
+
+/// @brief The state of one aggregate for every group; typed once, updated per batch.
+class GroupStates {
+ public:
+  virtual ~GroupStates() = default;
+  [[nodiscard]] virtual Status Update(const ColumnVector& in, std::span<const std::uint32_t> ids) = 0;
+  virtual void Merge(const GroupStates& other, std::span<const std::uint32_t> remap) = 0;
+  [[nodiscard]] virtual ColumnVectorPtr Finish() const = 0;
+};
+// MinMaxStates<T> keeps std::vector<T> (std::string for String); SumStates keeps int64 or double.
+</script>
+      <doc-pin line="12" title="One virtual call for each batch">Not for each row.</doc-pin>
+    </doc-code>
+
+    <doc-claim at="src/quest/taskflow/operators/hash_aggregate_operator.hpp:86">
+      <p><b>hash_aggregate_operator.hpp:86</b> · Group</p>
+      <doc-code src="src/quest/taskflow/operators/hash_aggregate_operator.hpp" lines="77-99" hl="81,86,98">
+        <doc-pin line="98" tone="risk" title="A vector of variants for each key">The key becomes encoded bytes.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Sort compares rows with one typed comparator for each key.</p>
+    <doc-code title="taskflow/operators/sort_operator.cpp · sketch" lang="cpp" hl="6-8">
+<script type="text/plain">
+using RowOrder = std::function<std::weak_ordering(std::size_t, std::size_t)>;
+
+[[nodiscard]] RowOrder MakeOrder(const ColumnVector& col, bool ascending) {
+  return VisitType(col.type(), [&]<typename Tag>(Tag) -> RowOrder {
+    return [v = col.View<typename Tag::CType>(), ascending](std::size_t a,
+                                                           std::size_t b) -> std::weak_ordering {
+      if (v.IsNull(a) || v.IsNull(b)) return NullsLast(v.IsNull(a), v.IsNull(b));
+      const std::weak_ordering c = NaNLastOrder(v[a], v[b]);  // NaN above every number
+      return ascending ? c : 0 <=> c;
+    };
+  });
+}
+</script>
+    </doc-code>
+
+    <doc-claim at="src/quest/taskflow/operators/sort_operator.cpp:91">
+      <p><b>sort_operator.cpp:91</b> · FinalizeSink()</p>
+      <doc-code src="src/quest/taskflow/operators/sort_operator.cpp" lines="81-92" hl="81,91">
+        <doc-pin line="81" tone="warn" title="A copy of every key cell">The comparators read in place.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 4 · SCALARS ═════ -->
+<doc-claim>
+  <p>A literal is a one-row column, and the <code>Value</code> variant goes.</p>
+  <doc-code title="columnar/column_vector.hpp · sketch" lang="cpp" hl="3,9">
+<script type="text/plain">
+/// @brief One value of one type, or a typed null. Holds a one-row column.
+class Scalar {
+ public:
+  template <FixedWidthCType T> explicit Scalar(T value); // int32_t, Date32, …
+  explicit Scalar(std::string_view value);              // String; copies the chars
+  [[nodiscard]] static Scalar Null(DataType type);
+  [[nodiscard]] DataType type() const noexcept;
+  [[nodiscard]] bool is_null() const noexcept;
+  template <typename T> [[nodiscard]] T Get() const;      // column_->Get<T>(0)
+  [[nodiscard]] std::string ToString() const;             // same formatter as ToCSV
+ private:
+  ColumnVectorPtr column_;
+};
+</script>
+  </doc-code>
+  <doc-ask id="value">
+    <p>Does the per-row <code>Value</code> variant stay?</p>
+    <label><input type="radio" name="value" value="drop" checked> Remove it; literals hold a <code>Scalar</code> <small>no variant is left in the code base</small></label>
+    <label><input type="radio" name="value" value="keep"> Keep it for literals, tests and printing only <small>171 test GetValue calls stay; hot paths still drop it</small></label>
+  </doc-ask>
+  <div data-if="value=keep"><doc-note tone="info">Then claim 4.2 goes, step 6 only deletes <code>GetValue</code> from <code>src/</code>, and <code>Scalar</code> is not added.</doc-note></div>
+
+  <doc-claim>
+    <p>A literal broadcasts as a constant column and never enters a <code>RecordBatch</code>.</p>
+    <doc-code title="execution/kernels/batch_kernels.cpp · sketch" lang="cpp" hl="7">
+<script type="text/plain">
+// LiteralExpression::Evaluate: shares the scalar's buffers; size n, one stored row.
+return ColumnVector::Constant(literal_, input.num_rows());
+
+// ProjectRecordBatch: kernels accept constant columns, batches do not.
+for (const auto& expr : expressions) {
+  auto column = expr->Evaluate(batch);
+  if (!column) return std::unexpected(column.error());
+  columns.push_back((*column)->is_constant() ? Expand(**column) : std::move(*column));
+}
+</script>
+    </doc-code>
+
+    <doc-claim at="src/quest/plan/physical/expressions/physical_expr.hpp:35">
+      <p><b>physical_expr.hpp:35</b> · ColumnData</p>
+      <doc-code src="src/quest/plan/physical/expressions/physical_expr.hpp" lines="35-50" hl="35">
+        <doc-pin line="35" tone="risk" title="The third variant">It goes, with MaterializedColumnVector.</doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Tests read cells with <code>Get&lt;T&gt;(i)</code> and <code>IsNull(i)</code>.</p>
+    <doc-code diff file="tests/test_physical_expr.cpp" lang="cpp">
+<script type="text/plain">
+@@ -105,2 +105,2 @@
+-  EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 42);
+-  EXPECT_EQ(std::get<int32_t>(result->GetValue(4)), 42);
++  EXPECT_EQ(result->Get<int32_t>(0), 42);
++  EXPECT_EQ(result->Get<int32_t>(4), 42);
+</script>
+      <doc-pin line="105" title="171 calls in 13 test files">A mechanical edit.</doc-pin>
+    </doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 5 · STEPS ═════ -->
+<doc-claim>
+  <p>The change lands in 6 steps; each step ends with all tests green.</p>
+  <div class="cols">
+    <div class="card"><h4>1 · Types</h4><p><code>DataType</code>, <code>TypeTraits</code>, <code>VisitType</code>. BYTE_ARRAY and FLBA mapping. A sed edits most of 327 test tags; Binary/Int96/FLBA tests change by hand.</p></div>
+    <div class="card"><h4>2 · Buffers</h4><p>The largest step. A final <code>ColumnVector</code> breaks every subclass, so all producers move at once: reader, generate, expression results, literals, INT96, and approximately 140 test lines. <code>GetValue</code> stays as an adapter.</p></div>
+    <div class="card"><h4>3 · Batch kernels</h4><p>Filter, gather, concatenate, spill, <code>size_in_bytes</code>.</p></div>
+    <div class="card"><h4>4 · Expressions</h4><p><code>Cast</code>, compare, arithmetic, CASE read views, not <code>GetValue</code>.</p></div>
+    <div class="card"><h4>5 · Operators</h4><p>Hash join, hash aggregate, sort. <code>src/</code> stops calling <code>GetValue</code>.</p></div>
+    <div class="card"><h4>6 · Scalar</h4><p><code>Scalar</code> literals; tests use <code>Get&lt;T&gt;</code>. <code>Value</code> goes.</p></div>
+  </div>
+
+  <doc-claim>
+    <p>Q12 at scale factor 1 must run in less time than 845 ms.</p>
+    <doc-mock frame="terminal" title="baseline · 2026-10-31 · Release · be19376" w="480"><template><span class="dim">$</span> duckdb &lt; /tmp/quest-sf1/gen.sql  <span class="dim"># SF 1, 1 row group</span>
+<span class="dim">$</span> cp /tmp/quest-sf1/*.parquet testdata/tpch/
+<span class="dim">$</span> ./build-rel/tests/test_tpch_q12 \
+    --gtest_filter='*MatchesDuckDb'
+MAIL | 6202 | 9324   SHIP | 6200 | 9262  <span class="g">✓ DuckDB</span>
+QUEST   <b>855 · 838 · 848 ms</b>   <span class="dim">(3 runs)</span>
+DuckDB  <b>96 · 82 ms</b>           <span class="dim">(threads = 1)</span>
+<span class="dim">$</span> git checkout testdata/tpch
+
+<span class="dim">after: step 0's Sf1MatchesDuckDb, same report</span></template></doc-mock>
+    <doc-note tone="warn"><strong>Reader bug</strong> The reader fails on files with more than one row group (<code>OutOfRange</code>, <code>bytes.hpp:29</code>). The benchmark file has one row group.</doc-note>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Step 0 adds an opt-in SF 1 test that checks the known answer.</p>
+    <doc-code title="tests/test_tpch_q12.cpp · sketch" lang="cpp" hl="3">
+<script type="text/plain">
+TEST(TpchQ12Test, Sf1MatchesDuckDb) {
+  const char* dir = std::getenv("QUEST_TPCH_SF1_DIR");
+  if (dir == nullptr) GTEST_SKIP() << "set QUEST_TPCH_SF1_DIR to run Q12 at SF 1";
+  ASSERT_OK_AND_ASSIGN(auto rows, RunQ12(dir));
+  EXPECT_EQ(rows, (Rows{{"MAIL", 6202, 9324}, {"SHIP", 6200, 9262}}));
+}
+// testdata/tpch/generate_sf1.sql (new): sf = 1, one row group, threads = 1.
+</script>
+    </doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ SHARED ═════ -->
+<doc-claim aux="shared">
+  <p>Shared: <code>ColumnView&lt;T&gt;</code>, the typed read access that every kernel uses.</p>
+  <doc-code title="columnar/column_vector.hpp · sketch" lang="cpp" hl="5,13">
+<script type="text/plain">
+/// @brief Typed, non-owning reads; a constant column reads row 0 for every row.
+template <typename T>
+class ColumnView {
+ public:
+  [[nodiscard]] T operator[](std::size_t i) const noexcept;  // values_[i * stride_]; String: chars + offsets
+  [[nodiscard]] bool IsNull(std::size_t i) const noexcept;
+  [[nodiscard]] bool has_nulls() const noexcept { return validity_ != nullptr; }
+  [[nodiscard]] std::size_t size() const noexcept { return size_; }
+
+ private:
+  const void* values_ = nullptr;           // Storage<T>*; unused for String
+  const std::int64_t* offsets_ = nullptr;  // String only
+  const char* chars_ = nullptr;            // String only
+  const std::uint8_t* validity_ = nullptr; // null when the column has no nulls
+  std::size_t size_ = 0;
+  std::size_t stride_ = 1;                 // 0 for a constant column: no branch per row
+};
+</script>
+  </doc-code>
+</doc-claim>
+
+<!-- ═════ SCOPE ═════ -->
+<doc-claim aux="scope">
+  <p>Not changing: the plan layers, the pipeline roles and the SQL null rules.</p>
+  <ul>
+    <li>Logical plan nodes, <code>QueryBuilder</code> and <code>PipelineExecutor</code>.</li>
+    <li>Three-valued AND/OR, null on division by zero, overflow errors.</li>
+    <li>No Decimal, Binary, nested types, unsigned types or time zones.</li>
+    <li>No Arrow dependency and no SIMD intrinsics.</li>
+    <li>Parquet page decode and compression.</li>
+  </ul>
+</doc-claim>
+
+</doc-plan>
+</main>
+</body></html>
