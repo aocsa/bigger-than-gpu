@@ -25,7 +25,7 @@ inside `src/`; the error type is `common/result.hpp` (namespace `quest`).
 | `execution/kernels/` | Batch filter/project/truncate kernels, bloom filter (`quest::execution`) |
 | `execution/lowering/` | `plan_to_graph.hpp`: `CreateGraph`, `CreatePhysicalExpr` (`quest::execution`) |
 | `taskflow/` | Execution engine: `Graph`, `GraphBuilder`, `Pipeline`, `MetaPipeline`, `PipelineExecutor`, `PreparedQuery`, `Port`, `Operator`, `OperatorType` (`quest::taskflow`) |
-| `taskflow/operators/` | Concrete operators: TableScan, Generate, Filter, Project, Limit, Union, Print, Collector |
+| `taskflow/operators/` | Concrete operators: TableScan, Generate, Filter, Project, Limit, Union, HashJoin, HashAggregate, Sort, Print, Collector |
 | `cache/` | `DataBlock`, `BatchHolder` (CPU/Disk tiers, spill), `BlockingQueue`, host-block helpers (`quest::cache`) |
 | `memory/` | `MemoryResourceManager` (`quest::memory`) |
 
@@ -33,8 +33,8 @@ Query flow: `QueryBuilder::ExecuteOnGraph` -> logical plan -> `execution::Create
 `Operator`s split into `Pipeline`s by `MetaPipeline` -> `PipelineExecutor` runs them
 (sources `GetNextBatch`, streaming ops `ProcessBatch`, blocking ops `Sink`/`FinalizeSink`).
 
-`OperatorType` also reserves Aggregate, Sort, Join and Partition entries that have no operator
-class yet; check `operators/` before assuming one exists.
+`OperatorType` also reserves BlazingSQL-style entries (ComputeAggregate, SortAndSample,
+PartwiseJoin, Partition, ...) that have no operator class; check `operators/` before assuming one exists.
 
 Other dirs: `tests/` (one `test_*.cpp` per area, GTest), `examples/`, `tasks/`
 (todo, lessons, handoff notes), `.claude/skills/` (new-operator, verify-operator, etc.).
@@ -87,7 +87,8 @@ Other dirs: `tests/` (one `test_*.cpp` per area, GTest), `examples/`, `tasks/`
 2. New operators MUST implement the pipeline-role contract:
    - **Streaming transformations** (Filter, Project, Limit): override `ProcessBatch(DataBlockPtr)` — called in-line by `Pipeline::RunTask`; no `run()` loop.
    - **Sources** (TableScan, Generate, BindableTableScan): override `GetNextBatch()` and ensure `IsSource()` is true, either through `OperatorType` classification or an override. Return `Result<std::optional<DataBlockPtr>>` (nullopt = EOS, never an error).
-   - **Blocking operators** (Aggregate, Sort, Join): override `Sink(DataBlockPtr)` and `FinalizeSink()`; expose `IsSource()` + `GetNextBatch()` only after finalization for the post-barrier source phase.
+   - **Blocking operators** (HashAggregate, Sort): override `Sink(DataBlockPtr)` and `FinalizeSink()`; expose `IsSource()` + `GetNextBatch()` only after finalization for the post-barrier source phase. `FinalizeSink()` runs once, when the sink's own pipeline finishes. `Sink()` must be thread-safe.
+   - **Multi-input operators** declare a `PortRole` per input port (`InputPortRole`): `kHolder` (Union: a child pipeline fills the port's holder), `kSink` (HashJoin build: the child pipeline ends at this operator's `Sink()`), `kFused` (HashJoin probe: the pipeline continues through `ProcessBatch()`).
    - All roles default to passthrough/no-op in `Operator`; override only what the operator needs.
 3. Every new file gets a test in `tests/` registered in `tests/CMakeLists.txt`
 4. `QueryBuilder` methods are rvalue-qualified (`&&`) — chain with `std::move`

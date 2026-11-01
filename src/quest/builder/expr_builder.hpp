@@ -150,6 +150,8 @@ template <LiteralValue T>
   return ExprBuilder(plan::logical::lit(std::move(value)));
 }
 
+[[nodiscard]] inline ExprBuilder Lit(const char* value) { return Lit(std::string(value)); }
+
 /// @brief `CASE WHEN when THEN then ELSE otherwise END`.
 /// @param when Bool condition; null counts as not true.
 /// @param then Value for rows where @p when is true.

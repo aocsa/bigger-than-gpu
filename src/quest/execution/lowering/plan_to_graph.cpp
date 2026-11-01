@@ -3,14 +3,22 @@
 
 #include "quest/execution/lowering/plan_to_graph.hpp"
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include "quest/taskflow/graph_builder.hpp"
 #include "quest/taskflow/operators/filter_operator.hpp"
+#include "quest/taskflow/operators/hash_aggregate_operator.hpp"
+#include "quest/taskflow/operators/hash_join_operator.hpp"
 #include "quest/taskflow/operators/limit_operator.hpp"
 #include "quest/taskflow/operators/project_operator.hpp"
+#include "quest/taskflow/operators/sort_operator.hpp"
 #include "quest/taskflow/operators/table_scan_operator.hpp"
 #include "quest/taskflow/operators/union_operator.hpp"
 
@@ -75,6 +83,36 @@ Result<plan::physical::ExpressionPtr> CreatePhysicalExpr(
 }
 
 namespace {
+
+/// @brief Lowers one `name = AGG(expr)` of an Aggregate node to the operator's spec.
+[[nodiscard]] Result<taskflow::AggregateSpec> LowerAggregate(
+    const plan::logical::NamedAggregate& aggregate, const plan::logical::LogicalPlan& input) {
+  if (dynamic_cast<const plan::logical::CountStar*>(aggregate.expr.get()) != nullptr) {
+    return taskflow::AggregateSpec{taskflow::AggregateKind::kCountStar, nullptr, aggregate.name};
+  }
+  const auto* call = dynamic_cast<const plan::logical::AggregateExpr*>(aggregate.expr.get());
+  if (call == nullptr) {
+    return Error::PhysicalPlanError("Aggregate output '" + aggregate.name +
+                                    "' is not an aggregate function: " +
+                                    aggregate.expr->ToString());
+  }
+  static constexpr std::array<std::pair<std::string_view, taskflow::AggregateKind>, 5> kKinds = {{
+      {"SUM", taskflow::AggregateKind::kSum},
+      {"AVG", taskflow::AggregateKind::kAvg},
+      {"COUNT", taskflow::AggregateKind::kCount},
+      {"MIN", taskflow::AggregateKind::kMin},
+      {"MAX", taskflow::AggregateKind::kMax},
+  }};
+  const auto* kind = std::ranges::find(kKinds, call->op(), &decltype(kKinds)::value_type::first);
+  if (kind == kKinds.end()) {
+    return Error::PhysicalPlanError("Unsupported aggregate function: " + call->op());
+  }
+  auto input_expr = CreatePhysicalExpr(call->input(), input);
+  if (!input_expr) {
+    return std::unexpected(std::move(input_expr).error());
+  }
+  return taskflow::AggregateSpec{kind->second, std::move(*input_expr), aggregate.name};
+}
 
 /// @brief If every expression of @p projection is a pure column reference
 /// (`Column` by name, or `ColumnIndex` resolved against @p input's schema),
@@ -219,6 +257,63 @@ namespace {
     ops.push_back(std::move(op));
     gb.Edge(**left, op_ptr->input_a());
     gb.Edge(**right, op_ptr->input_b());
+    return op_ptr;
+  }
+
+  if (const auto* join = dynamic_cast<const plan::logical::Join*>(&plan)) {
+    auto probe = TranslateNode(join->probe(), memory_manager, ops, gb, next_id);
+    if (!probe) {
+      return std::unexpected(probe.error());
+    }
+    auto build = TranslateNode(join->build(), memory_manager, ops, gb, next_id);
+    if (!build) {
+      return std::unexpected(build.error());
+    }
+    auto op = std::make_unique<taskflow::HashJoinOperator>(next_id++, join->build_key(),
+                                                           join->probe_key(), memory_manager);
+    auto* op_ptr = op.get();
+    ops.push_back(std::move(op));
+    gb.Edge(**build, op_ptr->build());
+    gb.Edge(**probe, op_ptr->probe());
+    return op_ptr;
+  }
+
+  if (const auto* aggregate = dynamic_cast<const plan::logical::Aggregate*>(&plan)) {
+    auto child = TranslateNode(aggregate->input(), memory_manager, ops, gb, next_id);
+    if (!child) {
+      return std::unexpected(child.error());
+    }
+    std::vector<taskflow::AggregateSpec> specs;
+    specs.reserve(aggregate->aggregates().size());
+    for (const auto& named : aggregate->aggregates()) {
+      auto spec = LowerAggregate(named, aggregate->input());
+      if (!spec) {
+        return std::unexpected(std::move(spec).error());
+      }
+      specs.push_back(std::move(*spec));
+    }
+    auto op = std::make_unique<taskflow::HashAggregateOperator>(
+        next_id++, aggregate->group_by(), std::move(specs), memory_manager);
+    auto* op_ptr = op.get();
+    ops.push_back(std::move(op));
+    gb.Edge(**child, *op_ptr);
+    return op_ptr;
+  }
+
+  if (const auto* sort = dynamic_cast<const plan::logical::Sort*>(&plan)) {
+    auto child = TranslateNode(sort->input(), memory_manager, ops, gb, next_id);
+    if (!child) {
+      return std::unexpected(child.error());
+    }
+    std::vector<taskflow::SortKey> keys;
+    keys.reserve(sort->keys().size());
+    for (const auto& key : sort->keys()) {
+      keys.push_back({key.column, key.ascending});
+    }
+    auto op = std::make_unique<taskflow::SortOperator>(next_id++, std::move(keys), memory_manager);
+    auto* op_ptr = op.get();
+    ops.push_back(std::move(op));
+    gb.Edge(**child, *op_ptr);
     return op_ptr;
   }
 
