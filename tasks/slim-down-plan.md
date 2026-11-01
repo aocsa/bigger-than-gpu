@@ -114,3 +114,31 @@ S1 adjustments: keep `AddPorts` (multi-input join ports). Row estimation is dele
 Regression gate per stage: full build, all ctest tests (baseline 609; 
 `GraphBridgeTest.FlagshipSpillThroughRealOperators` is a pre-existing flake under `ctest -j`),
 and byte-identical example/Parquet-decoder outputs against the pre-change binaries.
+
+## Results (2026-10-31)
+
+All stages S1 to S7 done on `claude/plan-execution-query-engine-481b56` (based on `distribution`).
+`src/quest` went from 14,902 to 13,302 lines; header-only code dropped from ~12k to ~7.2k lines.
+Final state: 591 tests pass under `-Werror` (C++23) and under ASan + UBSan; example and Parquet
+decoder outputs are byte-identical to the pre-change binaries.
+
+Bugs fixed along the way (not in the original plan):
+- Spill files were shared and deleted across `DiskMemoryResource` instances (destructor ran
+  `remove_all(base_path)`); each instance now owns `base_path/quest_<pid>_<n>`. This was the
+  "flaky" `GraphBridgeTest.FlagshipSpillThroughRealOperators`.
+- Parquet: negative page sizes, oversized thrift list counts, and reads past EOF could read out
+  of bounds or abort the process.
+- `Scan` with a bad projection column was an assert; now `Scan::WithProjection` returns
+  `SchemaError`.
+
+Follow-ups found (not done here):
+- Expressions do not follow SQL null semantics: comparisons with null yield false, `false OR
+  null` is false, arithmetic treats null as 0.0 and always returns double.
+- `BatchHolder` byte accounting: `Add` counts the host size, `Pull` subtracts the spilled file
+  size, so `current_bytes_` can underflow once back-pressure is wired.
+- `ParquetFileReader` shares one `ifstream` across partitions; parallel `ReadPartition` races.
+- No query cancellation since `ExecuteWithControl` was removed; operators do not reset for
+  re-execution (`LimitOperator::remaining_`, `TableScanOperator::next_partition_`).
+- Serializer reads of spilled names/strings/bitmaps are not bounds-checked.
+- `std::move_only_function` is unavailable in Apple clang 21's libc++; `EdgeTuningPolicy` stays
+  `std::function`.
