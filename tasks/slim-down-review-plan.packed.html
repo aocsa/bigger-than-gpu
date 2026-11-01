@@ -1875,7 +1875,7 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 
 <header>
   <h1>Typed Columns Cleanup in QUEST</h1>
-  <doc-changes new="3" changed="54"></doc-changes>
+  <doc-changes new="21" changed="51"></doc-changes>
   <details class="thread"><summary>Why · 2 requests</summary>
     <doc-quote via="prompt" from="the user">…code changes while mantaining the same functionality you can use model c++ 23 features use the following notes below: /html-plan:htm…</doc-quote>
     <doc-quote via="doc" from="the user's notes">…I’d start with magic_enum. For a SQL engine more broadly, I’d also look at Glaze, spdlog, and standard C+… matchit.cpp Repetitive conditional and structural matching Query-plan nodes and expression trees Glaze JSON serialization and parsing code…</doc-quote>
@@ -1900,21 +1900,22 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 
   <doc-claim>
     <p>Three fixes land first, then nine cleanups. Each commit passes the gate.</p>
-    <doc-code title="commit order · net lines (src / tests)" lang="text">
+    <doc-code title="commits as built · net lines (src / tests)" lang="text" caption="Built 2026-11-01. Each commit passed the gate. Q12 at SF 1: 420.5 ms, 157da8a 428 ms (interleaved).">
 <script type="text/plain">
- 1  Fix: spill reader checks the field name length     +4 / +12
- 2  Fix: row group with too few column chunks          +4 / +45
- 3  Fix: ReadUvarint32 stops after 5 bytes             +4 / +12
- 4  Dead code, all areas (24 tests go)               -350 / -280
- 5  Aggregates: AggregateExpr, plan/aggregate.hpp    -125 / +10
- 6  Lowering: Add<Op>(), pipelines, CommonType        -80 /   0
- 7  Operators: cache helpers, GatherColumns()         -70 /   0
- 8  Columnar: ranges, DataType spill read             -30 /   0
- 9  Errors: ErrorFactory<C> (decision 4)              -35 /   0
-10  Tests: V2 page header, golden footers               0 / +80
-11  Thrift: ReadStruct() and Read() (decision 3)     -650 /   0
-12  Decoders: varints, skip, column decoders         -110 /  -2
-    total                                           -1440 / -125
+5f68904  Fix: spill reader checks the field name length       +3 /  +13
+e6963d3  Fix: row group with too few column chunks            +3 /  +28
+9162c89  Fix: ReadUvarint32 stops after 5 bytes               +3 /   +9
+09eb18a  Dead code, all areas (24 tests go)                 -370 / -287
+a615c56  Aggregates: AggregateExpr, plan/aggregate.hpp      -100 /  +14
+7adde6a  Lowering: Lowering class, pipelines, UnifyType      -51 /    0
+3bd73e6  Operators: cache helpers, GatherColumns()           -78 /    0
+ef49e91  Columnar: DataType spill read, ranges               -21 /    0
+ab9992a  Errors: ErrorFactory<C>                             -32 /    0
+8f606ac  Operators: restore memory-accounting order          +23 /    0
+f7a0824  Tests: V2 page header, golden footers                 0 / +280
+0b6747f  Thrift: ReadStruct() and Read()                    -835 /    0
+e6022fa  Decoders: varints, skip, def levels                -127 /    0
+         total (src 15876 -> 14294)                        -1582 /  +57
 </script>
     </doc-code>
   </doc-claim>
@@ -1931,8 +1932,9 @@ GTest at 157da8a                                        703
 - test_cache_data.cpp:52  MutableRecordBatchAccess       -1
 - result_test.cpp:200-210  Ok() helper                   -2
 + commit 10: V2 page header, golden footers              +2
-= GTest after                                           684
-  CTest after = 684 + BloomJoin.Demo                    685
++ SumType test (commit 5)                                +1
+= GTest after (as built)                                685
+  CTest after = 685 + BloomJoin.Demo                    686
 </script>
     </doc-code>
   </doc-claim>
@@ -1941,6 +1943,7 @@ GTest at 157da8a                                        703
     <p>The build keeps its three dependencies: Snappy, Threads and GTest.</p>
     <doc-code src="CMakeLists.txt" lines="47-48" caption="tests/CMakeLists.txt:2 adds GTest." file="CMakeLists.txt" start="47" sha="157da8a"><script type="text/plain">find_package(Snappy REQUIRED)
 find_package(Threads REQUIRED)</script></doc-code>
+    <doc-note tone="info">Answered: matchit, then dropped. No Homebrew or conda-forge package exists. No library was added.</doc-note>
     <doc-ask id="deps">
       <p>Which third-party library does this branch add?</p>
       <label><input type="radio" name="deps" value="none" checked> None <small>C++23 covers both uses</small></label>
@@ -2606,7 +2609,7 @@ class Lowering {
      return std::unexpected(merged.error());
    }
 </script>
-      <doc-pin line="79" tone="info" title="One null check, in EnsureHostBlock()">Eight operators repeat it today. No test reads its text.</doc-pin>
+      <doc-pin line="79" tone="warn" title="Reverted in 8f606ac">The helper changed when blocks are freed. Only the null check moved.</doc-pin>
     </doc-code>
   </doc-claim>
 
