@@ -3,6 +3,7 @@
 
 #include "quest/plan/logical/logical_plan.hpp"
 
+#include <algorithm>
 #include <sstream>
 
 namespace quest::plan::logical {
@@ -38,12 +39,10 @@ std::string Scan::ToString() const {
 Result<std::unique_ptr<Scan>> Scan::WithProjection(std::string path,
                                                    std::shared_ptr<DataSource> data_source,
                                                    std::vector<std::string> columns) {
-  auto schema = data_source->schema().Select(columns);
-  if (!schema) {
-    return std::unexpected(std::move(schema).error());
-  }
-  return std::make_unique<Scan>(Validated{}, std::move(path), std::move(data_source),
-                                std::move(columns), *std::move(schema));
+  return data_source->schema().Select(columns).transform([&](Schema schema) {
+    return std::make_unique<Scan>(Validated{}, std::move(path), std::move(data_source),
+                                  std::move(columns), std::move(schema));
+  });
 }
 
 Schema Projection::schema() const {
@@ -118,16 +117,8 @@ std::string Projection::ToString() const {
 }
 
 bool UnionCompatible(const Schema& lhs, const Schema& rhs) {
-  if (lhs.num_fields() != rhs.num_fields()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < lhs.num_fields(); ++i) {
-    if (columnar::GetTypeName(lhs.field(i).data_type) !=
-        columnar::GetTypeName(rhs.field(i).data_type)) {
-      return false;
-    }
-  }
-  return true;
+  return std::ranges::equal(lhs.fields(), rhs.fields(), {}, &Field::data_type,
+                            &Field::data_type);
 }
 
 }  // namespace quest::plan::logical

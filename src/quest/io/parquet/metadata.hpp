@@ -26,8 +26,6 @@ using columnar::Field;
 using columnar::Repetition;
 using columnar::Schema;
 
-class ThriftDecoder;
-
 // =============================================================================
 // Metadata Structures
 // =============================================================================
@@ -53,7 +51,6 @@ struct SchemaElement {
 struct ColumnChunkMetadata {
   std::string file_path;  ///< Optional, for external files.
   int64_t file_offset = 0;
-  std::vector<std::string> column_path;
   PhysicalType type = PhysicalType::kBoolean;
   std::vector<Encoding> encodings;
   std::vector<std::string> path_in_schema;
@@ -99,65 +96,6 @@ class MetadataParser {
  public:
   [[nodiscard]] static Result<FileMetadata> Parse(
       std::span<const uint8_t> data);
-
- private:
-  // ===========================================================================
-  // Top-Level Parsers
-  // ===========================================================================
-
-  [[nodiscard]] static Result<FileMetadata> ParseFileMetadata(
-      ThriftDecoder& decoder);
-
-  // ===========================================================================
-  // Schema Parsers
-  // ===========================================================================
-
-  [[nodiscard]] static Result<std::vector<SchemaElement>> ParseSchemaElements(
-      ThriftDecoder& decoder);
-
-  [[nodiscard]] static Result<SchemaElement> ParseSchemaElement(
-      ThriftDecoder& decoder);
-
-  // ===========================================================================
-  // Row Group Parsers
-  // ===========================================================================
-
-  [[nodiscard]] static Result<std::vector<RowGroupMetadata>> ParseRowGroups(
-      ThriftDecoder& decoder);
-
-  [[nodiscard]] static Result<RowGroupMetadata> ParseRowGroup(
-      ThriftDecoder& decoder);
-
-  // ===========================================================================
-  // Column Chunk Parsers
-  // ===========================================================================
-
-  [[nodiscard]] static Result<std::vector<ColumnChunkMetadata>> ParseColumnChunks(
-      ThriftDecoder& decoder);
-
-  [[nodiscard]] static Result<ColumnChunkMetadata> ParseColumnChunk(
-      ThriftDecoder& decoder);
-
-  [[nodiscard]] static Status ParseColumnMetadata(ThriftDecoder& decoder,
-                                                   ColumnChunkMetadata& cc);
-
-  // ===========================================================================
-  // Helper Parsers
-  // ===========================================================================
-
-  [[nodiscard]] static Result<std::vector<Encoding>> ParseEncodings(
-      ThriftDecoder& decoder);
-
-  [[nodiscard]] static Result<std::vector<std::string>> ParseStringList(
-      ThriftDecoder& decoder);
-
-  [[nodiscard]] static Result<ColumnStatistics> ParseStatistics(
-      ThriftDecoder& decoder);
-
-  [[nodiscard]] static Result<std::vector<KeyValue>> ParseKeyValueMetadata(
-      ThriftDecoder& decoder);
-
-  [[nodiscard]] static Result<KeyValue> ParseKeyValue(ThriftDecoder& decoder);
 };
 
 // =============================================================================

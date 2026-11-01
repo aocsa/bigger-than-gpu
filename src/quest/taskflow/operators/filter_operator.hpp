@@ -33,23 +33,17 @@ class FilterOperator : public SimpleOperator {
 
  protected:
   [[nodiscard]] Result<cache::DataBlockPtr> ProcessBatch(cache::DataBlockPtr input) override {
-    auto host_result = cache::EnsureHostBlock(std::move(input));
-    if (!host_result) {
-      return std::unexpected(host_result.error());
+    // `host` stays alive until the output is tracked: memory accounting sees both at once.
+    auto host = cache::EnsureHostBlock(std::move(input));
+    if (!host) {
+      return std::unexpected(host.error());
     }
-    auto host = std::move(*host_result);
-    const auto* batch = host->record_batch();
-    if (!batch) {
-      return Error::Invalid("FilterOperator: empty record batch");
-    }
-
-    auto filtered = execution::FilterRecordBatch(*batch, *predicate_);
+    auto filtered = execution::FilterRecordBatch(*(*host)->record_batch(), *predicate_);
     if (!filtered) {
       return std::unexpected(filtered.error());
     }
-
     return cache::MakeTrackedHostBlock(std::format("filter_{}", id()), std::move(*filtered),
-                                           memory_manager_);
+                                       memory_manager_);
   }
 
  private:

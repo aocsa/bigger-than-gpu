@@ -1,0 +1,20 @@
+version=1
+num_rows=15000
+created_by="DuckDB version v2.0.0 (build d54cbbe3df)"
+schema[0]: name="duckdb_schema" type=0 type_length=- repetition=0 num_children=5 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[1]: name="o_orderkey" type=2 type_length=- repetition=0 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=64 is_signed=1
+schema[2]: name="o_custkey" type=2 type_length=- repetition=0 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=64 is_signed=1
+schema[3]: name="o_orderdate" type=1 type_length=- repetition=0 num_children=0 logical_type=6 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[4]: name="o_orderpriority" type=6 type_length=- repetition=0 num_children=0 logical_type=1 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[5]: name="o_shippriority" type=1 type_length=- repetition=0 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=32 is_signed=1
+row_group[0]: num_rows=15000 total_byte_size=185229 file_offset=- total_compressed_size=4 ordinal=-9972
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["o_orderkey"] codec=1 num_values=15000 total_uncompressed_size=120023 total_compressed_size=59861 data_page_offset=4 index_page_offset=- dictionary_page_offset=-
+    statistics: min=0100000000000000 max=60ea000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[2] path_in_schema=["o_custkey"] codec=1 num_values=15000 total_uncompressed_size=26979 total_compressed_size=22989 data_page_offset=63885 index_page_offset=- dictionary_page_offset=59865
+    statistics: min=0100000000000000 max=db05000000000000 null_count=0 distinct_count=1000 num_values=-
+  column[2]: file_path="" file_offset=0 type=1 encodings=[2] path_in_schema=["o_orderdate"] codec=1 num_values=15000 total_uncompressed_size=32361 total_compressed_size=32372 data_page_offset=92481 index_page_offset=- dictionary_page_offset=82854
+    statistics: min=631f0000 max=c8280000 null_count=0 distinct_count=2401 num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[2] path_in_schema=["o_orderpriority"] codec=1 num_values=15000 total_uncompressed_size=5825 total_compressed_size=5833 data_page_offset=115305 index_page_offset=- dictionary_page_offset=115226
+    statistics: min=312d555247454e54 max=352d4c4f57 null_count=0 distinct_count=5 num_values=-
+  column[4]: file_path="" file_offset=0 type=1 encodings=[2] path_in_schema=["o_shippriority"] codec=1 num_values=15000 total_uncompressed_size=41 total_compressed_size=45 data_page_offset=121078 index_page_offset=- dictionary_page_offset=121059
+    statistics: min=00000000 max=00000000 null_count=0 distinct_count=1 num_values=-

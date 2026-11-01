@@ -5,7 +5,6 @@
 
 #include <cmath>
 #include <functional>
-#include <limits>
 #include <optional>
 #include <string>
 
@@ -18,14 +17,6 @@ using columnar::ColumnView;
 using columnar::Decimal64;
 using columnar::Int128;
 using columnar::PowerOfTen;
-
-/// @brief A one-row column holding @p value.
-template <typename T>
-[[nodiscard]] ColumnVectorPtr OneRow(DataType type, T value) {
-  ColumnBuilder<T> builder(type, 1);
-  builder.Append(value);
-  return std::move(builder).Finish();
-}
 
 /// @brief True for a NULL literal: only literals are constant columns.
 [[nodiscard]] bool IsNullLiteral(const ColumnVector& col) {
@@ -372,25 +363,6 @@ template <typename T>
   });
 }
 
-/// @brief Each row of a numeric or Bool @p col as double (a Decimal divided by 10^scale); 0 for
-/// a null row or another column type.
-[[nodiscard]] std::vector<double> AsDoubles(const ColumnVector& col) {
-  std::vector<double> values(col.size(), 0.0);
-  columnar::VisitType(col.GetType(), [&]<typename Tag>(Tag) {
-    using T = typename Tag::CType;
-    if constexpr (kIsNumber<T> || std::same_as<T, bool>) {  // a Bool counts as 0 or 1
-      const auto view = col.View<T>();
-      for (size_t i = 0; i < values.size(); ++i) {
-        if (!view.IsNull(i)) {
-          auto value = CastOne<double>(view[i], col.GetType().scale, 0);
-          values[i] = value ? *value : 0.0;
-        }
-      }
-    }
-  });
-  return values;
-}
-
 }  // namespace
 
 // =============================================================================
@@ -411,9 +383,7 @@ std::string LiteralExpression::ToString() const { return value_.ToSql(); }
 Result<ColumnVectorPtr> ColumnExpression::Evaluate(
     const RecordBatch& input) const {
   if (index_ >= input.num_columns()) {
-    return std::unexpected(
-        Error::OutOfRange("Column index out of range: " +
-                           std::to_string(index_)));
+    return Error::OutOfRange("Column index out of range: " + std::to_string(index_));
   }
   return input.column_ptr(index_);
 }
@@ -510,18 +480,11 @@ Result<ColumnVectorPtr> CaseExpression::Evaluate(const RecordBatch& input) const
 
   std::optional<DataType> type;
   for (const auto& result : results) {
-    if (IsNullLiteral(*result)) {
-      continue;
+    auto status = UnifyType(
+        type, IsNullLiteral(*result) ? std::nullopt : std::optional<DataType>(result->GetType()));
+    if (!status) {
+      return std::unexpected(status.error());
     }
-    if (!type) {
-      type = result->GetType();
-      continue;
-    }
-    auto common = CommonType(*type, result->GetType());
-    if (!common) {
-      return std::unexpected(common.error());
-    }
-    type = std::move(*common);
   }
   if (!type) {
     type = results.back()->GetType();  // every result is a NULL literal
@@ -571,144 +534,6 @@ std::string CaseExpression::ToString() const {
     s += " WHEN " + when->ToString() + " THEN " + then->ToString();
   }
   return s + " ELSE " + otherwise_->ToString() + " END";
-}
-
-// =============================================================================
-// Aggregate Expressions
-// =============================================================================
-
-Result<ColumnVectorPtr> SumExpression::Evaluate(
-    const RecordBatch& input) const {
-  auto input_result = input_->Evaluate(input);
-  if (!input_result) {
-    return std::unexpected(input_result.error());
-  }
-
-  auto& col = **input_result;
-  const std::vector<double> values = AsDoubles(col);
-  double sum = 0.0;
-
-  for (size_t i = 0; i < col.size(); ++i) {
-    if (!col.IsNull(i)) {
-      sum += values[i];
-    }
-  }
-
-  return OneRow<double>(columnar::DataType::kDouble, sum);
-}
-
-Result<ColumnVectorPtr> AvgExpression::Evaluate(
-    const RecordBatch& input) const {
-  auto input_result = input_->Evaluate(input);
-  if (!input_result) {
-    return std::unexpected(input_result.error());
-  }
-
-  auto& col = **input_result;
-  const std::vector<double> values = AsDoubles(col);
-  double sum = 0.0;
-  size_t count = 0;
-
-  for (size_t i = 0; i < col.size(); ++i) {
-    if (!col.IsNull(i)) {
-      sum += values[i];
-      ++count;
-    }
-  }
-
-  double avg = (count > 0) ? (sum / static_cast<double>(count)) : 0.0;
-
-  return OneRow<double>(columnar::DataType::kDouble, avg);
-}
-
-Result<ColumnVectorPtr> CountExpression::Evaluate(
-    const RecordBatch& input) const {
-  auto input_result = input_->Evaluate(input);
-  if (!input_result) {
-    return std::unexpected(input_result.error());
-  }
-
-  auto& col = **input_result;
-  int64_t count = 0;
-
-  for (size_t i = 0; i < col.size(); ++i) {
-    if (!col.IsNull(i)) {
-      ++count;
-    }
-  }
-
-  return OneRow<int64_t>(columnar::DataType::kInt64, count);
-}
-
-Result<ColumnVectorPtr> CountStarExpression::Evaluate(
-    const RecordBatch& input) const {
-  return OneRow<int64_t>(columnar::DataType::kInt64, static_cast<int64_t>(input.num_rows()));
-}
-
-Result<ColumnVectorPtr> MinExpression::Evaluate(
-    const RecordBatch& input) const {
-  auto input_result = input_->Evaluate(input);
-  if (!input_result) {
-    return std::unexpected(input_result.error());
-  }
-
-  auto& col = **input_result;
-  const std::vector<double> values = AsDoubles(col);
-  if (col.size() == 0) {
-    return OneRow<double>(columnar::DataType::kDouble, std::numeric_limits<double>::quiet_NaN());
-  }
-
-  double min_val = std::numeric_limits<double>::max();
-  bool found = false;
-
-  for (size_t i = 0; i < col.size(); ++i) {
-    if (!col.IsNull(i)) {
-      double val = values[i];
-      if (!found || val < min_val) {
-        min_val = val;
-        found = true;
-      }
-    }
-  }
-
-  if (!found) {
-    min_val = std::numeric_limits<double>::quiet_NaN();
-  }
-
-  return OneRow<double>(columnar::DataType::kDouble, min_val);
-}
-
-Result<ColumnVectorPtr> MaxExpression::Evaluate(
-    const RecordBatch& input) const {
-  auto input_result = input_->Evaluate(input);
-  if (!input_result) {
-    return std::unexpected(input_result.error());
-  }
-
-  auto& col = **input_result;
-  const std::vector<double> values = AsDoubles(col);
-  if (col.size() == 0) {
-    return OneRow<double>(columnar::DataType::kDouble, std::numeric_limits<double>::quiet_NaN());
-  }
-
-  double max_val = std::numeric_limits<double>::lowest();
-  bool found = false;
-
-  for (size_t i = 0; i < col.size(); ++i) {
-    if (!col.IsNull(i)) {
-      double val = values[i];
-      if (!found || val > max_val) {
-        max_val = val;
-        found = true;
-      }
-    }
-  }
-
-  if (!found) {
-    max_val = std::numeric_limits<double>::quiet_NaN();
-  }
-
-  return OneRow<double>(columnar::DataType::kDouble, max_val);
 }
 
 }  // namespace quest::plan::physical

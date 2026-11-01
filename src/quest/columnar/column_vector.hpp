@@ -4,12 +4,10 @@
 #pragma once
 
 #include <algorithm>
-#include <bit>
 #include <cassert>
 #include <chrono>
 #include <concepts>
 #include <cstdint>
-#include <cstring>
 #include <format>
 #include <memory>
 #include <optional>
@@ -21,7 +19,6 @@
 #include <vector>
 
 #include "quest/columnar/types.hpp"
-#include "quest/common/result.hpp"
 
 namespace quest::columnar {
 
@@ -50,12 +47,11 @@ __extension__ using Int128 = __int128;  // __extension__: -Wpedantic rejects bar
   using namespace std::chrono;
   const sys_time<microseconds> time{microseconds{timestamp.micros}};
   const auto day = floor<days>(time);
-  const year_month_day ymd{day};
   const hh_mm_ss clock{time - day};
-  std::string text = std::format("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", static_cast<int>(ymd.year()),
-                                 static_cast<unsigned>(ymd.month()),
-                                 static_cast<unsigned>(ymd.day()), clock.hours().count(),
-                                 clock.minutes().count(), clock.seconds().count());
+  std::string text =
+      FormatDate32(Date32{static_cast<std::int32_t>(day.time_since_epoch().count())}) +
+      std::format(" {:02}:{:02}:{:02}", clock.hours().count(), clock.minutes().count(),
+                  clock.seconds().count());
   if (const auto micros = clock.subseconds().count(); micros != 0) {
     std::string fraction = std::format("{:06}", micros);
     fraction.erase(fraction.find_last_not_of('0') + 1);

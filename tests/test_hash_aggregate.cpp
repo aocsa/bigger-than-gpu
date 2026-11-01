@@ -46,6 +46,7 @@ using columnar::DataType;
 using columnar::Field;
 using columnar::RecordBatch;
 using columnar::Schema;
+using plan::AggregateKind;
 using plan::physical::ColumnExpression;
 using plan::physical::ExpressionPtr;
 

@@ -78,25 +78,11 @@ class CollectorOperator : public Operator {
     std::vector<columnar::RecordBatch> out;
     out.reserve(batches_.size());
     for (const auto& block : batches_) {
-      auto host = std::dynamic_pointer_cast<cache::HostMemoryBlock>(block);
+      auto host = cache::EnsureHostBlock(block);
       if (!host) {
-        auto upgraded = block->ToCpu();
-        if (!upgraded) {
-          return std::unexpected(upgraded.error());
-        }
-        host = std::move(*upgraded);
+        return std::unexpected(host.error());
       }
-      if (!host->record_batch()) {
-        return Error::Invalid("Collector: block has no record batch");
-      }
-      // Copy columns into a new RecordBatch (HostMemoryBlock owns the original).
-      const auto& rb = *host->record_batch();
-      std::vector<columnar::ColumnVectorPtr> cols;
-      cols.reserve(rb.num_columns());
-      for (size_t i = 0; i < rb.num_columns(); ++i) {
-        cols.push_back(rb.column_ptr(i));
-      }
-      out.emplace_back(rb.schema(), std::move(cols));
+      out.push_back(*(*host)->record_batch());  // shares the columns
     }
     return out;
   }

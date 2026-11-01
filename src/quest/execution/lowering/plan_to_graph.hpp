@@ -53,7 +53,8 @@ using ExecutableGraphPtr = std::unique_ptr<ExecutableGraph>;
 
 /// @brief Translate a supported LogicalPlan into a push-pipeline ExecutableGraph.
 ///
-/// Supported: Scan, Selection, Projection, Limit, Union (and trees thereof).
+/// Supported: Scan, Selection, Projection, Limit, Union, Join, Aggregate, Sort (and trees
+/// thereof).
 /// Unsupported nodes return an error.
 [[nodiscard]] Result<ExecutableGraphPtr> CreateGraph(
     const plan::logical::LogicalPlan& plan,

@@ -29,6 +29,10 @@ add_executable(test_parquet_reader test_parquet_reader.cpp)
 target_link_libraries(test_parquet_reader PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_parquet_reader DISCOVERY_TIMEOUT 60)
 
+add_executable(test_parquet_golden test_parquet_golden.cpp)
+target_link_libraries(test_parquet_golden PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_parquet_golden DISCOVERY_TIMEOUT 60)
+
 add_executable(test_column_vector test_column_vector.cpp)
 target_link_libraries(test_column_vector PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_column_vector DISCOVERY_TIMEOUT 60)

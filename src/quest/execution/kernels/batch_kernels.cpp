@@ -6,9 +6,7 @@
 #include <algorithm>
 #include <numeric>
 #include <string>
-#include <type_traits>
 #include <utility>
-#include <variant>
 
 namespace quest::execution {
 
@@ -23,6 +21,16 @@ columnar::ColumnVectorPtr GatherColumn(const columnar::ColumnVector& col,
     }
     return std::move(builder).Finish();
   });
+}
+
+std::vector<columnar::ColumnVectorPtr> GatherColumns(const columnar::RecordBatch& batch,
+                                                     const std::vector<size_t>& indices) {
+  std::vector<columnar::ColumnVectorPtr> columns;
+  columns.reserve(batch.num_columns());
+  for (size_t col = 0; col < batch.num_columns(); ++col) {
+    columns.push_back(GatherColumn(batch.column(col), indices));
+  }
+  return columns;
 }
 
 Result<columnar::RecordBatch> FilterRecordBatch(
@@ -50,13 +58,7 @@ Result<columnar::RecordBatch> FilterRecordBatch(
   if (indices.empty()) {
     return columnar::RecordBatch(batch.schema(), {});
   }
-
-  std::vector<columnar::ColumnVectorPtr> new_columns;
-  new_columns.reserve(batch.num_columns());
-  for (size_t col_idx = 0; col_idx < batch.num_columns(); ++col_idx) {
-    new_columns.push_back(GatherColumn(batch.column(col_idx), indices));
-  }
-  return columnar::RecordBatch(batch.schema(), std::move(new_columns));
+  return columnar::RecordBatch(batch.schema(), GatherColumns(batch, indices));
 }
 
 Result<columnar::RecordBatch> TruncateRecordBatch(
@@ -64,18 +66,9 @@ Result<columnar::RecordBatch> TruncateRecordBatch(
   if (n_rows == 0) {
     return columnar::RecordBatch(batch.schema(), {});
   }
-  const std::size_t take = std::min(n_rows, batch.num_rows());
-  std::vector<size_t> indices(take);
-  for (std::size_t i = 0; i < take; ++i) {
-    indices[i] = i;
-  }
-
-  std::vector<columnar::ColumnVectorPtr> new_columns;
-  new_columns.reserve(batch.num_columns());
-  for (size_t col_idx = 0; col_idx < batch.num_columns(); ++col_idx) {
-    new_columns.push_back(GatherColumn(batch.column(col_idx), indices));
-  }
-  return columnar::RecordBatch(batch.schema(), std::move(new_columns));
+  std::vector<size_t> indices(std::min(n_rows, batch.num_rows()));
+  std::iota(indices.begin(), indices.end(), size_t{0});
+  return columnar::RecordBatch(batch.schema(), GatherColumns(batch, indices));
 }
 
 Result<columnar::RecordBatch> ProjectRecordBatch(
@@ -95,9 +88,6 @@ Result<columnar::RecordBatch> ProjectRecordBatch(
       result = GatherColumn(**result, rows);
     }
     columns.push_back(std::move(*result));
-  }
-  if (columns.size() != expressions.size()) {
-    return Error::ExpressionError("Projection produced fewer columns than expressions");
   }
   return columnar::RecordBatch(schema, std::move(columns));
 }

@@ -40,9 +40,6 @@ class PrintOperator : public Operator {
       return std::unexpected(host.error());
     }
     const auto* record_batch = (*host)->record_batch();
-    if (record_batch == nullptr) {
-      return Error::Invalid("PrintOperator: block has no record batch");
-    }
     out_ << record_batch->ToCSV();
     total_rows_ += record_batch->num_rows();
     ++batch_count_;

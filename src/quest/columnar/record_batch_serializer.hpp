@@ -3,13 +3,11 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
 #include <vector>
 
 #include "quest/columnar/column_vector.hpp"
 #include "quest/columnar/record_batch.hpp"
-#include "quest/columnar/schema.hpp"
 #include "quest/columnar/types.hpp"
 #include "quest/common/result.hpp"
 
@@ -44,10 +42,6 @@ class RecordBatchSerializer {
   [[nodiscard]] static Result<RecordBatch> DeserializeFromFile(const std::string& filename);
 
  private:
-  static void WriteDataType(std::vector<uint8_t>& buffer, DataType type);
-
-  static Result<DataType> ReadDataType(const std::vector<uint8_t>& buffer, size_t& offset);
-
   static Status WriteColumn(std::vector<uint8_t>& buffer, const ColumnVector& column, size_t num_rows);
 
 

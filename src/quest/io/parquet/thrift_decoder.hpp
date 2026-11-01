@@ -10,6 +10,8 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "quest/common/result.hpp"
@@ -127,8 +129,100 @@ class ThriftDecoder {
   [[nodiscard]] Status SkipStruct() noexcept;
 
  private:
+  /// @brief Reads a length-prefixed run of bytes.
+  /// @param too_long The error message when the run passes the end of the data.
+  /// @return A view of the bytes in the decoder's buffer, or `ThriftDecodeError`.
+  [[nodiscard]] Result<std::span<const uint8_t>> ReadLengthPrefixed(const char* too_long) noexcept;
+
   std::span<const uint8_t> data_;
   size_t pos_;
 };
+
+// =============================================================================
+// Struct and Value Readers
+// =============================================================================
+
+/// @brief Reads one struct up to its STOP field.
+/// @param on_field Called as `on_field(int16_t field_id, ThriftType type) -> Status` for each
+/// field; it reads or skips the field's value.
+/// @return The first error of the decoder or of @p on_field.
+template <typename OnField>
+[[nodiscard]] Status ReadStruct(ThriftDecoder& decoder, OnField&& on_field) {
+  int16_t last_field_id = 0;
+  while (true) {
+    auto header = decoder.ReadFieldHeader(last_field_id);
+    if (!header) {
+      return std::unexpected(std::move(header).error());
+    }
+    if (!*header) {
+      return {};
+    }
+    last_field_id = (*header)->field_id;
+    if (auto read = on_field(last_field_id, (*header)->type); !read) {
+      return read;
+    }
+  }
+}
+
+// =============================================================================
+// Read(decoder, out): one overload per field type. Each reads one value from @p decoder
+// into @p out and returns the decoder's error, if any. A struct type adds its own overload.
+// =============================================================================
+
+/// @brief Reads an i16 into @p out.
+[[nodiscard]] inline Status Read(ThriftDecoder& decoder, int16_t& out) {
+  return decoder.ReadI16().transform([&](int16_t value) { out = value; });
+}
+
+/// @brief Reads an i32 into @p out.
+[[nodiscard]] inline Status Read(ThriftDecoder& decoder, int32_t& out) {
+  return decoder.ReadI32().transform([&](int32_t value) { out = value; });
+}
+
+/// @brief Reads an i64 into @p out.
+[[nodiscard]] inline Status Read(ThriftDecoder& decoder, int64_t& out) {
+  return decoder.ReadI64().transform([&](int64_t value) { out = value; });
+}
+
+/// @brief Reads a thrift enum, an i32, into @p out.
+template <typename E>
+  requires std::is_enum_v<E>
+[[nodiscard]] Status Read(ThriftDecoder& decoder, E& out) {
+  return decoder.ReadI32().transform([&](int32_t value) { out = static_cast<E>(value); });
+}
+
+/// @brief Reads a string into @p out.
+[[nodiscard]] inline Status Read(ThriftDecoder& decoder, std::string& out) {
+  return decoder.ReadString().transform([&](std::string value) { out = std::move(value); });
+}
+
+/// @brief Reads a binary blob into @p out.
+[[nodiscard]] inline Status Read(ThriftDecoder& decoder, std::vector<uint8_t>& out) {
+  return decoder.ReadBinary().transform(
+      [&](std::vector<uint8_t> value) { out = std::move(value); });
+}
+
+/// @brief Reads a value of an optional field into @p out, replacing any earlier value.
+template <typename T>
+[[nodiscard]] Status Read(ThriftDecoder& decoder, std::optional<T>& out) {
+  return Read(decoder, out.emplace());
+}
+
+/// @brief Reads a list into @p out, replacing its contents; each element by its `Read`.
+template <typename T>
+[[nodiscard]] Status Read(ThriftDecoder& decoder, std::vector<T>& out) {
+  auto header = decoder.ReadListHeader();
+  if (!header) {
+    return std::unexpected(std::move(header).error());
+  }
+  out.clear();
+  out.reserve(header->size);
+  for (uint32_t i = 0; i < header->size; ++i) {
+    if (auto read = Read(decoder, out.emplace_back()); !read) {
+      return read;
+    }
+  }
+  return {};
+}
 
 }  // namespace quest::io::parquet

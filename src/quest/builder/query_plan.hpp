@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <initializer_list>
 #include <memory>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -44,13 +45,11 @@ class QueryPlan {
 
   [[nodiscard]] static Result<QueryPlan> FromParquet(
       const std::string& filename) {
-    auto source_result = io::parquet::ParquetDataSource::Open(filename);
-    if (!source_result) {
-      return std::unexpected(source_result.error());
-    }
-    auto source = std::make_shared<io::parquet::ParquetDataSource>(std::move(*source_result));
-    return QueryPlan(
-        std::make_unique<plan::logical::Scan>(filename, std::move(source)));
+    return io::parquet::ParquetDataSource::Open(filename).transform(
+        [&](io::parquet::ParquetDataSource source) {
+          return QueryPlan(std::make_unique<plan::logical::Scan>(
+              filename, std::make_shared<io::parquet::ParquetDataSource>(std::move(source))));
+        });
   }
 
   [[nodiscard]] static QueryPlan From(std::shared_ptr<datasource::DataSource> source,
@@ -78,18 +77,11 @@ class QueryPlan {
         std::make_unique<plan::logical::Projection>(std::move(plan_), std::move(exprs)));
   }
 
-  [[nodiscard]] QueryPlan Select(
-      std::initializer_list<ExprBuilder> exprs) && {
-    std::vector<plan::logical::LogicalExprPtr> expr_list;
-    expr_list.reserve(exprs.size());
-    for (const auto& expr : exprs) {
-      expr_list.push_back(expr.Build());
-    }
-    return QueryPlan(
-        std::make_unique<plan::logical::Projection>(std::move(plan_), std::move(expr_list)));
+  [[nodiscard]] QueryPlan Select(std::initializer_list<ExprBuilder> exprs) && {
+    return std::move(*this).Select(std::span<const ExprBuilder>(exprs.begin(), exprs.size()));
   }
 
-  [[nodiscard]] QueryPlan Select(const std::vector<ExprBuilder>& exprs) && {
+  [[nodiscard]] QueryPlan Select(std::span<const ExprBuilder> exprs) && {
     std::vector<plan::logical::LogicalExprPtr> expr_list;
     expr_list.reserve(exprs.size());
     for (const auto& expr : exprs) {
@@ -150,8 +142,6 @@ class QueryPlan {
   [[nodiscard]] columnar::Schema schema() const { return plan_->schema(); }
 
  private:
-  template <typename>
-  friend class QueryBuilderOf;
   friend class QueryBuilder;
 
   explicit QueryPlan(plan::logical::LogicalPlanPtr plan) noexcept : plan_(std::move(plan)) {}

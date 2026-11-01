@@ -46,9 +46,6 @@ class FileHandle {
 
   [[nodiscard]] size_t size() const noexcept { return file_size_; }
 
-  [[nodiscard]] Status Read(size_t offset, size_t length,
-                            std::vector<uint8_t>& buffer) const;
-
   [[nodiscard]] Result<std::vector<uint8_t>> Read(size_t offset,
                                                    size_t length) const;
 

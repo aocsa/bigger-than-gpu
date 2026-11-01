@@ -251,7 +251,7 @@ TEST(ParquetBytesTest, RleDecoderRejectsTruncatedBitPackedRun) {
   // Header 0x03: one bit-packed group of 8 values at bit width 8 needs 8 bytes; 2 are present.
   const std::vector<uint8_t> buf{0x03, 0x01, 0x02};
   RleBitPackingDecoder decoder(8);
-  decoder.SetData(buf, 8);
+  decoder.SetData(buf);
   ASSERT_OK_AND_ASSIGN(auto first, decoder.ReadValue());
   EXPECT_EQ(first, 1);
   ASSERT_OK_AND_ASSIGN(auto second, decoder.ReadValue());
@@ -262,7 +262,7 @@ TEST(ParquetBytesTest, RleDecoderRejectsTruncatedBitPackedRun) {
 TEST(ParquetBytesTest, RleDecoderRejectsInvalidBitWidth) {
   const std::vector<uint8_t> buf{0x02, 0x01};
   RleBitPackingDecoder decoder(40);
-  decoder.SetData(buf, 1);
+  decoder.SetData(buf);
   EXPECT_FALSE(decoder.ReadValue().has_value());
 }
 
@@ -279,6 +279,34 @@ TEST(ParquetCorruptFileTest, FooterLengthPastFileStartIsAnError) {
   std::filesystem::remove(path);
 }
 
+TEST(ParquetCorruptFileTest, RowGroupWithTooFewColumnChunksIsAnError) {
+  // Compact-thrift FileMetadata: version 1; schema = root + one required INT32 leaf "a";
+  // num_rows 0; one row group with an empty columns list.
+  const std::vector<uint8_t> footer{
+      0x15, 0x02,                                      // 1: version = 1
+      0x19, 0x2C,                                      // 2: schema, list of 2 structs
+      0x48, 0x04, 'r', 'o', 'o', 't', 0x15, 0x02, 0x00,  //   root: name, num_children = 1
+      0x15, 0x02, 0x25, 0x00, 0x18, 0x01, 'a', 0x00,   //   leaf: INT32, REQUIRED, name "a"
+      0x16, 0x00,                                      // 3: num_rows = 0
+      0x19, 0x1C,                                      // 4: row_groups, list of 1 struct
+      0x19, 0x0C, 0x16, 0x00, 0x16, 0x00, 0x00,        //   columns = [], sizes 0
+      0x00};
+  const auto path = std::filesystem::temp_directory_path() / "quest_missing_chunks.parquet";
+  {
+    std::ofstream out(path, std::ios::binary);
+    const auto length = static_cast<uint32_t>(footer.size());
+    out.write("PAR1", 4);
+    out.write(reinterpret_cast<const char*>(footer.data()), static_cast<std::streamsize>(length));
+    out.write(reinterpret_cast<const char*>(&length), sizeof(length));
+    out.write("PAR1", 4);
+  }
+  ASSERT_OK_AND_ASSIGN(auto reader, ParquetFileReader::Open(path.string()));
+  auto batch = reader.ReadRowGroup(0, {});
+  ASSERT_FALSE(batch.has_value());
+  EXPECT_EQ(batch.error().code(), quest::ErrorCode::ParquetFormatError);
+  std::filesystem::remove(path);
+}
+
 TEST(ParquetCorruptFileTest, NegativeCompressedPageSizeIsAnError) {
   // Compact-thrift PageHeader: type=DATA_PAGE, uncompressed_page_size=10,
   // compressed_page_size=-1 (zigzag 0x01), stop.
@@ -288,11 +316,50 @@ TEST(ParquetCorruptFileTest, NegativeCompressedPageSizeIsAnError) {
   EXPECT_FALSE(reader.GetPageData().has_value());
 }
 
+TEST(ParquetPageHeaderTest, DataPageV2HeaderIsParsed) {
+  // Compact-thrift PageHeader: type=DATA_PAGE_V2, uncompressed and compressed size 4,
+  // 8: data_page_header_v2 {num_values=5, num_nulls=1, num_rows=4, encoding=RLE_DICTIONARY,
+  // definition_levels_byte_length=2, repetition_levels_byte_length=0, is_compressed=false}.
+  const std::vector<uint8_t> page{
+      0x15, 0x06, 0x15, 0x08, 0x15, 0x08,  // 1: type = 3, 2: uncompressed = 4, 3: compressed = 4
+      0x5C,                                // 8: data_page_header_v2 (struct)
+      0x15, 0x0A, 0x15, 0x02, 0x15, 0x08,  //   num_values = 5, num_nulls = 1, num_rows = 4
+      0x15, 0x10, 0x15, 0x04, 0x15, 0x00,  //   encoding = 8, def length = 2, rep length = 0
+      0x12, 0x00,                          //   7: is_compressed = false (bool in header), stop
+      0x00,                                // stop
+      0xA1, 0xA2, 0xA3, 0xA4};
+  PageReader reader(page);
+  ASSERT_OK_AND_ASSIGN(auto header, reader.ReadPageHeader());
+  EXPECT_EQ(header.type, PageType::kDataPageV2);
+  EXPECT_EQ(header.uncompressed_page_size, 4);
+  EXPECT_EQ(header.compressed_page_size, 4);
+  EXPECT_EQ(header.num_values, 5);
+  EXPECT_EQ(header.num_nulls, 1);
+  EXPECT_EQ(header.num_rows, 4);
+  EXPECT_EQ(header.encoding, Encoding::kRleDictionary);
+  EXPECT_EQ(header.definition_levels_byte_length, 2);
+  EXPECT_EQ(header.repetition_levels_byte_length, 0);
+  EXPECT_FALSE(header.is_compressed);
+  ASSERT_OK_AND_ASSIGN(auto data, reader.GetPageData());
+  ASSERT_EQ(data.size(), 4U);
+  EXPECT_EQ(data[0], 0xA1);
+  EXPECT_FALSE(reader.HasNextPage());
+}
+
 TEST(ParquetCorruptFileTest, ListSizeBeyondBufferIsAnError) {
   // List header: size nibble 0xF -> varint size 0x7FFFFFFF, element type i32; no elements follow.
   const std::vector<uint8_t> buf{0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x07};
   ThriftDecoder decoder(buf);
   EXPECT_FALSE(decoder.ReadListHeader().has_value());
+}
+
+TEST(ParquetCorruptFileTest, UnsignedVarintLongerThanFiveBytesIsAnError) {
+  // Six continuation bytes: a uint32 varint has 5 bytes at most.
+  const std::vector<uint8_t> buf{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01};
+  ThriftDecoder decoder(buf);
+  auto value = decoder.ReadUvarint32();
+  ASSERT_FALSE(value.has_value());
+  EXPECT_EQ(value.error().code(), ErrorCode::ThriftDecodeError);
 }
 
 TEST(ParquetCorruptFileTest, FileReadPastEndIsAnError) {

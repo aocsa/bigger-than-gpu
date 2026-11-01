@@ -9,10 +9,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <stdexcept>
-#include <concepts>
 #include <source_location>
-#include <type_traits>
 
 
 namespace quest {
@@ -91,6 +88,18 @@ static_assert(kErrorCodeNames.size() == std::to_underlying(ErrorCode::SchemaErro
   return kErrorCodeNames[std::to_underlying(code)];
 }
 
+struct Error;
+
+/// @brief The type of `Error::Invalid`, `Error::IOError`, ...: a call makes an error of code
+/// @p C as a `std::unexpected<Error>`.
+template <ErrorCode C>
+struct ErrorFactory {
+  /// @param message The error message.
+  /// @param loc The caller's source location.
+  [[nodiscard]] std::unexpected<Error> operator()(
+      std::string message, std::source_location loc = std::source_location::current()) const;
+};
+
 // source_location captures call-site automatically — no manual __FILE__/__LINE__ needed.
 struct Error {
   ErrorCode code_;
@@ -109,12 +118,6 @@ struct Error {
         std::source_location location = std::source_location::current())
       : code_(code), message_(message), loc_(location) {}
 
-  Error(const Error& other) = default;
-  Error(Error&& other) noexcept = default;
-  Error& operator=(const Error& other) = default;
-  Error& operator=(Error&& other) noexcept = default;
-  ~Error() = default;
-
   [[nodiscard]] ErrorCode code() const noexcept { return code_; }
   [[nodiscard]] const std::string& message() const noexcept { return message_; }
   [[nodiscard]] const std::source_location& location() const noexcept { return loc_; }
@@ -129,83 +132,36 @@ struct Error {
   }
 
   [[nodiscard]] explicit operator const char*() const { return message_.c_str(); }
-  [[nodiscard]] explicit operator char*() { return (char*)message_.data(); }
 
   // Comparison is by code only — two errors with the same code are considered equal.
   [[nodiscard]] bool operator==(const Error& other) const noexcept { return code_ == other.code_; }
-  [[nodiscard]] bool operator!=(const Error& other) const noexcept { return code_ != other.code_; }
   [[nodiscard]] bool operator==(ErrorCode code) const noexcept { return code_ == code; }
-  [[nodiscard]] bool operator!=(ErrorCode code) const noexcept { return code_ != code; }
 
-  [[nodiscard]] static std::unexpected<Error> Invalid(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::Invalid, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> IOError(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::IOError, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> OutOfMemory(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::OutOfMemory, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> NotFound(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::NotFound, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> AlreadyExists(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::AlreadyExists, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> Cancelled(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::Cancelled, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> ParquetFormatError(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::ParquetFormatError, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> UnsupportedEncoding(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::UnsupportedEncoding, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> ThriftDecodeError(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::ThriftDecodeError, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> PageDecodeError(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::PageDecodeError, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> ColumnDecodeError(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::ColumnDecodeError, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> TypeError(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::TypeError, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> OutOfRange(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::OutOfRange, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> LogicalPlanError(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::LogicalPlanError, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> PhysicalPlanError(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::PhysicalPlanError, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> ExpressionError(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::ExpressionError, std::move(message), loc)};
-  }
-  [[nodiscard]] static std::unexpected<Error> SchemaError(
-      std::string message, std::source_location loc = std::source_location::current()) {
-    return std::unexpected<Error>{Error(ErrorCode::SchemaError, std::move(message), loc)};
-  }
+  static constexpr ErrorFactory<ErrorCode::Invalid> Invalid{};
+  static constexpr ErrorFactory<ErrorCode::IOError> IOError{};
+  static constexpr ErrorFactory<ErrorCode::OutOfMemory> OutOfMemory{};
+  static constexpr ErrorFactory<ErrorCode::NotFound> NotFound{};
+  static constexpr ErrorFactory<ErrorCode::AlreadyExists> AlreadyExists{};
+  static constexpr ErrorFactory<ErrorCode::Cancelled> Cancelled{};
+  static constexpr ErrorFactory<ErrorCode::ParquetFormatError> ParquetFormatError{};
+  static constexpr ErrorFactory<ErrorCode::UnsupportedEncoding> UnsupportedEncoding{};
+  static constexpr ErrorFactory<ErrorCode::ThriftDecodeError> ThriftDecodeError{};
+  static constexpr ErrorFactory<ErrorCode::PageDecodeError> PageDecodeError{};
+  static constexpr ErrorFactory<ErrorCode::ColumnDecodeError> ColumnDecodeError{};
+  static constexpr ErrorFactory<ErrorCode::TypeError> TypeError{};
+  static constexpr ErrorFactory<ErrorCode::OutOfRange> OutOfRange{};
+  static constexpr ErrorFactory<ErrorCode::LogicalPlanError> LogicalPlanError{};
+  static constexpr ErrorFactory<ErrorCode::PhysicalPlanError> PhysicalPlanError{};
+  static constexpr ErrorFactory<ErrorCode::ExpressionError> ExpressionError{};
+  static constexpr ErrorFactory<ErrorCode::SchemaError> SchemaError{};
 };
+
+// Defined after Error: the body constructs an Error, which must be complete here.
+template <ErrorCode C>
+std::unexpected<Error> ErrorFactory<C>::operator()(std::string message,
+                                                   std::source_location loc) const {
+  return std::unexpected<Error>{Error(C, std::move(message), loc)};
+}
 
 // =============================================================================
 // Status
@@ -219,9 +175,7 @@ using Status = std::expected<void, Error>;
 
 /// @brief Result type using std::expected (C++23).
 ///
-/// Result<T> holds either a value of type T on success, or a Status on failure.
-/// Use has_value() to check success, value() to get the result, and error()
-/// to get the Status on failure.
+/// Result<T> holds either a value of type T on success, or an Error on failure.
 ///
 /// @tparam T The success value type.
 template <typename T>
@@ -231,19 +185,10 @@ using Result = std::expected<T, Error>;
 // Helper Functions
 // =============================================================================
 
-template <typename T>
-[[nodiscard]] Result<T> Ok(T value) {
-  return Result<T>{std::in_place, std::move(value)};
-}
-
 [[nodiscard]] inline std::unexpected<Error> Err(
     ErrorCode code, std::string message,
     std::source_location loc = std::source_location::current()) {
   return std::unexpected<Error>{Error{code, std::move(message), loc}};
-}
-
-[[nodiscard]] inline std::unexpected<Error> Err(const Error& error) {
-  return std::unexpected<Error>{error};
 }
 
 }  // namespace quest

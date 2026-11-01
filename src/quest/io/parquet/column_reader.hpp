@@ -39,7 +39,6 @@ class ColumnReader {
       : field_(field),
         leaf_(leaf),
         column_meta_(column_meta),
-        data_(data),
         page_reader_(data),
         codec_(std::move(codec)) {}
 
@@ -119,7 +118,6 @@ class ColumnReader {
   Field field_;
   LeafType leaf_;
   ColumnChunkMetadata column_meta_;
-  std::span<const uint8_t> data_;
   PageReader page_reader_;
   std::unique_ptr<CompressionCodec> codec_;
 

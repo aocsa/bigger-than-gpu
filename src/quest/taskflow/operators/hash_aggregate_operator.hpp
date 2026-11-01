@@ -21,17 +21,15 @@
 #include "quest/columnar/schema.hpp"
 #include "quest/common/result.hpp"
 #include "quest/memory/memory_resource.hpp"
+#include "quest/plan/aggregate.hpp"
 #include "quest/plan/physical/expressions/physical_expr.hpp"
 #include "quest/taskflow/operator.hpp"
 
 namespace quest::taskflow {
 
-/// @brief Aggregate function applied per group.
-enum class AggregateKind : std::uint8_t { kSum, kCount, kCountStar, kMin, kMax, kAvg };
-
 /// @brief One aggregate output column.
 struct AggregateSpec {
-  AggregateKind kind;
+  plan::AggregateKind kind;
   plan::physical::ExpressionPtr input;  ///< nullptr for kCountStar
   std::string output_name;
   /// The planner's output type; it types the output when no input row arrives.
@@ -113,13 +111,13 @@ class HashAggregateOperator : public Operator {
     std::uint32_t FindOrInsert(const std::string& key);
   };
 
-  [[nodiscard]] static std::unique_ptr<ExtremesBase> MakeExtremes(AggregateKind kind,
+  [[nodiscard]] static std::unique_ptr<ExtremesBase> MakeExtremes(plan::AggregateKind kind,
                                                                   columnar::DataType type);
 
   /// @brief Folds @p local into the shared table; the caller holds the mutex.
-  [[nodiscard]] Status MergeLocked(GroupTable& local);
+  [[nodiscard]] Status MergeLocked(const GroupTable& local);
 
-  [[nodiscard]] Result<columnar::RecordBatch> BuildOutput() const;
+  [[nodiscard]] columnar::RecordBatch BuildOutput() const;
 
   std::vector<std::string> group_by_;
   std::vector<AggregateSpec> aggregates_;

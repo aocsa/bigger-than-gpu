@@ -22,20 +22,7 @@ using columnar::ColumnVector;
 using columnar::ColumnVectorPtr;
 using columnar::DataType;
 using columnar::Decimal64;
-
-/// @brief How SUM adds an input: integers, Bools and Decimals (unscaled) in an int64, the
-/// rest as double.
-enum class NumericClass : std::uint8_t { kInteger, kDecimal, kFloating, kOther };
-
-[[nodiscard]] NumericClass Classify(DataType type) {
-  if (columnar::IsInteger(type)) {
-    return NumericClass::kInteger;
-  }
-  if (columnar::IsDecimal(type)) {
-    return NumericClass::kDecimal;
-  }
-  return columnar::IsNumeric(type) ? NumericClass::kFloating : NumericClass::kOther;
-}
+using plan::AggregateKind;
 
 [[nodiscard]] DataType OutputType(AggregateKind kind, const std::optional<DataType>& input_type) {
   switch (kind) {
@@ -45,15 +32,7 @@ enum class NumericClass : std::uint8_t { kInteger, kDecimal, kFloating, kOther }
     case AggregateKind::kAvg:
       return columnar::DataType::kDouble;
     case AggregateKind::kSum:
-      if (input_type && Classify(*input_type) == NumericClass::kFloating) {
-        return columnar::DataType::kDouble;
-      }
-      if (input_type && columnar::IsDecimal(*input_type)) {
-        // DuckDB widens to DECIMAL(38, s); QUEST keeps an int64 and fails on overflow.
-        return columnar::DataType::Decimal(columnar::DataType::kMaxDecimalPrecision,
-                                           input_type->scale);
-      }
-      return columnar::DataType::kInt64;
+      return input_type.and_then(plan::SumType).value_or(columnar::DataType::kInt64);
     case AggregateKind::kMin:
     case AggregateKind::kMax:
       return input_type.value_or(columnar::DataType::kInt64);
@@ -249,9 +228,6 @@ Status HashAggregateOperator::Sink(cache::DataBlockPtr batch) {
     return std::unexpected(host.error());
   }
   const columnar::RecordBatch* input = (*host)->record_batch();
-  if (input == nullptr) {
-    return Error::Invalid("HashAggregateOperator: empty record batch");
-  }
 
   std::vector<KeyEncoder> encoders;
   std::vector<columnar::Field> key_fields;
@@ -279,9 +255,8 @@ Status HashAggregateOperator::Sink(cache::DataBlockPtr batch) {
     inputs[i] = std::move(*evaluated);
     // DuckDB: SUM(BOOLEAN) counts the true values; AVG(BOOLEAN) is an error.
     const DataType type = inputs[i]->GetType();
-    const bool summable = Classify(type) != NumericClass::kOther ||
-                          (spec.kind == AggregateKind::kSum && type == DataType::kBool);
-    if ((spec.kind == AggregateKind::kSum || spec.kind == AggregateKind::kAvg) && !summable) {
+    if ((spec.kind == AggregateKind::kSum && !plan::SumType(type)) ||
+        (spec.kind == AggregateKind::kAvg && !columnar::IsNumeric(type))) {
       return Error::TypeError(std::format("HashAggregateOperator: '{}' needs a numeric input, got {}",
                                           spec.output_name, columnar::GetTypeName(type)));
     }
@@ -318,6 +293,7 @@ Status HashAggregateOperator::Sink(cache::DataBlockPtr batch) {
         state.extremes = MakeExtremes(spec.kind, type);
       }
       state.extremes->Update(column, group_of_row);
+      continue;
     }
     auto status = columnar::VisitType(type, [&]<typename Tag>(Tag) -> Status {
       using T = typename Tag::CType;
@@ -371,7 +347,7 @@ std::unique_ptr<HashAggregateOperator::ExtremesBase> HashAggregateOperator::Make
   });
 }
 
-Status HashAggregateOperator::MergeLocked(GroupTable& local) {
+Status HashAggregateOperator::MergeLocked(const GroupTable& local) {
   std::vector<std::uint32_t> remap(local.keys.size());
   for (std::size_t g = 0; g < local.keys.size(); ++g) {
     remap[g] = table_.FindOrInsert(local.keys[g]);
@@ -407,12 +383,8 @@ Status HashAggregateOperator::FinalizeSink() {
     table_.FindOrInsert(std::string{});  // one global group, even for empty input
   }
   if (!table_.keys.empty()) {
-    auto output = BuildOutput();
-    if (!output) {
-      return std::unexpected(output.error());
-    }
-    output_ = cache::MakeTrackedHostBlock(std::format("hash_aggregate_{}", id()),
-                                          std::move(*output), memory_manager_);
+    output_ = cache::MakeTrackedHostBlock(std::format("hash_aggregate_{}", id()), BuildOutput(),
+                                          memory_manager_);
   }
   finalized_.store(true);
   return {};
@@ -422,12 +394,10 @@ Result<std::optional<cache::DataBlockPtr>> HashAggregateOperator::GetNextBatch()
   if (!finalized_.load()) {
     return Error::Invalid("HashAggregateOperator: GetNextBatch before FinalizeSink");
   }
-  std::optional<cache::DataBlockPtr> next = std::move(output_);
-  output_.reset();
-  return next;
+  return std::exchange(output_, std::nullopt);
 }
 
-Result<columnar::RecordBatch> HashAggregateOperator::BuildOutput() const {
+columnar::RecordBatch HashAggregateOperator::BuildOutput() const {
   const std::size_t groups = table_.keys.size();
   std::vector<columnar::Field> fields;
   std::vector<ColumnVectorPtr> columns;

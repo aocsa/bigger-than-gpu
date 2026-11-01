@@ -92,14 +92,6 @@ class HostMemoryBlock final : public DataBlock {
     return record_batch_.get();
   }
 
-  [[nodiscard]] columnar::RecordBatch* record_batch() noexcept {
-    return record_batch_.get();
-  }
-
-  [[nodiscard]] columnar::RecordBatch* mutable_record_batch() noexcept {
-    return record_batch_.get();
-  }
-
   void set_disk_resource(
       std::shared_ptr<memory::DiskMemoryResource> disk_resource) {
     disk_resource_ = std::move(disk_resource);
@@ -178,7 +170,8 @@ using DataBlockPtr = std::shared_ptr<DataBlock>;
 // Host Block Helpers
 // =============================================================================
 
-/// @brief Ensure a DataBlock is resident in CPU and return its HostMemoryBlock.
+/// @brief Ensure a DataBlock is resident in CPU and return its HostMemoryBlock, whose
+/// record_batch() is not null; `Invalid` for a null block or a released host block.
 [[nodiscard]] Result<std::shared_ptr<HostMemoryBlock>> EnsureHostBlock(DataBlockPtr input);
 
 /// @brief Wrap a RecordBatch in a HostMemoryBlock carrying both memory

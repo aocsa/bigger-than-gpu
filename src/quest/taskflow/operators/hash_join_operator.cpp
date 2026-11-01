@@ -5,7 +5,6 @@
 
 #include <format>
 #include <utility>
-#include <variant>
 
 #include "quest/columnar/column_vector.hpp"
 #include "quest/columnar/schema.hpp"
@@ -26,8 +25,7 @@ namespace {
         std::format("HashJoinOperator: {} key column '{}' not found", side, name));
   }
   const auto type = column->GetType();
-  if (!(type == columnar::DataType::kInt32) &&
-      !(type == columnar::DataType::kInt64)) {
+  if (type != columnar::DataType::kInt32 && type != columnar::DataType::kInt64) {
     return Error::TypeError(
         std::format("HashJoinOperator: {} key column '{}' is {}, not an integer", side, name,
                     columnar::GetTypeName(type)));
@@ -73,9 +71,6 @@ Status HashJoinOperator::Sink(cache::DataBlockPtr batch) {
   if (!host_result) {
     return std::unexpected(host_result.error());
   }
-  if ((*host_result)->record_batch() == nullptr) {
-    return Error::Invalid("HashJoinOperator: empty record batch");
-  }
   std::lock_guard lock(sink_mutex_);
   build_blocks_.push_back(std::move(*host_result));
   return {};
@@ -93,7 +88,7 @@ Status HashJoinOperator::FinalizeSink() {
     if (!merged) {
       return std::unexpected(merged.error());
     }
-    build_blocks_.clear();
+    build_blocks_.clear();  // released before the hash table is built
     build_batch_.emplace(std::move(*merged));
 
     auto key_column = KeyColumn(*build_batch_, build_key_, "build");
@@ -118,9 +113,6 @@ Result<cache::DataBlockPtr> HashJoinOperator::ProcessBatch(cache::DataBlockPtr i
   }
   auto host = std::move(*host_result);
   const auto* probe = host->record_batch();
-  if (probe == nullptr) {
-    return Error::Invalid("HashJoinOperator: empty record batch");
-  }
   auto key_column = KeyColumn(*probe, probe_key_, "probe");
   if (!key_column) {
     return std::unexpected(key_column.error());
@@ -140,17 +132,10 @@ Result<cache::DataBlockPtr> HashJoinOperator::ProcessBatch(cache::DataBlockPtr i
   });
 
   std::vector<columnar::Field> fields = probe->schema().fields();
-  std::vector<columnar::ColumnVectorPtr> columns;
-  columns.reserve(probe->num_columns() + (build_batch_ ? build_batch_->num_columns() : 0));
-  for (std::size_t col = 0; col < probe->num_columns(); ++col) {
-    columns.push_back(execution::GatherColumn(probe->column(col), probe_rows));
-  }
+  auto columns = execution::GatherColumns(*probe, probe_rows);
   if (build_batch_) {
-    const auto& build_fields = build_batch_->schema().fields();
-    fields.insert(fields.end(), build_fields.begin(), build_fields.end());
-    for (std::size_t col = 0; col < build_batch_->num_columns(); ++col) {
-      columns.push_back(execution::GatherColumn(build_batch_->column(col), build_rows));
-    }
+    fields.append_range(build_batch_->schema().fields());
+    columns.append_range(execution::GatherColumns(*build_batch_, build_rows));
   }
 
   return cache::MakeTrackedHostBlock(

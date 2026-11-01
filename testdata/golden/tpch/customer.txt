@@ -1,0 +1,29 @@
+version=1
+num_rows=1500
+created_by="DuckDB version v2.0.0 (build d54cbbe3df)"
+schema[0]: name="duckdb_schema" type=0 type_length=- repetition=0 num_children=8 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[1]: name="c_custkey" type=2 type_length=- repetition=0 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=64 is_signed=1
+schema[2]: name="c_name" type=6 type_length=- repetition=0 num_children=0 logical_type=1 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[3]: name="c_address" type=6 type_length=- repetition=0 num_children=0 logical_type=1 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[4]: name="c_nationkey" type=1 type_length=- repetition=0 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=32 is_signed=1
+schema[5]: name="c_phone" type=6 type_length=- repetition=0 num_children=0 logical_type=1 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[6]: name="c_acctbal" type=2 type_length=- repetition=0 num_children=0 logical_type=5 precision=15 scale=2 field_id=- time_unit=- bit_width=- is_signed=-
+schema[7]: name="c_mktsegment" type=6 type_length=- repetition=0 num_children=0 logical_type=1 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[8]: name="c_comment" type=6 type_length=- repetition=0 num_children=0 logical_type=1 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+row_group[0]: num_rows=1500 total_byte_size=246304 file_offset=- total_compressed_size=4 ordinal=-5600
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["c_custkey"] codec=1 num_values=1500 total_uncompressed_size=12021 total_compressed_size=6034 data_page_offset=4 index_page_offset=- dictionary_page_offset=-
+    statistics: min=0100000000000000 max=dc05000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0] path_in_schema=["c_name"] codec=1 num_values=1500 total_uncompressed_size=33021 total_compressed_size=7576 data_page_offset=6038 index_page_offset=- dictionary_page_offset=-
+    statistics: min=437573746f6d657223303030303030303031 max=437573746f6d657223303030303031353030 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=6 encodings=[0] path_in_schema=["c_address"] codec=1 num_values=1500 total_uncompressed_size=43112 total_compressed_size=43121 data_page_offset=13614 index_page_offset=- dictionary_page_offset=-
+    statistics: min=202c63495a2c30364b67 max=7a795776692c5347632c7458546c73 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[2] path_in_schema=["c_nationkey"] codec=1 num_values=1500 total_uncompressed_size=1102 total_compressed_size=1108 data_page_offset=56851 index_page_offset=- dictionary_page_offset=56735
+    statistics: min=00000000 max=18000000 null_count=0 distinct_count=25 num_values=-
+  column[4]: file_path="" file_offset=0 type=6 encodings=[0] path_in_schema=["c_phone"] codec=1 num_values=1500 total_uncompressed_size=28522 total_compressed_size=18406 data_page_offset=57843 index_page_offset=- dictionary_page_offset=-
+    statistics: min=31302d3130392d3433302d35363338 max=33342d3939322d3532392d32303233 null_count=0 distinct_count=- num_values=-
+  column[5]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["c_acctbal"] codec=1 num_values=1500 total_uncompressed_size=12021 total_compressed_size=7471 data_page_offset=76249 index_page_offset=- dictionary_page_offset=-
+    statistics: min=697bfeffffffffff max=733d0f0000000000 null_count=0 distinct_count=- num_values=-
+  column[6]: file_path="" file_offset=0 type=6 encodings=[2] path_in_schema=["c_mktsegment"] codec=1 num_values=1500 total_uncompressed_size=683 total_compressed_size=689 data_page_offset=83801 index_page_offset=- dictionary_page_offset=83720
+    statistics: min=4155544f4d4f42494c45 max=4d414348494e455259 null_count=0 distinct_count=5 num_values=-
+  column[7]: file_path="" file_offset=0 type=6 encodings=[0] path_in_schema=["c_comment"] codec=1 num_values=1500 total_uncompressed_size=115822 total_compressed_size=41067 data_page_offset=84409 index_page_offset=- dictionary_page_offset=-
+    statistics: min=2061626f757420746865206361726566756c6c792069726f6e69632070696e746f206265616e732e206163636f756e max=796d70746f7465732e2069726f6e69632c20756e757375616c206e6f746f726e69732077616b65206166746572207468652069726f6e69632c207370656369616c206465706f736974732e20626c697468656c792066696e61 null_count=0 distinct_count=- num_values=-

@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Typed Columns Cleanup Plan</title>
+<link rel="stylesheet" href="htmlplan.css">
+<script src="htmlplan.js" defer></script>
+<body>
+
+<header>
+  <h1>Typed Columns Cleanup in QUEST</h1>
+  <doc-changes new="21" changed="51"></doc-changes>
+  <details class="thread"><summary>Why · 2 requests</summary>
+    <doc-quote via="prompt" from="the user">…code changes while mantaining the same functionality you can use model c++ 23 features use the following notes below: /html-plan:htm…</doc-quote>
+    <doc-quote via="doc" from="the user's notes">…I’d start with magic_enum. For a SQL engine more broadly, I’d also look at Glaze, spdlog, and standard C+… matchit.cpp Repetitive conditional and structural matching Query-plan nodes and expression trees Glaze JSON serialization and parsing code…</doc-quote>
+  </details>
+</header>
+
+<main>
+<doc-plan>
+
+<!-- ═════ 1 · RESULTS ═════ -->
+<doc-claim>
+  <p>No query result changes.</p>
+  <doc-mock frame="terminal" title="gate · each commit" w="470"><template><span class="dim">$</span> cmake --build build            <span class="dim"># QUEST_WERROR=ON</span>
+<span class="g">✓</span> 110/110 targets, no compiler warning
+<span class="dim">$</span> ctest --test-dir build -j 8
+<span class="g">✓</span> 100% tests passed out of <b>704</b>
+<span class="dim">$</span> sum of --gtest_list_tests     <span class="dim"># + BloomJoin.Demo</span>
+<span class="g">✓</span> <b>703</b> + 1 = 704  <span class="dim">no stale CTest entry</span>
+<span class="dim">$</span> test_tpch · test_tpch_q12
+<span class="g">✓</span> Q1 Q3 Q5 Q6 Q10 Q12 match DuckDB
+<span class="dim">baseline 157da8a · Q12 at SF 1: median 431 ms</span></template></doc-mock>
+
+  <doc-claim>
+    <p>Three fixes land first, then nine cleanups. Each commit passes the gate.</p>
+    <doc-code title="commits as built · net lines (src / tests)" lang="text" caption="Built 2026-11-01. Each commit passed the gate. Q12 at SF 1: 420.5 ms, 157da8a 428 ms (interleaved).">
+<script type="text/plain">
+5f68904  Fix: spill reader checks the field name length       +3 /  +13
+e6963d3  Fix: row group with too few column chunks            +3 /  +28
+9162c89  Fix: ReadUvarint32 stops after 5 bytes               +3 /   +9
+09eb18a  Dead code, all areas (24 tests go)                 -370 / -287
+a615c56  Aggregates: AggregateExpr, plan/aggregate.hpp      -100 /  +14
+7adde6a  Lowering: Lowering class, pipelines, UnifyType      -51 /    0
+3bd73e6  Operators: cache helpers, GatherColumns()           -78 /    0
+ef49e91  Columnar: DataType spill read, ranges               -21 /    0
+ab9992a  Errors: ErrorFactory<C>                             -32 /    0
+8f606ac  Operators: restore memory-accounting order          +23 /    0
+f7a0824  Tests: V2 page header, golden footers                 0 / +280
+0b6747f  Thrift: ReadStruct() and Read()                    -835 /    0
+e6022fa  Decoders: varints, skip, def levels                -127 /    0
+         total (src 15876 -> 14294)                        -1582 /  +57
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The test count changes only by the tests of removed code and the new tests.</p>
+    <doc-code title="tests · expected count" lang="text">
+<script type="text/plain">
+GTest at 157da8a                                        703
++ fixes 1–3: one test each                               +3
+- test_physical_expr.cpp:324-504  six dead aggregates   -14
+- test_query_integration.cpp:231-296  same classes       -6
+- test_datasource.cpp:312  FieldAlias                    -1
+- test_cache_data.cpp:52  MutableRecordBatchAccess       -1
+- result_test.cpp:200-210  Ok() helper                   -2
++ commit 10: V2 page header, golden footers              +2
++ SumType test (commit 5)                                +1
+= GTest after (as built)                                685
+  CTest after = 685 + BloomJoin.Demo                    686
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The build keeps its three dependencies: Snappy, Threads and GTest.</p>
+    <doc-code src="CMakeLists.txt" lines="47-48" caption="tests/CMakeLists.txt:2 adds GTest."></doc-code>
+    <doc-note tone="info">Answered: matchit, then dropped. No Homebrew or conda-forge package exists. No library was added.</doc-note>
+    <doc-ask id="deps">
+      <p>Which third-party library does this branch add?</p>
+      <label><input type="radio" name="deps" value="none" checked> None <small>C++23 covers both uses</small></label>
+      <label><input type="radio" name="deps" value="magic_enum"> magic_enum for ErrorCode names <small>saves approximately 7 lines, adds one dependency</small></label>
+      <label><input type="radio" name="deps" value="matchit"> matchit for plan dispatch <small>no shorter than the 18 dynamic_cast lines</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The tests stay on GTest.</p>
+    <doc-mock frame="terminal" title="tests/" w="440"><template><span class="dim">$</span> grep -c '^TEST' tests/*.cpp | sum
+<b>695</b> TEST / TEST_F / TEST_P
+<span class="dim">$</span> grep -l 'ASSERT_OK' tests/ | wc -l
+<b>32</b> files use tests/support/test_utils.hpp</template></doc-mock>
+    <doc-ask id="tests">
+      <p>Do the tests move to Catch2?</p>
+      <label><input type="radio" name="tests" value="gtest" checked> No, keep GTest </label>
+      <label><input type="radio" name="tests" value="catch2"> Yes, move to Catch2 <small>rewrites 695 tests</small></label>
+    </doc-ask>
+    <div data-if="tests=catch2"><doc-note tone="risk">The move goes in a separate branch after this one. The gate then compares the same tests.</doc-note></div>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 2 · DEAD CODE ═════ -->
+<doc-claim>
+  <p>Dead code goes: approximately 350 lines of src/ and 24 tests.</p>
+  <doc-mock frame="terminal" title="no caller outside tests" w="470"><template><span class="dim">$</span> grep -rnE '(Sum|Avg|Count|Min|Max)Expression' src examples \
+    | grep -v physical_expr
+<span class="dim">(no output)</span>
+<span class="dim">$</span> grep -rn 'mutable_record_batch\|\.field(' src examples
+<span class="dim">(no output)</span>
+<span class="dim">$</span> grep -rn 'ValueDecoder\|current_header()' src tests examples \
+    | grep -v 'encoding.hpp\|page_reader.hpp'
+<span class="dim">(no output)</span></template></doc-mock>
+
+  <doc-claim>
+    <p>Six physical aggregate classes go. Queries use <code>HashAggregateOperator</code>.</p>
+    <doc-calls title="physical_expr · removed" caption="Only tests make these classes.">
+<script type="text/plain">
+- class AggregateExpression                @ src/quest/plan/physical/expressions/physical_expr.hpp:148
+-   class SumExpression                    @ src/quest/plan/physical/expressions/physical_expr.hpp:158
+-   class AvgExpression                    @ src/quest/plan/physical/expressions/physical_expr.hpp:170
+-   class CountExpression                  @ src/quest/plan/physical/expressions/physical_expr.hpp:183
+-   class MinExpression                    @ src/quest/plan/physical/expressions/physical_expr.hpp:208
+-   class MaxExpression                    @ src/quest/plan/physical/expressions/physical_expr.hpp:220
+- class CountStarExpression                @ src/quest/plan/physical/expressions/physical_expr.hpp:196
+- OneRow(type, value)                      @ src/quest/plan/physical/expressions/physical_expr.cpp:24
+- AsDoubles(col)                           @ src/quest/plan/physical/expressions/physical_expr.cpp:377
+</script>
+    </doc-calls>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Unused members go from columnar, cache, builder and <code>result.hpp</code>.</p>
+    <doc-calls title="other removed symbols" caption="No caller in src/ or examples/.">
+<script type="text/plain">
+- RecordBatch::field(i)                    @ src/quest/columnar/record_batch.hpp:53   -- Kotlin alias; test FieldAlias goes
+- RecordBatch::ToString()                  @ src/quest/columnar/record_batch.hpp:70
+- HostMemoryBlock::record_batch() non-const @ src/quest/cache/data_block.hpp:95
+- HostMemoryBlock::mutable_record_batch()  @ src/quest/cache/data_block.hpp:99
+- friend class QueryBuilderOf              @ src/quest/builder/query_plan.hpp:154   -- names no class
+- Error::operator char*()                  @ src/quest/common/result.hpp:132
+- Error::operator!= (two)                  @ src/quest/common/result.hpp:136   -- C++20 rewrites ==
+- Error defaulted copy, move, dtor         @ src/quest/common/result.hpp:112
+- Ok(value), Err(const Error&)             @ src/quest/common/result.hpp:235
+- columns.size() != expressions.size()     @ src/quest/execution/kernels/batch_kernels.cpp:99   -- cannot be true
+</script>
+    </doc-calls>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Unused Parquet reader parts go.</p>
+    <doc-calls title="io/parquet · removed" caption="Two lines of test_parquet_reader.cpp change.">
+<script type="text/plain">
+- class ValueDecoder (virtual base)        @ src/quest/io/parquet/encoding.hpp:31
+- ValuesRemaining(), num_values_, values_read_ @ src/quest/io/parquet/encoding.hpp:52
+- ColumnReader::data_                      @ src/quest/io/parquet/column_reader.hpp:122
+- ColumnChunkMetadata::column_path         @ src/quest/io/parquet/metadata.hpp:56
+- PageReader::current_header()             @ src/quest/io/parquet/page_reader.hpp:80
+~ FileHandle::Read, 3 args into 2 args     @ src/quest/io/parquet/file_reader.cpp:82
+</script>
+    </doc-calls>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 3 · ONE PLACE ═════ -->
+<doc-claim>
+  <p>Each rule and each repeated step has one place in the code.</p>
+  <doc-calls title="SUM typing today: three copies" caption="The planner and the operator each state the SUM rule.">
+<script type="text/plain">
+~ Sum::ToField(input)                      @ src/quest/plan/logical/logical_expr.cpp:132
++   **SumType**(type)                      @ src/quest/plan/aggregate.hpp:1   -- nullopt: TypeError, same text
+~ OutputType(kind, input_type)             @ src/quest/taskflow/operators/hash_aggregate_operator.cpp:40
++   SumType(type).value_or(kInt64)         @ src/quest/plan/aggregate.hpp:1
+- Classify(type), NumericClass             @ src/quest/taskflow/operators/hash_aggregate_operator.cpp:27   -- kInteger, kDecimal never compared
+</script>
+  </doc-calls>
+
+  <doc-claim>
+    <p>One <code>AggregateExpr</code> with an <code>AggregateKind</code> replaces six logical classes.</p>
+    <doc-schema id="aggexpr" lang="cpp" diff title="logical_expr.hpp · AggregateExpr" caption="ToString() text and the SUM TypeError do not change.">
+<script type="text/plain">
+-class AggregateExpr : public LogicalExpr {   // base with std::string op_ ("SUM", ...)
+-class Sum : public AggregateExpr { ... };    // Avg, Count, Min, Max: same shape
+-class CountStar : public LogicalExpr { ... };
++class AggregateExpr final : public LogicalExpr {
++ public:
++  /// @param input nullptr for COUNT(*).
++  AggregateExpr(plan::AggregateKind kind, LogicalExprPtr input);
++  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override;
++  [[nodiscard]] std::string ToString() const override;   // "SUM(x)", "COUNT(*)"
++  [[nodiscard]] LogicalExprPtr Clone() const override;
++  [[nodiscard]] plan::AggregateKind kind() const noexcept { return kind_; }
++  [[nodiscard]] const LogicalExpr* input() const noexcept { return input_.get(); }
++ private:
++  plan::AggregateKind kind_;
++  LogicalExprPtr input_;
++};
+</script>
+    </doc-schema>
+    <doc-claim at="src/quest/execution/lowering/plan_to_graph.cpp:86">
+      <p><b>plan_to_graph.cpp:86</b> · LowerAggregate()</p>
+      <doc-code src="src/quest/execution/lowering/plan_to_graph.cpp" lines="86-122" hl="90-93,99-109">
+        <doc-pin line="90" title="Goes: AggregateExpr knows COUNT(*)"></doc-pin>
+        <doc-pin line="99" title="Goes: kind() replaces the string table"></doc-pin>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>One <code>Add&lt;Op&gt;()</code> makes, numbers and keeps each operator in <code>CreateGraph</code>.</p>
+    <doc-code diff file="src/quest/execution/lowering/plan_to_graph.cpp" caption="The eight other node types change the same way.">
+<script type="text/plain">
+@@ -172,16 +172,13 @@
+   if (const auto* selection = dynamic_cast<const plan::logical::Selection*>(&plan)) {
+-    auto child = TranslateNode(selection->input(), memory_manager, ops, gb, next_id);
++    auto child = Translate(selection->input());
+     if (!child) {
+       return std::unexpected(child.error());
+     }
+     auto expr_result = CreatePhysicalExpr(selection->condition(), selection->input());
+     if (!expr_result) {
+       return std::unexpected(expr_result.error());
+     }
+-    auto op = std::make_unique<taskflow::FilterOperator>(next_id++, std::move(*expr_result),
+-                                                         memory_manager);
+-    auto* op_ptr = op.get();
+-    ops.push_back(std::move(op));
+-    gb.Edge(**child, *op_ptr);
+-    return op_ptr;
++    auto& op = Add<taskflow::FilterOperator>(std::move(*expr_result), memory_);
++    gb_.Edge(**child, op);
++    return &op;
+   }
+</script>
+    </doc-code>
+    <doc-claim>
+      <p><b>plan_to_graph.cpp:159</b> · class Lowering · sketch</p>
+      <doc-code title="plan_to_graph.cpp · sketch" lang="cpp">
+<script type="text/plain">
+/// @brief Translates one logical plan into operators that it owns and numbers.
+class Lowering {
+ public:
+  explicit Lowering(std::shared_ptr<memory::MemoryResourceManager> memory);
+  [[nodiscard]] Result<taskflow::Operator*> Translate(const plan::logical::LogicalPlan& plan);
+
+ private:
+  template <typename Op, typename... Args>
+  Op& Add(Args&&... args) {
+    auto& op = ops_.emplace_back(std::make_unique<Op>(next_id_++, std::forward<Args>(args)...));
+    return static_cast<Op&>(*op);
+  }
+
+  std::shared_ptr<memory::MemoryResourceManager> memory_;
+  std::vector<std::unique_ptr<taskflow::Operator>> ops_;
+  taskflow::GraphBuilder gb_;
+  std::uint32_t next_id_ = 0;
+};
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Operators get host batches only through the cache helpers.</p>
+    <doc-code diff file="src/quest/taskflow/operators/sort_operator.cpp" caption="HashJoin keeps EnsureHostBlock() in Sink(): spill timing does not change.">
+<script type="text/plain">
+@@ -79,18 +79,5 @@
+-  std::vector<std::shared_ptr<cache::HostMemoryBlock>> hosts;
+-  std::vector<const columnar::RecordBatch*> inputs;
+-  for (auto& block : batches_) {
+-    auto host = cache::EnsureHostBlock(std::move(block));
+-    if (!host) {
+-      return std::unexpected(host.error());
+-    }
+-    if ((*host)->record_batch() == nullptr) {
+-      return Error::Invalid("SortOperator: empty record batch");
+-    }
+-    inputs.push_back((*host)->record_batch());
+-    hosts.push_back(std::move(*host));
+-  }
+-  batches_.clear();
+-  auto merged = columnar::ConcatenateRecordBatches(inputs);
++  auto merged = cache::ConcatenateHostBlocks(std::exchange(batches_, {}))
++                    .and_then(cache::EnsureHostBlock);
+   if (!merged) {
+     return std::unexpected(merged.error());
+   }
+</script>
+      <doc-pin line="79" tone="warn" title="Reverted in 8f606ac">The helper changed when blocks are freed. Only the null check moved.</doc-pin>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>One <code>GatherColumns()</code> copies the selected rows of a batch.</p>
+    <doc-code title="batch_kernels.hpp · sketch" lang="cpp" caption="Filter, Truncate, HashJoin and Sort call it.">
+<script type="text/plain">
+/// @brief The rows @p indices of each column of @p batch, in that order.
+[[nodiscard]] std::vector<columnar::ColumnVectorPtr> GatherColumns(
+    const columnar::RecordBatch& batch, const std::vector<size_t>& indices);
+
+// TruncateRecordBatch: std::iota replaces the index loop.
+std::vector<size_t> indices(std::min(n_rows, batch.num_rows()));
+std::ranges::iota(indices, size_t{0});
+return columnar::RecordBatch(batch.schema(), GatherColumns(batch, indices));
+</script>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p>CASE typing in the planner and in the kernel uses one <code>CommonType()</code> fold.</p>
+    <doc-code title="binary_op.hpp · sketch" lang="cpp" caption="Both callers give nullopt for a NULL literal.">
+<script type="text/plain">
+/// @brief The common type of the CASE results; a NULL literal (nullopt) takes the others' type.
+/// @return nullopt when every result is a NULL literal, or TypeError.
+[[nodiscard]] inline Result<std::optional<columnar::DataType>> CommonType(
+    std::span<const std::optional<columnar::DataType>> types) {
+  std::optional<columnar::DataType> common;
+  for (const auto& type : types | std::views::filter([](auto t) { return t.has_value(); })) {
+    auto next = common ? CommonType(*common, *type) : Result<columnar::DataType>(*type);
+    if (!next) {
+      return std::unexpected(next.error());
+    }
+    common = *next;
+  }
+  return common;
+}
+</script>
+    </doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 4 · PIPELINES ═════ -->
+<doc-claim>
+  <p>Error propagation reads as one pipeline where the steps are linear.</p>
+  <doc-code diff file="src/quest/builder/query_builder.hpp" caption="Sites with two or more values keep early returns.">
+<script type="text/plain">
+@@ -54,7 +54,4 @@
+   [[nodiscard]] static Result<QueryBuilder> FromParquet(const std::string& filename) {
+-    auto plan_result = QueryPlan::FromParquet(filename);
+-    if (!plan_result) {
+-      return std::unexpected(plan_result.error());
+-    }
+-    return QueryBuilder(std::move(*plan_result));
++    return QueryPlan::FromParquet(filename).transform(
++        [](QueryPlan plan) { return QueryBuilder(std::move(plan)); });
+   }
+</script>
+  </doc-code>
+
+  <doc-claim>
+    <p>Six single-step sites use <code>transform</code> and <code>and_then</code>.</p>
+    <doc-calls title="pipeline sites" caption="Seven std::unexpected(Error::X(…)) wrappers also go.">
+<script type="text/plain">
+~ QueryBuilder::FromParquet()              @ src/quest/builder/query_builder.hpp:54
+~ QueryBuilder::ExecuteOnGraph()           @ src/quest/builder/query_builder.hpp:141
+~ QueryPlan::FromParquet()                 @ src/quest/builder/query_plan.hpp:45
+~ Scan::WithProjection()                   @ src/quest/plan/logical/logical_plan.cpp:37
+~ BinaryExpr::ToField(), last step         @ src/quest/plan/logical/logical_expr.cpp:56
+~ CreateGraph(), last step                 @ src/quest/execution/lowering/plan_to_graph.cpp:360
+</script>
+    </doc-calls>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Each Thrift struct parser is one switch of one-line <code>Read()</code> calls.</p>
+    <doc-code diff file="src/quest/io/parquet/metadata.cpp" caption="Lines 423-473 are cut: five more cases. 17 parsers look like this.">
+<script type="text/plain">
+@@ -399,24 +399,13 @@
+-Result<RowGroupMetadata> MetadataParser::ParseRowGroup(
+-    ThriftDecoder& decoder) {
+-  RowGroupMetadata rg;
+-  int16_t last_field_id = 0;
+-
+-  while (true) {
+-    auto header_result = decoder.ReadFieldHeader(last_field_id);
+-    if (!header_result.has_value()) {
+-      return std::unexpected(header_result.error());
+-    }
+-    auto header = header_result.value();
+-    if (!header) {
+-      break;
+-    }
+-    last_field_id = header->field_id;
+-
+-    switch (header->field_id) {
+-      case 1: {  // columns
+-        auto result = ParseColumnChunks(decoder);
+-        if (!result.has_value()) {
+-          return std::unexpected(result.error());
+-        }
+-        rg.columns = std::move(result.value());
+-        break;
++Status Read(ThriftDecoder& d, RowGroupMetadata& rg) {
++  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
++    switch (id) {
++      case 1: return Read(d, rg.columns);
++      case 2: return Read(d, rg.total_byte_size);
++      case 3: return Read(d, rg.num_rows);
++      case 4: return Read(d, rg.file_offset);
++      case 5: return Read(d, rg.total_compressed_size);
++      case 6: return Read(d, rg.ordinal);
++      default: return d.SkipField(type);
++    }
++  });
++}
+</script>
+    </doc-code>
+    <doc-ask id="thrift">
+      <p>Does this branch rewrite the Thrift struct parsers?</p>
+      <label><input type="radio" name="thrift" value="yes" checked> Yes, after guard tests land <small>commits 10 and 11; approximately −650 lines</small></label>
+      <label><input type="radio" name="thrift" value="later"> Later, in a separate branch <small>commits 10 and 11 go from this branch</small></label>
+      <label><input type="radio" name="thrift" value="no"> No <small>the parsers stay; claim 4.2 goes</small></label>
+    </doc-ask>
+    <div data-if="thrift=yes"><doc-note tone="warn"><strong>Risk</strong> Each footer and page header uses this code. No test has V2 pages. Commit 10 adds a V2 header test and golden footer dumps made at 157da8a.</doc-note></div>
+    <doc-claim>
+      <p><b>thrift_decoder.hpp</b> · ReadStruct(), Read() · sketch</p>
+      <doc-code title="thrift_decoder.hpp · sketch" lang="cpp" caption="converted_type, logicalType, statistics 5/6 and is_compressed keep small lambdas.">
+<script type="text/plain">
+/// @brief Reads one struct; @p on_field reads or skips each field.
+template <typename OnField>  // was ReadStructFields
+[[nodiscard]] Status ReadStruct(ThriftDecoder& d, OnField&& on_field);
+
+[[nodiscard]] inline Status Read(ThriftDecoder& d, std::int64_t& out) {
+  return d.ReadI64().transform([&](std::int64_t v) { out = v; });
+}
+// Also: int16_t, int32_t, std::string, std::vector<uint8_t>, enums (as i32).
+// They come before the templates below: no ADL for built-in types.
+template <typename T>
+[[nodiscard]] Status Read(ThriftDecoder& d, std::optional<T>& out) {
+  return Read(d, out.emplace());
+}
+template <typename T>  // list header, then Read() for each element
+[[nodiscard]] Status Read(ThriftDecoder& d, std::vector<T>& out);
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The 17 <code>Error::X</code> factories are one template.</p>
+    <doc-code title="result.hpp · sketch" lang="cpp" caption="Call sites do not change. source_location still records the caller.">
+<script type="text/plain">
+struct Error;
+template <ErrorCode C>
+struct ErrorFactory {
+  [[nodiscard]] std::unexpected<Error> operator()(
+      std::string message, std::source_location loc = std::source_location::current()) const;
+};
+
+struct Error {
+  // ... ctors, accessors ...
+  static constexpr ErrorFactory<ErrorCode::Invalid> Invalid{};
+  static constexpr ErrorFactory<ErrorCode::IOError> IOError{};
+  // ... 15 more, one line each (69 lines today) ...
+};
+
+// Out of class: Error is complete here.
+template <ErrorCode C>
+std::unexpected<Error> ErrorFactory<C>::operator()(std::string m, std::source_location l) const {
+  return std::unexpected<Error>{Error(C, std::move(m), l)};
+}
+</script>
+    </doc-code>
+    <doc-ask id="factory">
+      <p>Do the 17 error factories become one template?</p>
+      <label><input type="radio" name="factory" value="template" checked> Yes, <code>ErrorFactory&lt;C&gt;</code> <small>approximately −35 lines; call sites do not change</small></label>
+      <label><input type="radio" name="factory" value="keep"> No, keep 17 static functions <small>commit 9 goes</small></label>
+    </doc-ask>
+  </doc-claim>
+
+  <doc-claim>
+    <p>Short loops use <code>std::ranges</code> and <code>std::to_underlying</code>.</p>
+    <doc-code diff file="src/quest/plan/logical/logical_plan.cpp" caption="Same form: GetFieldIndex, Field::ToString, the DataType spill read.">
+<script type="text/plain">
+@@ -120,12 +120,4 @@
+ bool UnionCompatible(const Schema& lhs, const Schema& rhs) {
+-  if (lhs.num_fields() != rhs.num_fields()) {
+-    return false;
+-  }
+-  for (std::size_t i = 0; i < lhs.num_fields(); ++i) {
+-    if (columnar::GetTypeName(lhs.field(i).data_type) !=
+-        columnar::GetTypeName(rhs.field(i).data_type)) {
+-      return false;
+-    }
+-  }
+-  return true;
++  return std::ranges::equal(lhs.fields(), rhs.fields(), {}, &Field::data_type,
++                            &Field::data_type);
+ }
+</script>
+      <doc-pin line="121" tone="info" title="Same result">A non-Decimal type has precision 0 and scale 0.</doc-pin>
+    </doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ 5 · CORRUPT INPUT ═════ -->
+<doc-claim>
+  <p>Corrupt input gives an error, not undefined behaviour.</p>
+  <doc-code src="src/quest/columnar/record_batch_serializer.cpp" lines="101-105" hl="103">
+    <doc-pin line="103" tone="risk" title="name_len comes from the spill file">No bounds check. A bad length reads past the buffer end.</doc-pin>
+  </doc-code>
+  <doc-ask id="fixes">
+    <p>Which input fixes land in this branch?</p>
+    <label><input type="radio" name="fixes" value="all" checked> All three, as commits 1–3 <small>each with its own test</small></label>
+    <label><input type="radio" name="fixes" value="spill"> The spill reader only <small>5.2 and 5.3 go to tasks/p1-correctness-bugs.md</small></label>
+    <label><input type="radio" name="fixes" value="none"> None <small>claim 5 goes; all three go to p1</small></label>
+  </doc-ask>
+
+  <doc-claim>
+    <p>The spill reader rejects a field name longer than the buffer.</p>
+    <doc-code diff file="src/quest/columnar/record_batch_serializer.cpp" caption="Same check as ReadPart().">
+<script type="text/plain">
+@@ -101,4 +101,7 @@
+     auto name_len = ReadValue<uint32_t>(buffer, offset);
+     if (!name_len) return std::unexpected(name_len.error());
++    if (*name_len > buffer.size() - offset) {
++      return Error::Invalid("Buffer overflow during deserialization");
++    }
+     std::string name(buffer.begin() + offset, buffer.begin() + offset + *name_len);
+     offset += *name_len;
+</script>
+    </doc-code>
+    <doc-claim>
+      <p><b>test_record_batch_serializer.cpp</b> · CorruptFieldNameLengthIsInvalid · sketch</p>
+      <doc-code title="test_record_batch_serializer.cpp · sketch" lang="cpp">
+<script type="text/plain">
+TEST(RecordBatchSerializerTest, CorruptFieldNameLengthIsInvalid) {
+  auto bytes = RecordBatchSerializer::Serialize(MakeIntBatch({1, 2, 3}));
+  ASSERT_OK(bytes);
+  std::ranges::fill(bytes->begin() + 20, bytes->begin() + 24, 0xFF);  // name_len of field 0
+  auto batch = RecordBatchSerializer::Deserialize(*bytes);
+  ASSERT_FALSE(batch);
+  EXPECT_EQ(batch.error().code(), ErrorCode::Invalid);
+}
+</script>
+      </doc-code>
+    </doc-claim>
+  </doc-claim>
+
+  <doc-claim>
+    <p>A row group with fewer column chunks than the schema gives ParquetFormatError.</p>
+    <doc-code src="src/quest/io/parquet/file_reader.cpp" lines="147-150" hl="149" caption="The test footer has one INT32 leaf and no column chunk.">
+      <doc-pin line="149" tone="risk" title="col_idx comes from the schema, not the row group"></doc-pin>
+    </doc-code>
+  </doc-claim>
+
+  <doc-claim>
+    <p><code>ReadUvarint32()</code> stops after 5 bytes, as <code>ReadVarint32()</code> does.</p>
+    <doc-code src="src/quest/io/parquet/thrift_decoder.cpp" lines="78-98" caption="A 6th byte shifts a uint32_t by 35. The test feeds six 0x80 bytes.">
+    </doc-code>
+  </doc-claim>
+</doc-claim>
+
+<!-- ═════ shared · not changing ═════ -->
+<doc-claim aux="shared">
+  <p>Shared: <code>AggregateKind</code> and <code>SumType()</code> move to <code>plan/aggregate.hpp</code>.</p>
+  <doc-schema id="aggregate" lang="cpp" title="src/quest/plan/aggregate.hpp · new" caption="Tests go in test_logical_plan.cpp.">
+<script type="text/plain">
+namespace quest::plan {
+
+/// @brief Aggregate function; was taskflow::AggregateKind.
+enum class AggregateKind : std::uint8_t { kSum, kCount, kCountStar, kMin, kMax, kAvg };
+
+/// @brief The SQL type of SUM over @p input: Int64 for Bool and integers, Double for
+/// floating types, Decimal(18, s) for a Decimal; nullopt for a non-numeric input.
+[[nodiscard]] constexpr std::optional<columnar::DataType> SumType(columnar::DataType input) noexcept;
+
+}  // namespace quest::plan
+</script>
+  </doc-schema>
+</doc-claim>
+
+<doc-claim aux="scope">
+  <p>Not changing: query results, spill bytes, the public query API.</p>
+  <ul>
+    <li>Glaze and spdlog: src/ has no JSON and no logging framework.</li>
+    <li>No TRY macro: CLAUDE.md forbids macros in src/.</li>
+    <li>The dynamic_cast chains stay. A visitor needs 14 <code>Accept()</code> methods.</li>
+    <li>The two Projection loops stay apart: a merge changes which error comes first.</li>
+    <li><code>FileMetadata</code> keeps its unread fields: it is public.</li>
+    <li><code>UncompressedCodec</code> and the <code>ColumnVector</code> constructor stay.</li>
+    <li>Known issues stay: SUM(NULL), the <code>num_values</code> reserve, <code>PrintOperator::Sink</code> lock.</li>
+  </ul>
+</doc-claim>
+
+</doc-plan>
+</main>
+</body>
+</html>

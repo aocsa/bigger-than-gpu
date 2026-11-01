@@ -49,16 +49,6 @@ TEST(HostMemoryBlockTest, RecordBatchAccess) {
   EXPECT_EQ(record_batch->num_rows(), 50U);
 }
 
-TEST(HostMemoryBlockTest, MutableRecordBatchAccess) {
-  auto batch = quest::testing::MakeTestRecordBatch(10, 1);
-
-  HostMemoryBlock cache("mutable_test", std::move(batch));
-
-  auto* mutable_batch = cache.mutable_record_batch();
-  ASSERT_NE(mutable_batch, nullptr);
-  EXPECT_EQ(mutable_batch->num_rows(), 10U);
-}
-
 TEST(HostMemoryBlockTest, Release) {
   auto batch = quest::testing::MakeTestRecordBatch(10, 1);
   HostMemoryBlock cache("release_test", std::move(batch));

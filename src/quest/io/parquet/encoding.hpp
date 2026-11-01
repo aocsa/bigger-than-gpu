@@ -25,40 +25,21 @@
 namespace quest::io::parquet {
 
 // =============================================================================
-// Base Value Decoder
-// =============================================================================
-
-class ValueDecoder {
- public:
-  virtual ~ValueDecoder() = default;
-
-  virtual void SetData(std::span<const uint8_t> data) = 0;
-
-  [[nodiscard]] virtual size_t ValuesRemaining() const = 0;
-};
-
-// =============================================================================
 // Plain Encoding Decoder
 // =============================================================================
 
 /// @brief Plain encoding decoder for fixed-width types (raw binary, no compression).
 /// @tparam T The value type (int32_t, int64_t, float, double, etc.)
 template <typename T>
-class PlainDecoder : public ValueDecoder {
+class PlainDecoder {
  public:
-  void SetData(std::span<const uint8_t> data) override {
+  void SetData(std::span<const uint8_t> data) {
     data_ = data;
     pos_ = 0;
-    num_values_ = data.size() / sizeof(T);
-    values_read_ = 0;
-  }
-
-  [[nodiscard]] size_t ValuesRemaining() const override {
-    return num_values_ - values_read_;
   }
 
   [[nodiscard]] Result<T> ReadValue() {
-    if (values_read_ >= num_values_) {
+    if (pos_ + sizeof(T) > data_.size()) {
       return std::unexpected(
           Error::ColumnDecodeError("No more values to read"));
     }
@@ -67,23 +48,19 @@ class PlainDecoder : public ValueDecoder {
       return value;
     }
     pos_ += sizeof(T);
-    ++values_read_;
     return value;
   }
 
   size_t ReadBatch(std::span<T> values) {
-    size_t count = std::min(values.size(), ValuesRemaining());
+    size_t count = std::min(values.size(), (data_.size() - pos_) / sizeof(T));
     std::memcpy(values.data(), data_.data() + pos_, count * sizeof(T));
     pos_ += count * sizeof(T);
-    values_read_ += count;
     return count;
   }
 
  private:
   std::span<const uint8_t> data_;
   size_t pos_ = 0;
-  size_t num_values_ = 0;
-  size_t values_read_ = 0;
 };
 
 // =============================================================================
@@ -94,9 +71,9 @@ class PlainDecoder : public ValueDecoder {
 ///
 /// Boolean values in Parquet are packed 8 per byte in plain encoding.
 template <>
-class PlainDecoder<bool> : public ValueDecoder {
+class PlainDecoder<bool> {
  public:
-  void SetData(std::span<const uint8_t> data) override {
+  void SetData(std::span<const uint8_t> data) {
     data_ = data;
     byte_pos_ = 0;
     bit_pos_ = 0;
@@ -104,10 +81,6 @@ class PlainDecoder<bool> : public ValueDecoder {
   }
 
   void SetNumValues(size_t num_values) { num_values_ = num_values; }
-
-  [[nodiscard]] size_t ValuesRemaining() const override {
-    return num_values_ - values_read_;
-  }
 
   [[nodiscard]] Result<bool> ReadValue() {
     if (values_read_ >= num_values_) {
@@ -143,15 +116,11 @@ class PlainDecoder<bool> : public ValueDecoder {
 ///
 /// Binary values are stored as a 4-byte little-endian length followed
 /// by the raw bytes.
-class PlainBinaryDecoder : public ValueDecoder {
+class PlainBinaryDecoder {
  public:
-  void SetData(std::span<const uint8_t> data) override {
+  void SetData(std::span<const uint8_t> data) {
     data_ = data;
     pos_ = 0;
-  }
-
-  [[nodiscard]] size_t ValuesRemaining() const override {
-    return pos_ < data_.size() ? 1 : 0;  // Approximate.
   }
 
   [[nodiscard]] Result<std::string> ReadValue() {
@@ -186,20 +155,14 @@ class RleBitPackingDecoder {
  public:
   explicit RleBitPackingDecoder(int bit_width) : bit_width_(bit_width) {}
 
-  void SetData(std::span<const uint8_t> data, size_t num_values) {
+  void SetData(std::span<const uint8_t> data) {
     data_ = data;
     pos_ = 0;
-    num_values_ = num_values;
-    values_read_ = 0;
     current_count_ = 0;
     current_value_ = 0;
     is_rle_ = false;
     bit_packed_pos_ = 0;
     bit_packed_count_ = 0;
-  }
-
-  [[nodiscard]] size_t ValuesRemaining() const {
-    return num_values_ - values_read_;
   }
 
   [[nodiscard]] Result<int32_t> ReadValue() {
@@ -219,7 +182,6 @@ class RleBitPackingDecoder {
       value = *packed;
     }
     --current_count_;
-    ++values_read_;
     return value;
   }
 
@@ -316,8 +278,6 @@ class RleBitPackingDecoder {
   int bit_width_;
   std::span<const uint8_t> data_;
   size_t pos_ = 0;
-  size_t num_values_ = 0;
-  size_t values_read_ = 0;
 
   size_t current_count_ = 0;
   int32_t current_value_ = 0;

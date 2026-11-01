@@ -15,34 +15,27 @@ namespace quest::io::parquet {
 
 namespace {
 
-/// Iterates over def_levels (or num_values if empty), calling read_fn/append_fn
-/// for present values and append_null_fn for nulls.
-/// @tparam ReadFn  () -> Result<T>
-/// @tparam AppendFn  (T&&) -> void
-/// @tparam AppendNullFn  () -> void
-template <typename ReadFn, typename AppendFn, typename AppendNullFn>
-[[nodiscard]] Status ProcessWithDefLevels(
-    size_t num_values, const std::vector<int32_t>& def_levels,
-    ReadFn&& read_fn, AppendFn&& append_fn, AppendNullFn&& append_null_fn) {
+/// @brief Appends the values of @p read (() -> Result of a T) to @p builder: @p num_values
+/// of them, or with @p def_levels, one per level 1 and a null for every other level.
+template <typename T, typename ReadFn>
+[[nodiscard]] Status ProcessWithDefLevels(size_t num_values, const std::vector<int32_t>& def_levels,
+                                          ReadFn&& read, ColumnBuilder<T>& builder) {
+  auto append = [&]() -> Status {
+    return read().transform([&](const auto& value) { builder.Append(value); });
+  };
   if (def_levels.empty()) {
     for (size_t i = 0; i < num_values; ++i) {
-      auto result = read_fn();
-      if (!result.has_value()) {
-        return std::unexpected(result.error());
+      if (auto status = append(); !status) {
+        return status;
       }
-      append_fn(std::move(result.value()));
     }
-  } else {
-    for (size_t i = 0; i < def_levels.size(); ++i) {
-      if (def_levels[i] == 1) {
-        auto result = read_fn();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        append_fn(std::move(result.value()));
-      } else {
-        append_null_fn();
-      }
+    return {};
+  }
+  for (const int32_t level : def_levels) {
+    if (level != 1) {
+      builder.AppendNull();
+    } else if (auto status = append(); !status) {
+      return status;
     }
   }
   return {};
@@ -125,12 +118,7 @@ template <typename T, typename D>
   auto indices_data = data.subspan(1);
 
   RleBitPackingDecoder index_decoder(bit_width);
-  size_t non_null_count =
-      def_levels.empty()
-          ? num_values
-          : std::count_if(def_levels.begin(), def_levels.end(),
-                          [](int32_t level) { return level == 1; });
-  index_decoder.SetData(indices_data, non_null_count);
+  index_decoder.SetData(indices_data);
 
   return ProcessWithDefLevels(
       num_values, def_levels,
@@ -146,7 +134,7 @@ template <typename T, typename D>
         }
         return T(dictionary[idx]);
       },
-      [&builder](T val) { builder.Append(val); }, [&builder]() { builder.AppendNull(); });
+      builder);
 }
 
 }  // namespace
@@ -358,7 +346,7 @@ Result<std::vector<int32_t>> ColumnReader::DecodeDefinitionLevelsRle(
   std::vector<int32_t> levels(num_values);
   int bit_width = ComputeBitWidth(max_level);
   RleBitPackingDecoder decoder(bit_width);
-  decoder.SetData(data, num_values);
+  decoder.SetData(data);
   auto status = decoder.ReadBatch(levels);
   if (!status.has_value()) {
     return std::unexpected(status.error());
@@ -399,8 +387,7 @@ Status ColumnReader::DecodeBooleanValues(std::span<const uint8_t> data, size_t n
   decoder.SetNumValues(num_values);
 
   return ProcessWithDefLevels(
-      num_values, def_levels, [&decoder]() { return decoder.ReadValue(); },
-      [&builder](bool val) { builder.Append(val); }, [&builder]() { builder.AppendNull(); });
+      num_values, def_levels, [&decoder]() { return decoder.ReadValue(); }, builder);
 }
 
 template <typename T>
@@ -423,8 +410,7 @@ Status ColumnReader::DecodeFixedWidthValues(Encoding encoding, std::span<const u
   decoder.SetData(data);
 
   return ProcessWithDefLevels(
-      num_values, def_levels, [&decoder]() { return decoder.ReadValue(); },
-      [&builder](T val) { builder.Append(val); }, [&builder]() { builder.AppendNull(); });
+      num_values, def_levels, [&decoder]() { return decoder.ReadValue(); }, builder);
 }
 
 Status ColumnReader::DecodeBinaryValues(Encoding encoding, std::span<const uint8_t> data,
@@ -451,9 +437,7 @@ Status ColumnReader::DecodeBinaryValues(Encoding encoding, std::span<const uint8
   decoder.SetData(data);
 
   return ProcessWithDefLevels(
-      num_values, def_levels, [&decoder]() { return decoder.ReadValue(); },
-      [&builder](const std::string& val) { builder.Append(val); },
-      [&builder]() { builder.AppendNull(); });
+      num_values, def_levels, [&decoder]() { return decoder.ReadValue(); }, builder);
 }
 
 Status ColumnReader::DecodeInt96Values(Encoding encoding, std::span<const uint8_t> data,
@@ -477,9 +461,7 @@ Status ColumnReader::DecodeInt96Values(Encoding encoding, std::span<const uint8_
 
   size_t pos = 0;
   return ProcessWithDefLevels(
-      num_values, def_levels, [&data, &pos]() { return ReadInt96(data, pos); },
-      [&builder](columnar::Timestamp value) { builder.Append(value); },
-      [&builder]() { builder.AppendNull(); });
+      num_values, def_levels, [&data, &pos]() { return ReadInt96(data, pos); }, builder);
 }
 
 }  // namespace quest::io::parquet
