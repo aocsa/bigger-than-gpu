@@ -4,11 +4,9 @@
 #include "quest/execution/lowering/plan_to_graph.hpp"
 
 #include <algorithm>
-#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -87,36 +85,25 @@ namespace {
 /// @brief Lowers one `name = AGG(expr)` of an Aggregate node to the operator's spec.
 [[nodiscard]] Result<taskflow::AggregateSpec> LowerAggregate(
     const plan::logical::NamedAggregate& aggregate, const plan::logical::LogicalPlan& input) {
-  if (dynamic_cast<const plan::logical::CountStar*>(aggregate.expr.get()) != nullptr) {
-    return taskflow::AggregateSpec{taskflow::AggregateKind::kCountStar, nullptr, aggregate.name,
-                                   columnar::DataType::kInt64};
-  }
   const auto* call = dynamic_cast<const plan::logical::AggregateExpr*>(aggregate.expr.get());
   if (call == nullptr) {
     return Error::PhysicalPlanError("Aggregate output '" + aggregate.name +
                                     "' is not an aggregate function: " +
                                     aggregate.expr->ToString());
   }
-  static constexpr std::array<std::pair<std::string_view, taskflow::AggregateKind>, 5> kKinds = {{
-      {"SUM", taskflow::AggregateKind::kSum},
-      {"AVG", taskflow::AggregateKind::kAvg},
-      {"COUNT", taskflow::AggregateKind::kCount},
-      {"MIN", taskflow::AggregateKind::kMin},
-      {"MAX", taskflow::AggregateKind::kMax},
-  }};
-  const auto* kind = std::ranges::find(kKinds, call->op(), &decltype(kKinds)::value_type::first);
-  if (kind == kKinds.end()) {
-    return Error::PhysicalPlanError("Unsupported aggregate function: " + call->op());
+  if (call->kind() == plan::AggregateKind::kCountStar) {
+    return taskflow::AggregateSpec{call->kind(), nullptr, aggregate.name,
+                                   columnar::DataType::kInt64};
   }
-  auto input_expr = CreatePhysicalExpr(call->input(), input);
+  auto input_expr = CreatePhysicalExpr(*call->input(), input);
   if (!input_expr) {
     return std::unexpected(std::move(input_expr).error());
   }
-  auto field = aggregate.expr->ToField(input);
+  auto field = call->ToField(input);
   if (!field) {
     return std::unexpected(std::move(field).error());
   }
-  return taskflow::AggregateSpec{kind->second, std::move(*input_expr), aggregate.name,
+  return taskflow::AggregateSpec{call->kind(), std::move(*input_expr), aggregate.name,
                                  field->data_type};
 }
 

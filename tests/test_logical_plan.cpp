@@ -427,6 +427,19 @@ TEST_F(LogicalPlanTest, SumOfStringIsATypeError) {
   EXPECT_EQ(field.error().code(), ErrorCode::TypeError);
 }
 
+TEST(AggregateTest, SumTypeFollowsDuckDb) {
+  using quest::plan::SumType;
+  EXPECT_EQ(SumType(DataType::kBool), DataType::kInt64);
+  EXPECT_EQ(SumType(DataType::kInt8), DataType::kInt64);
+  EXPECT_EQ(SumType(DataType::kInt32), DataType::kInt64);
+  EXPECT_EQ(SumType(DataType::kFloat), DataType::kDouble);
+  EXPECT_EQ(SumType(DataType::kDouble), DataType::kDouble);
+  EXPECT_EQ(SumType(DataType::Decimal(12, 2)), DataType::Decimal(18, 2));
+  EXPECT_EQ(SumType(DataType::kString), std::nullopt);
+  EXPECT_EQ(SumType(DataType::kDate32), std::nullopt);
+  EXPECT_EQ(SumType(DataType::kTimestamp), std::nullopt);
+}
+
 TEST_F(LogicalPlanTest, SortKeepsSchemaAndPrintsKeys) {
   Sort sort(std::make_unique<Scan>("t", data_source_), {{"name", true}, {"value", false}});
   EXPECT_EQ(sort.schema().num_fields(), 3U);

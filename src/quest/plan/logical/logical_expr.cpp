@@ -129,49 +129,30 @@ std::unique_ptr<LogicalExpr> CaseExpr::Clone() const {
   return std::make_unique<CaseExpr>(std::move(branches), otherwise_->Clone());
 }
 
-Result<Field> Sum::ToField(const LogicalPlan& input) const {
+Result<Field> AggregateExpr::ToField(const LogicalPlan& input) const {
+  if (kind_ == AggregateKind::kCount || kind_ == AggregateKind::kCountStar) {
+    return Field{ToString(), DataType::kInt64};
+  }
+  if (kind_ == AggregateKind::kAvg) {
+    return Field{ToString(), DataType::kDouble};
+  }
   auto input_field = input_->ToField(input);
-  if (!input_field.has_value()) {
+  if (!input_field) {
     return input_field;
   }
-  // SQL: SUM of an integer type is BIGINT, of a floating type DOUBLE, of a Decimal a
-  // Decimal of the same scale (18 digits; HashAggregateOperator fails on overflow).
-  const auto& type = input_field->data_type;
-  if (columnar::IsDecimal(type)) {
-    return Field{"SUM(" + input_->ToString() + ")",
-                 columnar::DataType::Decimal(columnar::DataType::kMaxDecimalPrecision, type.scale)};
+  const DataType type = input_field->data_type;
+  if (kind_ != AggregateKind::kSum) {  // MIN and MAX keep the input type
+    return Field{ToString(), type};
   }
-  const bool is_integral = (type == columnar::DataType::kBool) ||
-                           (type == columnar::DataType::kInt8) ||
-                           (type == columnar::DataType::kInt16) ||
-                           (type == columnar::DataType::kInt32) ||
-                           (type == columnar::DataType::kInt64);
-  const bool is_floating = (type == columnar::DataType::kFloat) ||
-                           (type == columnar::DataType::kDouble);
-  if (!is_integral && !is_floating) {
+  const auto sum = SumType(type);
+  if (!sum) {
     return Error::TypeError("SUM needs a numeric input, got " + columnar::GetTypeName(type));
   }
-  return Field{"SUM(" + input_->ToString() + ")",
-               is_integral ? columnar::DataType{columnar::DataType::kInt64}
-                           : columnar::DataType{columnar::DataType::kDouble}};
+  return Field{ToString(), *sum};
 }
 
-Result<Field> Min::ToField(const LogicalPlan& input) const {
-  auto input_field = input_->ToField(input);
-  if (!input_field.has_value()) {
-    return input_field;
-  }
-  // MIN preserves input type
-  return Field{"MIN(" + input_->ToString() + ")", input_field.value().data_type};
-}
-
-Result<Field> Max::ToField(const LogicalPlan& input) const {
-  auto input_field = input_->ToField(input);
-  if (!input_field.has_value()) {
-    return input_field;
-  }
-  // MAX preserves input type
-  return Field{"MAX(" + input_->ToString() + ")", input_field.value().data_type};
+std::string AggregateExpr::ToString() const {
+  return std::string(plan::ToString(kind_)) + "(" + (input_ ? input_->ToString() : "*") + ")";
 }
 
 }  // namespace quest::plan::logical

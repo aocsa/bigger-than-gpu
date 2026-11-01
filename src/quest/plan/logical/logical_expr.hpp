@@ -14,6 +14,7 @@
 #include "quest/columnar/column_vector.hpp"
 #include "quest/columnar/schema.hpp"
 #include "quest/common/result.hpp"
+#include "quest/plan/aggregate.hpp"
 #include "quest/plan/binary_op.hpp"
 
 namespace quest::plan::logical {
@@ -170,123 +171,34 @@ class CaseExpr : public LogicalExpr {
 };
 
 // =============================================================================
-// Aggregate Expressions
+// Aggregate Expression
 // =============================================================================
 
-class AggregateExpr : public LogicalExpr {
+/// @brief `SUM(x)`, `COUNT(x)`, `COUNT(*)`, `MIN(x)`, `MAX(x)` or `AVG(x)`.
+class AggregateExpr final : public LogicalExpr {
  public:
-  explicit AggregateExpr(LogicalExprPtr input, std::string op)
-      : input_(std::move(input)), op_(std::move(op)) {}
+  /// @param kind The aggregate function.
+  /// @param input The argument; nullptr for `COUNT(*)`.
+  AggregateExpr(AggregateKind kind, LogicalExprPtr input)
+      : kind_(kind), input_(std::move(input)) {}
 
-  [[nodiscard]] const LogicalExpr& input() const { return *input_; }
-  [[nodiscard]] const std::string& op() const { return op_; }
+  /// @return Int64 for COUNT, Double for AVG, `SumType` for SUM (`TypeError` for a
+  /// non-numeric input), the input type for MIN and MAX.
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override;
 
- protected:
+  [[nodiscard]] std::string ToString() const override;
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
+    return std::make_unique<AggregateExpr>(kind_, input_ ? input_->Clone() : nullptr);
+  }
+
+  [[nodiscard]] AggregateKind kind() const noexcept { return kind_; }
+  /// @return The argument; nullptr for `COUNT(*)`.
+  [[nodiscard]] const LogicalExpr* input() const noexcept { return input_.get(); }
+
+ private:
+  AggregateKind kind_;
   LogicalExprPtr input_;
-  std::string op_;
-};
-
-class Sum : public AggregateExpr {
- public:
-  explicit Sum(LogicalExprPtr input)
-      : AggregateExpr(std::move(input), "SUM") {}
-
-  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override;
-
-  [[nodiscard]] std::string ToString() const override {
-    return "SUM(" + input_->ToString() + ")";
-  }
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Sum>(input_->Clone());
-  }
-};
-
-class Avg : public AggregateExpr {
- public:
-  explicit Avg(LogicalExprPtr input)
-      : AggregateExpr(std::move(input), "AVG") {}
-
-  [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
-    // AVG always returns double
-    return Field{"AVG(" + input_->ToString() + ")", columnar::DataType::kDouble};
-  }
-
-  [[nodiscard]] std::string ToString() const override {
-    return "AVG(" + input_->ToString() + ")";
-  }
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Avg>(input_->Clone());
-  }
-};
-
-class Count : public AggregateExpr {
- public:
-  explicit Count(LogicalExprPtr input)
-      : AggregateExpr(std::move(input), "COUNT") {}
-
-  [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
-    // COUNT always returns Int64
-    return Field{"COUNT(" + input_->ToString() + ")", columnar::DataType::kInt64};
-  }
-
-  [[nodiscard]] std::string ToString() const override {
-    return "COUNT(" + input_->ToString() + ")";
-  }
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Count>(input_->Clone());
-  }
-};
-
-class CountStar : public LogicalExpr {
- public:
-  CountStar() = default;
-
-  [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
-    return Field{"COUNT(*)", columnar::DataType::kInt64};
-  }
-
-  [[nodiscard]] std::string ToString() const override {
-    return "COUNT(*)";
-  }
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<CountStar>();
-  }
-};
-
-class Min : public AggregateExpr {
- public:
-  explicit Min(LogicalExprPtr input)
-      : AggregateExpr(std::move(input), "MIN") {}
-
-  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override;
-
-  [[nodiscard]] std::string ToString() const override {
-    return "MIN(" + input_->ToString() + ")";
-  }
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Min>(input_->Clone());
-  }
-};
-
-class Max : public AggregateExpr {
- public:
-  explicit Max(LogicalExprPtr input)
-      : AggregateExpr(std::move(input), "MAX") {}
-
-  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override;
-
-  [[nodiscard]] std::string ToString() const override {
-    return "MAX(" + input_->ToString() + ")";
-  }
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Max>(input_->Clone());
-  }
 };
 
 // =============================================================================
@@ -371,27 +283,27 @@ inline LogicalExprPtr case_when(LogicalExprPtr when, LogicalExprPtr then,
 // =============================================================================
 
 inline LogicalExprPtr sum(LogicalExprPtr input) {
-  return std::make_unique<Sum>(std::move(input));
+  return std::make_unique<AggregateExpr>(AggregateKind::kSum, std::move(input));
 }
 
 inline LogicalExprPtr avg(LogicalExprPtr input) {
-  return std::make_unique<Avg>(std::move(input));
+  return std::make_unique<AggregateExpr>(AggregateKind::kAvg, std::move(input));
 }
 
 inline LogicalExprPtr count(LogicalExprPtr input) {
-  return std::make_unique<Count>(std::move(input));
+  return std::make_unique<AggregateExpr>(AggregateKind::kCount, std::move(input));
 }
 
 inline LogicalExprPtr count_star() {
-  return std::make_unique<CountStar>();
+  return std::make_unique<AggregateExpr>(AggregateKind::kCountStar, nullptr);
 }
 
 inline LogicalExprPtr min(LogicalExprPtr input) {
-  return std::make_unique<Min>(std::move(input));
+  return std::make_unique<AggregateExpr>(AggregateKind::kMin, std::move(input));
 }
 
 inline LogicalExprPtr max(LogicalExprPtr input) {
-  return std::make_unique<Max>(std::move(input));
+  return std::make_unique<AggregateExpr>(AggregateKind::kMax, std::move(input));
 }
 
 }  // namespace quest::plan::logical
