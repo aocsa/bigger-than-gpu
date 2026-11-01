@@ -1875,9 +1875,11 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 
 <header>
   <h1>Typed Arrow-Style Columns in QUEST</h1>
-  <doc-changes new="1" changed="48"></doc-changes>
-  <details class="thread"><summary>Why · 1 request</summary>
+  <doc-changes new="6" changed="52"></doc-changes>
+  <details class="thread"><summary>Why · 3 requests</summary>
     <doc-quote via="prompt" from="the user">instead of using variant, see the image, we can make a more robust implementation more like arrow but simpler with support of NULLs, we want to be performant but we don't want a large implementation we want a cleanest implementation with things like type dispatching and modern c++23 features. 1. Primitive &amp; Numeric Types. don't include decimal. 2. Binary &amp; String Types. Only string type 3. Temporal Types: Date and Timestamp only 4. Nested &amp; Complex Types. Dont include</doc-quote>
+    <doc-quote via="prompt" from="the user">do we have enought data type support to run these queries. TPC-H Q1, Q3, Q5, Q6, Q10 and Q12</doc-quote>
+    <doc-quote via="prompt" from="the user">dont support decimal yet, just use float64</doc-quote>
   </details>
 </header>
 
@@ -1949,7 +1951,7 @@ constexpr decltype(auto) VisitType(DataType type, F&& f) {
 
     <doc-claim at="src/quest/columnar/column_vector.hpp:243">
       <p><b>column_vector.hpp:243</b> · AppendColumnValues()</p>
-      <doc-code src="src/quest/columnar/column_vector.hpp" lines="243-268" hl="252" file="src/quest/columnar/column_vector.hpp" start="243" sha="be19376"><script type="text/plain">[[nodiscard]] inline Status AppendColumnValues(ColumnVector& dest, const ColumnVector& src) {
+      <doc-code src="src/quest/columnar/column_vector.hpp" lines="243-268" hl="252" file="src/quest/columnar/column_vector.hpp" start="243" sha="1e1d2c7"><script type="text/plain">[[nodiscard]] inline Status AppendColumnValues(ColumnVector& dest, const ColumnVector& src) {
   return std::visit(
       [&dest, &src](const auto& type_tag) -> Status {
         using TypeTag = std::decay_t<decltype(type_tag)>;
@@ -2042,7 +2044,7 @@ constexpr decltype(auto) VisitType(DataType type, F&& f) {
 
   <doc-claim>
     <p>The type set has no unsigned integer types.</p>
-    <doc-code src="src/quest/io/parquet/metadata.cpp" lines="28-35" hl="31-32" file="src/quest/io/parquet/metadata.cpp" start="28" sha="be19376"><script type="text/plain">    case 19: return LogicalType::kJson;
+    <doc-code src="src/quest/io/parquet/metadata.cpp" lines="28-35" hl="31-32" file="src/quest/io/parquet/metadata.cpp" start="28" sha="1e1d2c7"><script type="text/plain">    case 19: return LogicalType::kJson;
     case 20: return LogicalType::kBson;
     default:
       if (converted >= 11 && converted <= 18) {  // UINT_8 .. INT_64
@@ -2094,7 +2096,7 @@ constexpr decltype(auto) VisitType(DataType type, F&& f) {
 
     <doc-claim at="src/quest/io/parquet/column_reader.cpp:464">
       <p><b>column_reader.cpp:464</b> · DecodeInt96Values()</p>
-      <doc-code src="src/quest/io/parquet/column_reader.cpp" lines="464-489" hl="483-484" file="src/quest/io/parquet/column_reader.cpp" start="464" sha="be19376"><script type="text/plain">Status ColumnReader::DecodeInt96Values(
+      <doc-code src="src/quest/io/parquet/column_reader.cpp" lines="464-489" hl="483-484" file="src/quest/io/parquet/column_reader.cpp" start="464" sha="1e1d2c7"><script type="text/plain">Status ColumnReader::DecodeInt96Values(
     Encoding /*encoding*/, std::span<const uint8_t> data, size_t num_values,
     const std::vector<int32_t>& def_levels, ColumnVector* column) {
   // INT96 is typically used for timestamps, treat as binary.
@@ -2176,7 +2178,7 @@ using ColumnVectorPtr = std::shared_ptr<const ColumnVector>;
 
     <doc-claim at="src/quest/columnar/column_vector.hpp:60">
       <p><b>column_vector.hpp:60</b> · class ColumnVector</p>
-      <doc-code src="src/quest/columnar/column_vector.hpp" lines="60-68" hl="65" file="src/quest/columnar/column_vector.hpp" start="60" sha="be19376"><script type="text/plain">class ColumnVector {
+      <doc-code src="src/quest/columnar/column_vector.hpp" lines="60-68" hl="65" file="src/quest/columnar/column_vector.hpp" start="60" sha="1e1d2c7"><script type="text/plain">class ColumnVector {
  public:
   virtual ~ColumnVector() = default;
 
@@ -2218,7 +2220,7 @@ class ColumnBuilder {
 
     <doc-claim at="src/quest/io/parquet/column_reader.cpp:294">
       <p><b>column_reader.cpp:294</b> · DecodeFixedWidthValues()</p>
-      <doc-code src="src/quest/io/parquet/column_reader.cpp" lines="293-317" hl="297,315-316" file="src/quest/io/parquet/column_reader.cpp" start="293" sha="be19376"><script type="text/plain">template <typename T>
+      <doc-code src="src/quest/io/parquet/column_reader.cpp" lines="293-317" hl="297,315-316" file="src/quest/io/parquet/column_reader.cpp" start="293" sha="1e1d2c7"><script type="text/plain">template <typename T>
 Status ColumnReader::DecodeFixedWidthValues(
     Encoding encoding, std::span<const uint8_t> data, size_t num_values,
     const std::vector<int32_t>& def_levels, ColumnVector* column) {
@@ -2269,7 +2271,7 @@ Status ColumnReader::DecodeFixedWidthValues(
 
   <doc-claim>
     <p>String offsets are 64-bit, because Sort and HashJoin concatenate all input.</p>
-    <doc-code src="src/quest/taskflow/operators/sort_operator.cpp" lines="72-80" hl="75" file="src/quest/taskflow/operators/sort_operator.cpp" start="72" sha="be19376"><script type="text/plain">    hosts.push_back(std::move(*host));
+    <doc-code src="src/quest/taskflow/operators/sort_operator.cpp" lines="72-80" hl="75" file="src/quest/taskflow/operators/sort_operator.cpp" start="72" sha="1e1d2c7"><script type="text/plain">    hosts.push_back(std::move(*host));
   }
   batches_.clear();
   auto merged = columnar::ConcatenateRecordBatches(inputs);
@@ -2305,7 +2307,7 @@ Status ColumnReader::DecodeFixedWidthValues(
 
     <doc-claim at="src/quest/columnar/record_batch_serializer.cpp:213">
       <p><b>record_batch_serializer.cpp:213</b> · WriteColumnValues()</p>
-      <doc-code src="src/quest/columnar/record_batch_serializer.cpp" lines="213-226" hl="222" file="src/quest/columnar/record_batch_serializer.cpp" start="213" sha="be19376"><script type="text/plain">Status RecordBatchSerializer::WriteColumnValues(std::vector<uint8_t>& buffer,
+      <doc-code src="src/quest/columnar/record_batch_serializer.cpp" lines="213-226" hl="222" file="src/quest/columnar/record_batch_serializer.cpp" start="213" sha="1e1d2c7"><script type="text/plain">Status RecordBatchSerializer::WriteColumnValues(std::vector<uint8_t>& buffer,
                                                 const ColumnVector& column, size_t num_rows) {
   const DataType& type = column.GetType();
 
@@ -2351,7 +2353,7 @@ Status ColumnReader::DecodeFixedWidthValues(
 -   values.push_back(column.GetValue(row))     @ src/quest/taskflow/operators/sort_operator.cpp:91
 </script>
   
-<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:81" data-start="75" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:81" data-start="75" data-sha="1e1d2c7">
           return GatherTyped<std::string>(col, indices, columnar::StringType{});
         }
       },
@@ -2366,7 +2368,7 @@ Result<columnar::RecordBatch> FilterRecordBatch(
   }
 
 </script>
-<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:92" data-start="86" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:92" data-start="86" data-sha="1e1d2c7">
   }
 
   auto& mask_col = **mask_result;
@@ -2381,7 +2383,7 @@ Result<columnar::RecordBatch> FilterRecordBatch(
     }
   }
 </script>
-<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:53" data-start="47" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:53" data-start="47" data-sha="1e1d2c7">
       plan::physical::ColumnData{std::move(data)}, std::move(type),
       has_null ? std::move(validity) : std::vector<bool>{});
 }
@@ -2396,7 +2398,7 @@ std::shared_ptr<columnar::ColumnVector> GatherColumn(
         if constexpr (std::is_same_v<TypeTag, columnar::BoolType>) {
           return GatherTyped<bool>(col, indices, type_tag);
 </script>
-<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:26" data-start="20" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:26" data-start="20" data-sha="1e1d2c7">
   std::vector<T> data;
   data.reserve(indices.size());
   std::vector<bool> validity;
@@ -2411,7 +2413,7 @@ std::shared_ptr<columnar::ColumnVector> GatherColumn(
       // Binary and fixed-width byte types are carried as strings.
       if (std::holds_alternative<std::monostate>(val)) {
 </script>
-<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:16" data-start="10" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:16" data-start="10" data-sha="1e1d2c7">
 #include <variant>
 
 namespace quest::execution {
@@ -2426,7 +2428,7 @@ template <typename T>
   data.reserve(indices.size());
   std::vector<bool> validity;
 </script>
-<script type="text/plain" data-excerpt="src/quest/plan/physical/expressions/physical_expr.cpp:415" data-start="409" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/plan/physical/expressions/physical_expr.cpp:415" data-start="409" data-sha="1e1d2c7">
 }
 
 // =============================================================================
@@ -2441,7 +2443,7 @@ Result<std::shared_ptr<ColumnVector>> BinaryExpression::Evaluate(
   }
   auto right_result = right_->Evaluate(input);
 </script>
-<script type="text/plain" data-excerpt="src/quest/plan/physical/expressions/physical_expr.cpp:50" data-start="44" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/plan/physical/expressions/physical_expr.cpp:50" data-start="44" data-sha="1e1d2c7">
                                                             size_t num_rows, DataType type,
                                                             Fn fn) {
   std::vector<T> values(num_rows);
@@ -2456,7 +2458,7 @@ Result<std::shared_ptr<ColumnVector>> BinaryExpression::Evaluate(
       values[i] = **row;
     } else {
 </script>
-<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:129" data-start="123" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/execution/kernels/batch_kernels.cpp:129" data-start="123" data-sha="1e1d2c7">
   std::vector<std::shared_ptr<columnar::ColumnVector>> new_columns;
   new_columns.reserve(batch.num_columns());
   for (size_t col_idx = 0; col_idx < batch.num_columns(); ++col_idx) {
@@ -2471,7 +2473,7 @@ Result<columnar::RecordBatch> ProjectRecordBatch(
   std::vector<std::shared_ptr<columnar::ColumnVector>> columns;
   columns.reserve(expressions.size());
 </script>
-<script type="text/plain" data-excerpt="src/quest/plan/physical/expressions/physical_expr.cpp:40" data-start="34" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/plan/physical/expressions/physical_expr.cpp:40" data-start="34" data-sha="1e1d2c7">
           return false;
         }
       },
@@ -2486,7 +2488,7 @@ template <typename T, typename Fn>
                                                             Fn fn) {
   std::vector<T> values(num_rows);
 </script>
-<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_join_operator.cpp:107" data-start="101" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_join_operator.cpp:107" data-start="101" data-sha="1e1d2c7">
     }
   }
   finalized_ = true;
@@ -2501,7 +2503,7 @@ Result<cache::DataBlockPtr> HashJoinOperator::ProcessBatch(cache::DataBlockPtr i
   if (!host_result) {
     return std::unexpected(host_result.error());
 </script>
-<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_join_operator.cpp:39" data-start="33" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_join_operator.cpp:39" data-start="33" data-sha="1e1d2c7">
                     columnar::GetTypeName(type)));
   }
   return column;
@@ -2516,7 +2518,7 @@ Result<cache::DataBlockPtr> HashJoinOperator::ProcessBatch(cache::DataBlockPtr i
   }
   if (const auto* key = std::get_if<std::int32_t>(&value)) {
 </script>
-<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_aggregate_operator.cpp:156" data-start="150" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_aggregate_operator.cpp:156" data-start="150" data-sha="1e1d2c7">
   for (const auto& value : key) {
     seed ^= HashValue(value) + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
   }
@@ -2531,7 +2533,7 @@ Status HashAggregateOperator::Sink(cache::DataBlockPtr batch) {
     return {};
   }
 </script>
-<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_aggregate_operator.cpp:216" data-start="210" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/taskflow/operators/hash_aggregate_operator.cpp:216" data-start="210" data-sha="1e1d2c7">
 
   GroupTable local;
   std::vector<Value> key;
@@ -2546,7 +2548,7 @@ Status HashAggregateOperator::Sink(cache::DataBlockPtr batch) {
     }
     auto& states = local.groups[entry->second].states;
 </script>
-<script type="text/plain" data-excerpt="src/quest/taskflow/operators/sort_operator.cpp:51" data-start="45" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/taskflow/operators/sort_operator.cpp:51" data-start="45" data-sha="1e1d2c7">
   }
   std::lock_guard lock(mutex_);
   batches_.push_back(std::move(batch));
@@ -2561,7 +2563,7 @@ Status SortOperator::FinalizeSink() {
   if (batches_.empty()) {
     finalized_.store(true);
 </script>
-<script type="text/plain" data-excerpt="src/quest/taskflow/operators/sort_operator.cpp:91" data-start="85" data-sha="be19376">
+<script type="text/plain" data-excerpt="src/quest/taskflow/operators/sort_operator.cpp:91" data-start="85" data-sha="1e1d2c7">
       return Error::SchemaError(std::format("SortOperator: column '{}' not found", key.column));
     }
     const auto& column = merged->column(*index);
@@ -2596,7 +2598,7 @@ Status SortOperator::FinalizeSink() {
 
     <doc-claim at="src/quest/execution/kernels/batch_kernels.cpp:26">
       <p><b>batch_kernels.cpp:26</b> · GatherTyped()</p>
-      <doc-code src="src/quest/execution/kernels/batch_kernels.cpp" lines="20-44" hl="26,30-31" file="src/quest/execution/kernels/batch_kernels.cpp" start="20" sha="be19376"><script type="text/plain">  std::vector<T> data;
+      <doc-code src="src/quest/execution/kernels/batch_kernels.cpp" lines="20-44" hl="26,30-31" file="src/quest/execution/kernels/batch_kernels.cpp" start="20" sha="1e1d2c7"><script type="text/plain">  std::vector<T> data;
   data.reserve(indices.size());
   std::vector<bool> validity;
   validity.reserve(indices.size());
@@ -2653,7 +2655,7 @@ return VisitType(*type, [&]<typename Tag>(Tag) {
 
     <doc-claim at="src/quest/plan/physical/expressions/physical_expr.cpp:50">
       <p><b>physical_expr.cpp:50</b> · MapRows()</p>
-      <doc-code src="src/quest/plan/physical/expressions/physical_expr.cpp" lines="41-64" hl="50" file="src/quest/plan/physical/expressions/physical_expr.cpp" start="41" sha="be19376"><script type="text/plain">template <typename T, typename Fn>
+      <doc-code src="src/quest/plan/physical/expressions/physical_expr.cpp" lines="41-64" hl="50" file="src/quest/plan/physical/expressions/physical_expr.cpp" start="41" sha="1e1d2c7"><script type="text/plain">template <typename T, typename Fn>
 [[nodiscard]] Result<std::shared_ptr<ColumnVector>> MapRows(const ColumnVector& left,
                                                             const ColumnVector& right,
                                                             size_t num_rows, DataType type,
@@ -2684,7 +2686,7 @@ return VisitType(*type, [&]<typename Tag>(Tag) {
 
   <doc-claim>
     <p>Hash join reads its keys as one <code>int64_t</code> view for each batch.</p>
-    <doc-code src="src/quest/taskflow/operators/hash_join_operator.cpp" lines="38-50" hl="41" file="src/quest/taskflow/operators/hash_join_operator.cpp" start="38" sha="be19376"><script type="text/plain">/// @brief The key at @p row widened to int64, or nullopt if it is null.
+    <doc-code src="src/quest/taskflow/operators/hash_join_operator.cpp" lines="38-50" hl="41" file="src/quest/taskflow/operators/hash_join_operator.cpp" start="38" sha="1e1d2c7"><script type="text/plain">/// @brief The key at @p row widened to int64, or nullopt if it is null.
 [[nodiscard]] std::optional<std::int64_t> KeyAt(const columnar::ColumnVector& column,
                                                 std::size_t row) {
   const auto value = column.GetValue(row);
@@ -2728,7 +2730,7 @@ class GroupStates {
 
     <doc-claim at="src/quest/taskflow/operators/hash_aggregate_operator.hpp:86">
       <p><b>hash_aggregate_operator.hpp:86</b> · Group</p>
-      <doc-code src="src/quest/taskflow/operators/hash_aggregate_operator.hpp" lines="77-99" hl="81,86,98" file="src/quest/taskflow/operators/hash_aggregate_operator.hpp" start="77" sha="be19376"><script type="text/plain">  struct AggregateState {
+      <doc-code src="src/quest/taskflow/operators/hash_aggregate_operator.hpp" lines="77-99" hl="81,86,98" file="src/quest/taskflow/operators/hash_aggregate_operator.hpp" start="77" sha="1e1d2c7"><script type="text/plain">  struct AggregateState {
     std::int64_t count = 0;  ///< non-null inputs (rows for COUNT(*))
     std::int64_t int_sum = 0;
     double double_sum = 0.0;
@@ -2777,7 +2779,7 @@ using RowOrder = std::function<std::weak_ordering(std::size_t, std::size_t)>;
 
     <doc-claim at="src/quest/taskflow/operators/sort_operator.cpp:91">
       <p><b>sort_operator.cpp:91</b> · FinalizeSink()</p>
-      <doc-code src="src/quest/taskflow/operators/sort_operator.cpp" lines="81-92" hl="81,91" file="src/quest/taskflow/operators/sort_operator.cpp" start="81" sha="be19376"><script type="text/plain">  std::vector<std::vector<columnar::Value>> key_values;
+      <doc-code src="src/quest/taskflow/operators/sort_operator.cpp" lines="81-92" hl="81,91" file="src/quest/taskflow/operators/sort_operator.cpp" start="81" sha="1e1d2c7"><script type="text/plain">  std::vector<std::vector<columnar::Value>> key_values;
   for (const auto& key : keys_) {
     auto index = merged->schema().GetFieldIndex(key.column);
     if (!index) {
@@ -2840,7 +2842,7 @@ for (const auto& expr : expressions) {
 
     <doc-claim at="src/quest/plan/physical/expressions/physical_expr.hpp:35">
       <p><b>physical_expr.hpp:35</b> · ColumnData</p>
-      <doc-code src="src/quest/plan/physical/expressions/physical_expr.hpp" lines="35-50" hl="35" file="src/quest/plan/physical/expressions/physical_expr.hpp" start="35" sha="be19376"><script type="text/plain">using ColumnData = std::variant<std::vector<bool>, std::vector<int8_t>,
+      <doc-code src="src/quest/plan/physical/expressions/physical_expr.hpp" lines="35-50" hl="35" file="src/quest/plan/physical/expressions/physical_expr.hpp" start="35" sha="1e1d2c7"><script type="text/plain">using ColumnData = std::variant<std::vector<bool>, std::vector<int8_t>,
                                 std::vector<int16_t>, std::vector<int32_t>,
                                 std::vector<int64_t>, std::vector<float>,
                                 std::vector<double>, std::vector<std::string>,
@@ -2876,17 +2878,50 @@ class MaterializedColumnVector : public ColumnVector {
   </doc-claim>
 </doc-claim>
 
-<!-- ═════ 5 · STEPS ═════ -->
+<!-- ═════ 5 · TPC-H ═════ -->
 <doc-claim>
-  <p>The change lands in 6 steps; each step ends with all tests green.</p>
-  <div class="cols">
-    <div class="card"><h4>1 · Types</h4><p><code>DataType</code>, <code>TypeTraits</code>, <code>VisitType</code>. BYTE_ARRAY and FLBA mapping. A sed edits most of 327 test tags; Binary/Int96/FLBA tests change by hand.</p></div>
-    <div class="card"><h4>2 · Buffers</h4><p>The largest step. A final <code>ColumnVector</code> breaks every subclass, so all producers move at once: reader, generate, expression results, literals, INT96, and approximately 140 test lines. <code>GetValue</code> stays as an adapter.</p></div>
-    <div class="card"><h4>3 · Batch kernels</h4><p>Filter, gather, concatenate, spill, <code>size_in_bytes</code>.</p></div>
-    <div class="card"><h4>4 · Expressions</h4><p><code>Cast</code>, compare, arithmetic, CASE read views, not <code>GetValue</code>.</p></div>
-    <div class="card"><h4>5 · Operators</h4><p>Hash join, hash aggregate, sort. <code>src/</code> stops calling <code>GetValue</code>.</p></div>
-    <div class="card"><h4>6 · Scalar</h4><p><code>Scalar</code> literals; tests use <code>Get&lt;T&gt;</code>. <code>Value</code> goes.</p></div>
-  </div>
+  <p>TPC-H Q1, Q3, Q5, Q6, Q10 and Q12 run and match DuckDB.</p>
+  <doc-mock frame="terminal" title="what each query needs" w="480"><template>      <b>tables</b>  <b>joins</b>  <b>needs</b>
+Q1    1       0      2 group keys, AVG, COUNT(*)
+Q3    3       2      ORDER BY DESC, LIMIT 10    
+Q5    6       5      2nd join key as a filter   
+Q6    1       0      SUM of a product           
+Q10   4       3      7 group keys, LIMIT 20     
+Q12   2       1      <span class="g">runs today, matches DuckDB</span>
+
+<span class="y">Q1, Q3, Q5, Q6 and Q10 read DECIMAL money columns.</span>
+<span class="dim">Int64 keys, String, Date32: in the plan already.</span>
+<span class="dim">Chained joins: no test today; only Q12 has a join.</span></template></doc-mock>
+
+  <doc-claim>
+    <p>The reader turns each DECIMAL(15,2) column into Double.</p>
+    <doc-mock frame="terminal" title="duckdb · parquet_schema(lineitem)" w="480"><template>name             type   converted_type  scale
+l_quantity       INT64  DECIMAL         2
+l_extendedprice  INT64  DECIMAL         2
+l_discount       INT64  DECIMAL         2
+l_tax            INT64  DECIMAL         2
+<span class="dim">also c_acctbal, o_totalprice, s_acctbal …</span>
+
+<span class="r">today: QUEST reads 1234.56 as Int64 123456</span></template></doc-mock>
+    <doc-note tone="ok"><strong>Decided</strong> No Decimal type. The reader divides by 10^scale and stores float64. Tests compare money with DuckDB within 0.01.</doc-note>
+  </doc-claim>
+
+  <doc-claim>
+    <p>The change lands in 7 steps; each step ends with all tests green.</p>
+    <doc-mock frame="terminal" title="steps, in order" w="480"><template><b>1 Types</b>        DataType, TypeTraits, VisitType. Parquet
+               BYTE_ARRAY, FLBA, DECIMAL to Double.
+<b>2 Buffers</b>      The largest step. A final ColumnVector
+               moves all producers at once: reader,
+               generate, results, literals, INT96,
+               approximately 140 test lines.
+<b>3 Kernels</b>      Filter, gather, concatenate, spill, size.
+<b>4 Expressions</b>  Cast, compare, arithmetic, CASE on views.
+<b>5 Operators</b>    Join, aggregate, sort. No GetValue in src/.
+<b>6 Scalar</b>       Literals; tests use Get&lt;T&gt;. Value goes.
+<b>7 TPC-H</b>        6 tables at SF 0.01; 1 test per query.
+
+<span class="dim">each step: build -Werror, ctest, Q12 at SF 1</span></template></doc-mock>
+  </doc-claim>
 
   <doc-claim>
     <p>Q12 at scale factor 1 must run in less time than 845 ms.</p>
@@ -2951,7 +2986,7 @@ class ColumnView {
   <ul>
     <li>Logical plan nodes, <code>QueryBuilder</code> and <code>PipelineExecutor</code>.</li>
     <li>Three-valued AND/OR, null on division by zero, overflow errors.</li>
-    <li>No Decimal, Binary, nested types, unsigned types or time zones.</li>
+    <li>No Decimal, Binary, nested types, unsigned types or time zones. DECIMAL columns read as Double.</li>
     <li>No Arrow dependency and no SIMD intrinsics.</li>
     <li>Parquet page decode and compression.</li>
   </ul>
