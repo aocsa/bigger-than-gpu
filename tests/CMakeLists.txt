@@ -143,3 +143,8 @@ gtest_discover_tests(test_bloom_filter DISCOVERY_TIMEOUT 60)
 if(TARGET bloom_join_demo)
     add_test(NAME BloomJoin.Demo COMMAND bloom_join_demo)
 endif()
+
+get_property(quest_local_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(target IN LISTS quest_local_targets)
+    target_compile_options(${target} PRIVATE ${QUEST_WARNING_FLAGS})
+endforeach()

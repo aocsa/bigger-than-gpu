@@ -6,7 +6,7 @@ platforms = ["osx-arm64"]
 version = "0.1.0"
 
 [tasks]
-configure = "cmake -B build -G Ninja -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_CXX_STANDARD=26"
+configure = "cmake -B build -G Ninja -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX"
 build = "cmake --build build"
 test = "ctest --test-dir build --output-on-failure"
 

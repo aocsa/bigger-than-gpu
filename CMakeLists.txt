@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(bigger-than-gpu
+project(quest
     VERSION 0.1.0
     DESCRIPTION "CPU/Disk focused batch processing with taskflow execution"
     LANGUAGES CXX
@@ -12,8 +12,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Debug Release RelWithDebInfo MinSizeRel)
 endif()
 
-# Require C++26
-set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -28,15 +27,14 @@ endif()
 # Build options
 option(QUEST_BUILD_TESTS "Build tests" ON)
 option(QUEST_BUILD_EXAMPLES "Build examples" ON)
-option(QUEST_SANITIZERS "Enable sanitizers (asan, tsan, ubsan)" "")
+option(QUEST_WERROR "Treat warnings as errors (CI)" OFF)
+set(QUEST_SANITIZERS "" CACHE STRING "Semicolon list of sanitizers, e.g. address;undefined")
 
-# Compiler warnings
-add_compile_options(
-    -Wall
-    -Wextra
-    -Wpedantic
-    -Werror=return-type
-)
+# Applied per target (library, tests, examples) so projects embedding quest keep their own flags.
+set(QUEST_WARNING_FLAGS -Wall -Wextra -Wpedantic -Werror=return-type)
+if(QUEST_WERROR)
+    list(APPEND QUEST_WARNING_FLAGS -Werror)
+endif()
 
 # Sanitizers
 if(QUEST_SANITIZERS)
@@ -46,8 +44,8 @@ if(QUEST_SANITIZERS)
     endforeach()
 endif()
 
-# Find Snappy compression library
 find_package(Snappy REQUIRED)
+find_package(Threads REQUIRED)
 
 # Library sources
 set(QUEST_SOURCES
@@ -67,6 +65,7 @@ set(QUEST_SOURCES
 # Create library
 add_library(quest ${QUEST_SOURCES})
 add_library(quest::quest ALIAS quest)
+target_compile_options(quest PRIVATE ${QUEST_WARNING_FLAGS})
 
 target_include_directories(quest
     PUBLIC
@@ -77,7 +76,7 @@ target_include_directories(quest
 # Link required libraries
 target_link_libraries(quest
     PUBLIC
-        pthread
+        Threads::Threads
         Snappy::snappy
 )
 

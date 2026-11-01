@@ -1,13 +1,13 @@
-# QUEST — C++26 Batch Processing Framework
+# QUEST — C++23 Batch Processing Framework
 
 Two-tier memory (CPU/Disk) batch processing engine inspired by BlazingSQL.
 
 ## Codebase Map
 
 Static library `quest` (`quest::quest`), built from the `.cpp` files listed in root `CMakeLists.txt`
-(`QUEST_SOURCES`; most of the code is header-only). Deps: Snappy, pthread; GTest for tests.
-Toolchain is pinned via Pixi (`pixi.toml`, see `docs/dev/cpp26-pixi-setup.md`). Options:
-`QUEST_BUILD_TESTS`, `QUEST_BUILD_EXAMPLES`, `QUEST_SANITIZERS` (asan/tsan/ubsan). Default build type: Debug.
+(`QUEST_SOURCES`; most of the code is header-only). Deps: Snappy, Threads; GTest for tests.
+Toolchain is pinned via Pixi (`pixi.toml`). Options:
+`QUEST_BUILD_TESTS`, `QUEST_BUILD_EXAMPLES`, `QUEST_WERROR` (CI), `QUEST_SANITIZERS` (e.g. `"address;undefined"`). Default build type: Debug.
 
 Source lives in `src/quest/`; namespaces follow directories (`quest::columnar`, `quest::io::parquet`,
 `quest::plan::logical`, ...). `quest.hpp` is the user-facing umbrella header and is never included
