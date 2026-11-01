@@ -47,7 +47,9 @@ template <typename T>
   return std::visit(
       [](const auto& v) -> T {
         using V = std::decay_t<decltype(v)>;
-        if constexpr (std::is_arithmetic_v<V> && !std::is_same_v<V, bool>) {
+        if constexpr (std::is_same_v<V, bool>) {
+          return static_cast<T>(v ? 1 : 0);
+        } else if constexpr (std::is_arithmetic_v<V>) {
           return static_cast<T>(v);
         } else {
           std::unreachable();
@@ -193,6 +195,11 @@ Status HashAggregateOperator::Sink(cache::DataBlockPtr batch) {
     }
     inputs[i] = std::move(*evaluated);
     classes[i] = Classify(inputs[i]->GetType());
+    // DuckDB: SUM(BOOLEAN) counts the true values; AVG(BOOLEAN) is an error.
+    if (spec.kind == AggregateKind::kSum &&
+        std::holds_alternative<columnar::BoolType>(inputs[i]->GetType())) {
+      classes[i] = NumericClass::kInteger;
+    }
     if ((spec.kind == AggregateKind::kSum || spec.kind == AggregateKind::kAvg) &&
         classes[i] == NumericClass::kOther) {
       return Error::TypeError(

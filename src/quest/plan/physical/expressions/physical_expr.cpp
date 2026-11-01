@@ -538,6 +538,8 @@ Result<std::shared_ptr<ColumnVector>> CaseExpression::Evaluate(const RecordBatch
           return SelectRows<double>(whens, results, n, *type);
         } else if constexpr (std::is_same_v<Tag, columnar::StringType>) {
           return SelectRows<std::string>(whens, results, n, *type);
+        } else if constexpr (std::is_same_v<Tag, columnar::Date32Type>) {
+          return SelectRows<columnar::Date32>(whens, results, n, *type);
         } else {
           return Error::TypeError("CASE cannot produce " + columnar::GetTypeName(*type) +
                                   " values");

@@ -154,3 +154,32 @@ TEST(TpchQ12Test, DateColumnsGroupMinMaxAndSortLikeDuckDb) {
   };
   EXPECT_EQ(rows, expected);
 }
+
+TEST(TpchQ12Test, SumOfBoolAndCaseOverDatesLikeDuckDb) {
+  ASSERT_OK_AND_ASSIGN(
+      auto batches,
+      QueryBuilder::FromParquet((TpchDir() / "lineitem.parquet").string())
+          .value()
+          .Where(Col("l_shipmode") == Lit("MAIL") || Col("l_shipmode") == Lit("SHIP"))
+          .GroupBy({"l_shipmode"})
+          .Aggregate({{"early", agg::Sum(Col("l_shipdate") < Col("l_commitdate"))},
+                      {"last_day", agg::Max(Case(Col("l_shipmode") == Lit("MAIL"),
+                                                 Col("l_receiptdate"), Col("l_shipdate")))}})
+          .OrderBy({"l_shipmode"})
+          .ExecuteOnGraph());
+
+  std::vector<std::string> rows;
+  for (const auto& batch : batches) {
+    for (std::size_t i = 0; i < batch.num_rows(); ++i) {
+      rows.push_back(columnar::ValueToString(batch.column(0).GetValue(i)) + " " +
+                     columnar::ValueToString(batch.column(1).GetValue(i)) + " " +
+                     columnar::ValueToString(batch.column(2).GetValue(i)));
+    }
+  }
+
+  // DuckDB: SELECT l_shipmode, sum(l_shipdate < l_commitdate),
+  //   max(CASE WHEN l_shipmode = 'MAIL' THEN l_receiptdate ELSE l_shipdate END)
+  //   FROM lineitem WHERE l_shipmode IN ('MAIL', 'SHIP') GROUP BY 1 ORDER BY 1
+  const std::vector<std::string> expected = {"MAIL 4206 1998-12-17", "SHIP 4110 1998-11-23"};
+  EXPECT_EQ(rows, expected);
+}

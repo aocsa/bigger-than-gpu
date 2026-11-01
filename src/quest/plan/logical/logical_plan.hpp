@@ -293,7 +293,7 @@ struct SortKey {
   bool ascending = true;
 };
 
-/// @brief ORDER BY: a stable sort on @p keys; NULLs sort last for ASC, first for DESC.
+/// @brief ORDER BY: a stable sort on @p keys; NULLs sort last in both directions (DuckDB).
 class Sort : public LogicalPlan {
  public:
   Sort(LogicalPlanPtr input, std::vector<SortKey> keys)
