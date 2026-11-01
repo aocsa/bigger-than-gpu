@@ -130,6 +130,8 @@ Bugs fixed along the way (not in the original plan):
   of bounds or abort the process.
 - `Scan` with a bad projection column was an assert; now `Scan::WithProjection` returns
   `SchemaError`.
+- Parquet string columns (BYTE_ARRAY annotated UTF8/STRING, ENUM or JSON) loaded as `Binary`
+  because `converted_type` and `logicalType` were never parsed; they now load as `String`.
 
 Follow-ups found (not done here):
 - Expressions do not follow SQL null semantics: comparisons with null yield false, `false OR

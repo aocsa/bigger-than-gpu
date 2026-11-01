@@ -9,6 +9,84 @@
 
 namespace quest::io::parquet {
 
+namespace {
+
+// Legacy SchemaElement.converted_type values (parquet.thrift ConvertedType).
+std::optional<LogicalType> FromConvertedType(int32_t converted) {
+  switch (converted) {
+    case 0: return LogicalType::kString;  // UTF8
+    case 1:                                // MAP
+    case 2: return LogicalType::kMap;      // MAP_KEY_VALUE
+    case 3: return LogicalType::kList;
+    case 4: return LogicalType::kEnum;
+    case 5: return LogicalType::kDecimal;
+    case 6: return LogicalType::kDate;
+    case 7:                                // TIME_MILLIS
+    case 8: return LogicalType::kTime;     // TIME_MICROS
+    case 9:                                // TIMESTAMP_MILLIS
+    case 10: return LogicalType::kTimestamp;  // TIMESTAMP_MICROS
+    case 19: return LogicalType::kJson;
+    case 20: return LogicalType::kBson;
+    default:
+      if (converted >= 11 && converted <= 18) {  // UINT_8 .. INT_64
+        return LogicalType::kInteger;
+      }
+      return std::nullopt;  // INTERVAL or unknown
+  }
+}
+
+// SchemaElement.logicalType is a thrift union: the id of its one set field names the type.
+std::optional<LogicalType> FromLogicalTypeField(int16_t field_id) {
+  switch (field_id) {
+    case 1: return LogicalType::kString;
+    case 2: return LogicalType::kMap;
+    case 3: return LogicalType::kList;
+    case 4: return LogicalType::kEnum;
+    case 5: return LogicalType::kDecimal;
+    case 6: return LogicalType::kDate;
+    case 7: return LogicalType::kTime;
+    case 8: return LogicalType::kTimestamp;
+    case 10: return LogicalType::kInteger;
+    case 12: return LogicalType::kJson;
+    case 13: return LogicalType::kBson;
+    case 14: return LogicalType::kUuid;
+    default: return std::nullopt;
+  }
+}
+
+Result<std::optional<LogicalType>> ReadLogicalTypeUnion(ThriftDecoder& decoder) {
+  std::optional<LogicalType> logical;
+  int16_t last_field_id = 0;
+  while (true) {
+    auto header = decoder.ReadFieldHeader(last_field_id);
+    if (!header) {
+      return std::unexpected(std::move(header).error());
+    }
+    if (!*header) {
+      return logical;
+    }
+    last_field_id = (*header)->field_id;
+    logical = FromLogicalTypeField(last_field_id);
+    auto skipped = decoder.SkipField((*header)->type);
+    if (!skipped) {
+      return std::unexpected(std::move(skipped).error());
+    }
+  }
+}
+
+// UTF8, ENUM and JSON all annotate BYTE_ARRAY values that are UTF-8 text.
+DataType LeafDataType(const SchemaElement& elem) {
+  const bool is_text = elem.logical_type == LogicalType::kString ||
+                       elem.logical_type == LogicalType::kEnum ||
+                       elem.logical_type == LogicalType::kJson;
+  if (elem.type == PhysicalType::kByteArray && is_text) {
+    return columnar::StringType{};
+  }
+  return PhysicalTypeToDataType(elem.type, elem.type_length.value_or(0));
+}
+
+}  // namespace
+
 Result<FileMetadata> MetadataParser::Parse(
     std::span<const uint8_t> data) {
   ThriftDecoder decoder(data);
@@ -171,12 +249,32 @@ Result<SchemaElement> MetadataParser::ParseSchemaElement(
         elem.num_children = result.value();
         break;
       }
+      case 6: {  // converted_type (legacy; logicalType below takes precedence)
+        auto result = decoder.ReadI32();
+        if (!result.has_value()) {
+          return std::unexpected(result.error());
+        }
+        if (!elem.logical_type) {
+          elem.logical_type = FromConvertedType(result.value());
+        }
+        break;
+      }
       case 7: {  // field_id
         auto result = decoder.ReadI32();
         if (!result.has_value()) {
           return std::unexpected(result.error());
         }
         elem.field_id = result.value();
+        break;
+      }
+      case 10: {  // logicalType
+        auto result = ReadLogicalTypeUnion(decoder);
+        if (!result.has_value()) {
+          return std::unexpected(result.error());
+        }
+        if (*result) {
+          elem.logical_type = *result;
+        }
         break;
       }
       default: {
@@ -684,8 +782,7 @@ Schema BuildSchema(const FileMetadata& metadata) {
   while (i < metadata.schema_elements.size()) {
     const auto& elem = metadata.schema_elements[i];
     if (elem.IsLeaf()) {
-      DataType data_type =
-          PhysicalTypeToDataType(elem.type, elem.type_length.value_or(0));
+      DataType data_type = LeafDataType(elem);
       fields.emplace_back(elem.name, data_type, elem.repetition);
       if (elem.field_id) {
         fields.back().field_id = elem.field_id;

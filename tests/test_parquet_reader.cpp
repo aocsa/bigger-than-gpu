@@ -133,32 +133,20 @@ TEST_F(ParquetReaderTest, ScanProjection) {
   }
 }
 
-TEST_F(ParquetReaderTest, StringColumnRead) {
-  if (!std::filesystem::exists(string_test_file())) {
-    GTEST_SKIP() << "Test file not found: " << string_test_file();
+TEST_F(ParquetReaderTest, Utf8ColumnReadsAsString) {
+  if (!std::filesystem::exists(employees_file())) {
+    GTEST_SKIP() << "Test file not found: " << employees_file();
   }
 
-  ASSERT_OK_AND_ASSIGN(auto ds, ParquetDataSource::Open(string_test_file().string()));
-  auto schema = ds.schema();
+  // employees.parquet marks `name` as BYTE_ARRAY with the UTF8 / STRING annotation.
+  ASSERT_OK_AND_ASSIGN(auto ds, ParquetDataSource::Open(employees_file().string()));
+  auto index = ds.schema().GetFieldIndex("name");
+  ASSERT_TRUE(index.has_value());
+  EXPECT_TRUE(std::holds_alternative<StringType>(ds.schema().field(*index).data_type));
 
-  std::optional<std::string> string_col;
-  for (size_t i = 0; i < schema.num_fields(); ++i) {
-    if (std::holds_alternative<StringType>(schema.field(i).data_type)) {
-      string_col = schema.field(i).name;
-      break;
-    }
-  }
-
-  if (!string_col) {
-    GTEST_SKIP() << "No string column found in test file";
-  }
-
-  for (size_t i = 0; i < ds.num_partitions(); ++i) {
-    auto batch_result = ds.ReadPartition(i, {*string_col});
-    ASSERT_TRUE(batch_result.has_value());
-    auto& col = batch_result.value().column(0);
-    EXPECT_TRUE(std::holds_alternative<StringType>(col.GetType()));
-  }
+  ASSERT_OK_AND_ASSIGN(auto batch, ds.ReadPartition(0, {"name"}));
+  EXPECT_TRUE(std::holds_alternative<StringType>(batch.column(0).GetType()));
+  EXPECT_TRUE(std::holds_alternative<std::string>(batch.column(0).GetValue(0)));
 }
 
 TEST_F(ParquetReaderTest, NumericColumnTypes) {
