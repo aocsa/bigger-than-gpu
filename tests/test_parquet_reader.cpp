@@ -384,6 +384,16 @@ TEST(ParquetCorruptFileTest, ListSizeBeyondBufferIsAnError) {
   EXPECT_FALSE(decoder.ReadListHeader().has_value());
 }
 
+TEST(ParquetCorruptFileTest, MapSizeBeyondBufferIsAnError) {
+  // Map size varint 0xFFFFFFFF, key and value types bool; no entries follow. Bool entries read
+  // no bytes, so the skip loop used to run 2^32 times and succeed.
+  const std::vector<uint8_t> buf{0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x11};
+  ThriftDecoder decoder(buf);
+  auto skipped = decoder.SkipField(ThriftType::kMap);
+  ASSERT_FALSE(skipped.has_value());
+  EXPECT_EQ(skipped.error().code(), ErrorCode::ThriftDecodeError);
+}
+
 TEST(ParquetCorruptFileTest, UnsignedVarintLongerThanFiveBytesIsAnError) {
   // Six continuation bytes: a uint32 varint has 5 bytes at most.
   const std::vector<uint8_t> buf{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01};

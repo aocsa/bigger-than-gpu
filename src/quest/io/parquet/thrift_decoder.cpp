@@ -201,6 +201,11 @@ Status ThriftDecoder::SkipField(ThriftType type) noexcept {
       if (!types) {
         return std::unexpected(std::move(types).error());
       }
+      // As for lists: a larger count is corrupt, and bool entries read no bytes, so nothing
+      // else would stop the loop below.
+      if (*size > remaining()) {
+        return Error::ThriftDecodeError("Map size exceeds remaining buffer");
+      }
       const auto key_type = static_cast<ThriftType>((*types >> 4) & 0x0F);
       const auto value_type = static_cast<ThriftType>(*types & 0x0F);
       for (uint32_t i = 0; i < *size; ++i) {
