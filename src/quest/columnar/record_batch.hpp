@@ -19,7 +19,7 @@ namespace quest::columnar {
 // Batch of data organized in columns (similar to Arrow RecordBatch)
 class RecordBatch {
  public:
-  RecordBatch(Schema schema, std::vector<std::shared_ptr<ColumnVector>> columns)
+  RecordBatch(Schema schema, std::vector<ColumnVectorPtr> columns)
       : schema_(std::move(schema)), columns_(std::move(columns)) {
     assert((columns_.empty() || schema_.num_fields() == columns_.size()) &&
            "schema field count doesn't match column count");
@@ -38,7 +38,7 @@ class RecordBatch {
     return *columns_[index];
   }
 
-  std::shared_ptr<ColumnVector> column_ptr(size_t index) const {
+  ColumnVectorPtr column_ptr(size_t index) const {
     assert(index < columns_.size() && "column index out of range");
     return columns_[index];
   }
@@ -72,7 +72,7 @@ class RecordBatch {
 
  private:
   Schema schema_;
-  std::vector<std::shared_ptr<ColumnVector>> columns_;
+  std::vector<ColumnVectorPtr> columns_;
 };
 
 /// @brief Column-wise concatenate @p batches into one RecordBatch.
@@ -97,18 +97,29 @@ class RecordBatch {
     }
   }
 
-  std::vector<std::shared_ptr<ColumnVector>> columns;
+  std::vector<ColumnVectorPtr> columns;
   columns.reserve(num_cols);
   for (size_t c = 0; c < num_cols; ++c) {
-    auto unique_col = CreateColumnVector(schema.field(c).data_type, total_rows);
-    std::shared_ptr<ColumnVector> dest(std::move(unique_col));
-    for (const auto* batch : batches) {
-      auto status = AppendColumnValues(*dest, batch->column(c));
-      if (!status) {
-        return std::unexpected(status.error());
+    const DataType type = schema.field(c).data_type;
+    auto column = VisitType(type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
+      using T = typename Tag::CType;
+      ColumnBuilder<T> builder(type, total_rows);
+      for (const auto* batch : batches) {
+        const ColumnVector& src = batch->column(c);
+        if (src.GetType() != type) {
+          return Error::Invalid("Concatenate column type mismatch");
+        }
+        const auto view = src.View<T>();
+        for (size_t i = 0; i < src.size(); ++i) {
+          view.IsNull(i) ? builder.AppendNull() : builder.Append(view[i]);
+        }
       }
+      return std::move(builder).Finish();
+    });
+    if (!column) {
+      return std::unexpected(column.error());
     }
-    columns.push_back(std::move(dest));
+    columns.push_back(std::move(*column));
   }
 
   return RecordBatch(schema, std::move(columns));

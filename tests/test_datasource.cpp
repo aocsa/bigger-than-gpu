@@ -15,6 +15,7 @@
 
 using namespace quest::columnar;
 using namespace quest::io::parquet;
+using quest::testing::MakeColumn;
 
 // =============================================================================
 // Types Tests
@@ -219,218 +220,6 @@ TEST(SchemaTest, ToString) {
 }
 
 // =============================================================================
-// TypedColumnVector Tests
-// =============================================================================
-
-TEST(TypedColumnVectorTest, Int32Basic) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
-  EXPECT_EQ(col.size(), 0);
-
-  col.Append(100);
-  col.Append(200);
-  col.Append(300);
-
-  EXPECT_EQ(col.size(), 3);
-  EXPECT_EQ(col.GetTypedValue(0), 100);
-  EXPECT_EQ(col.GetTypedValue(1), 200);
-  EXPECT_EQ(col.GetTypedValue(2), 300);
-
-  EXPECT_FALSE(col.IsNull(0));
-  EXPECT_FALSE(col.IsNull(1));
-  EXPECT_FALSE(col.IsNull(2));
-}
-
-TEST(TypedColumnVectorTest, Nulls) {
-  TypedColumnVector<int64_t> col(DataType::kInt64, 10);
-
-  col.Append(1);
-  col.AppendNull();
-  col.Append(3);
-
-  EXPECT_EQ(col.size(), 3);
-  EXPECT_FALSE(col.IsNull(0));
-  EXPECT_TRUE(col.IsNull(1));
-  EXPECT_FALSE(col.IsNull(2));
-
-  Value val = col.GetValue(1);
-  EXPECT_TRUE(std::holds_alternative<std::monostate>(val));
-
-  val = col.GetValue(0);
-  ASSERT_TRUE(std::holds_alternative<int64_t>(val));
-  EXPECT_EQ(std::get<int64_t>(val), 1);
-}
-
-TEST(TypedColumnVectorTest, SetValue) {
-  TypedColumnVector<double> col(DataType::kDouble, 5);
-  col.Append(1.0);
-  col.Append(2.0);
-
-  col.SetValue(0, 10.0);
-  EXPECT_EQ(col.GetTypedValue(0), 10.0);
-  EXPECT_FALSE(col.IsNull(0));
-
-  col.SetNull(0);
-  EXPECT_TRUE(col.IsNull(0));
-
-  col.SetValid(0);
-  EXPECT_FALSE(col.IsNull(0));
-}
-
-TEST(TypedColumnVectorTest, Bool) {
-  TypedColumnVector<bool> col(DataType::kBool, 5);
-  col.Append(true);
-  col.Append(false);
-  col.AppendNull();
-  col.Append(true);
-
-  EXPECT_EQ(col.size(), 4);
-  EXPECT_EQ(col.GetTypedValue(0), true);
-  EXPECT_EQ(col.GetTypedValue(1), false);
-  EXPECT_TRUE(col.IsNull(2));
-  EXPECT_EQ(col.GetTypedValue(3), true);
-}
-
-TEST(TypedColumnVectorTest, Float) {
-  TypedColumnVector<float> col(DataType::kFloat, 5);
-  col.Append(1.5f);
-  col.Append(2.5f);
-
-  EXPECT_EQ(col.size(), 2);
-  EXPECT_FLOAT_EQ(col.GetTypedValue(0), 1.5f);
-  EXPECT_FLOAT_EQ(col.GetTypedValue(1), 2.5f);
-}
-
-TEST(TypedColumnVectorTest, Resize) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 2);
-
-  for (int i = 0; i < 100; ++i) {
-    col.Append(i);
-  }
-
-  EXPECT_EQ(col.size(), 100);
-  for (int i = 0; i < 100; ++i) {
-    EXPECT_EQ(col.GetTypedValue(i), i);
-    EXPECT_FALSE(col.IsNull(i));
-  }
-}
-
-TEST(TypedColumnVectorTest, Spans) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
-  col.Append(1);
-  col.Append(2);
-  col.Append(3);
-
-  auto values = col.GetValues();
-  EXPECT_EQ(values.size(), 3);
-  EXPECT_EQ(values[0], 1);
-  EXPECT_EQ(values[1], 2);
-  EXPECT_EQ(values[2], 3);
-
-  auto mutable_values = col.GetMutableValues();
-  mutable_values[0] = 100;
-  EXPECT_EQ(col.GetTypedValue(0), 100);
-}
-
-// =============================================================================
-// StringColumnVector Tests
-// =============================================================================
-
-TEST(StringColumnVectorTest, Basic) {
-  StringColumnVector col(DataType::kString, 10);
-  EXPECT_EQ(col.size(), 0);
-
-  col.Append("hello");
-  col.Append("world");
-
-  EXPECT_EQ(col.size(), 2);
-  EXPECT_EQ(col.GetString(0), "hello");
-  EXPECT_EQ(col.GetString(1), "world");
-  EXPECT_FALSE(col.IsNull(0));
-  EXPECT_FALSE(col.IsNull(1));
-}
-
-TEST(StringColumnVectorTest, Nulls) {
-  StringColumnVector col(DataType::kString);
-
-  col.Append("first");
-  col.AppendNull();
-  col.Append("third");
-
-  EXPECT_EQ(col.size(), 3);
-  EXPECT_FALSE(col.IsNull(0));
-  EXPECT_TRUE(col.IsNull(1));
-  EXPECT_FALSE(col.IsNull(2));
-
-  Value val = col.GetValue(1);
-  EXPECT_TRUE(std::holds_alternative<std::monostate>(val));
-
-  val = col.GetValue(0);
-  ASSERT_TRUE(std::holds_alternative<std::string>(val));
-  EXPECT_EQ(std::get<std::string>(val), "first");
-}
-
-TEST(StringColumnVectorTest, Binary) {
-  StringColumnVector col(DataType::kString);
-  col.Append(std::string("\x00\x01\x02", 3));
-  col.Append(std::string("\xFF\xFE", 2));
-
-  EXPECT_EQ(col.size(), 2);
-  EXPECT_EQ(col.GetString(0).size(), 3);
-  EXPECT_EQ(col.GetString(1).size(), 2);
-}
-
-TEST(StringColumnVectorTest, Resize) {
-  StringColumnVector col(DataType::kString, 2);
-
-  for (int i = 0; i < 100; ++i) {
-    col.Append("value_" + std::to_string(i));
-  }
-
-  EXPECT_EQ(col.size(), 100);
-  EXPECT_EQ(col.GetString(0), "value_0");
-  EXPECT_EQ(col.GetString(99), "value_99");
-}
-
-// =============================================================================
-// CreateColumnVector Factory Tests
-// =============================================================================
-
-TEST(CreateColumnVectorTest, Bool) {
-  auto col = CreateColumnVector(DataType::kBool, 10);
-  EXPECT_NE(dynamic_cast<TypedColumnVector<bool>*>(col.get()), nullptr);
-}
-
-TEST(CreateColumnVectorTest, Int32) {
-  auto col = CreateColumnVector(DataType::kInt32, 10);
-  EXPECT_NE(dynamic_cast<TypedColumnVector<int32_t>*>(col.get()), nullptr);
-}
-
-TEST(CreateColumnVectorTest, Int64) {
-  auto col = CreateColumnVector(DataType::kInt64, 10);
-  EXPECT_NE(dynamic_cast<TypedColumnVector<int64_t>*>(col.get()), nullptr);
-}
-
-TEST(CreateColumnVectorTest, Float) {
-  auto col = CreateColumnVector(DataType::kFloat, 10);
-  EXPECT_NE(dynamic_cast<TypedColumnVector<float>*>(col.get()), nullptr);
-}
-
-TEST(CreateColumnVectorTest, Double) {
-  auto col = CreateColumnVector(DataType::kDouble, 10);
-  EXPECT_NE(dynamic_cast<TypedColumnVector<double>*>(col.get()), nullptr);
-}
-
-TEST(CreateColumnVectorTest, String) {
-  auto col = CreateColumnVector(DataType::kString, 10);
-  EXPECT_NE(dynamic_cast<StringColumnVector*>(col.get()), nullptr);
-}
-
-TEST(CreateColumnVectorTest, Binary) {
-  auto col = CreateColumnVector(DataType::kString, 10);
-  EXPECT_NE(dynamic_cast<StringColumnVector*>(col.get()), nullptr);
-}
-
-// =============================================================================
 // Value Tests
 // =============================================================================
 
@@ -473,13 +262,9 @@ TEST(RecordBatchTest, Construction) {
       Field("name", DataType::kString)};
   Schema schema(fields);
 
-  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 10);
-  id_col->Append(1);
-  id_col->Append(2);
+  auto id_col = MakeColumn<int32_t>(DataType::kInt32, {1, 2});
 
-  auto name_col = std::make_shared<StringColumnVector>(DataType::kString);
-  name_col->Append("Alice");
-  name_col->Append("Bob");
+  auto name_col = MakeColumn<std::string_view>(DataType::kString, {"Alice", "Bob"});
 
   RecordBatch batch(schema, {id_col, name_col});
 
@@ -493,13 +278,9 @@ TEST(RecordBatchTest, ColumnAccess) {
       Field("b", DataType::kInt64)};
   Schema schema(fields);
 
-  auto col_a = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
-  col_a->Append(10);
-  col_a->Append(20);
+  auto col_a = MakeColumn<int32_t>(DataType::kInt32, {10, 20});
 
-  auto col_b = std::make_shared<TypedColumnVector<int64_t>>(DataType::kInt64, 5);
-  col_b->Append(100);
-  col_b->Append(200);
+  auto col_b = MakeColumn<int64_t>(DataType::kInt64, {100, 200});
 
   RecordBatch batch(schema, {col_a, col_b});
 
@@ -516,11 +297,9 @@ TEST(RecordBatchTest, ColumnByName) {
       Field("value", DataType::kDouble)};
   Schema schema(fields);
 
-  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
-  id_col->Append(1);
+  auto id_col = MakeColumn<int32_t>(DataType::kInt32, {1});
 
-  auto val_col = std::make_shared<TypedColumnVector<double>>(DataType::kDouble, 5);
-  val_col->Append(3.14);
+  auto val_col = MakeColumn<double>(DataType::kDouble, {3.14});
 
   RecordBatch batch(schema, {id_col, val_col});
 
@@ -536,8 +315,7 @@ TEST(RecordBatchTest, FieldAlias) {
   std::vector<Field> fields = {Field("a", DataType::kInt32)};
   Schema schema(fields);
 
-  auto col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
-  col->Append(42);
+  auto col = MakeColumn<int32_t>(DataType::kInt32, {42});
 
   RecordBatch batch(schema, {col});
 
@@ -561,13 +339,9 @@ TEST(RecordBatchTest, ToCSV) {
       Field("name", DataType::kString)};
   Schema schema(fields);
 
-  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
-  id_col->Append(1);
-  id_col->Append(2);
+  auto id_col = MakeColumn<int32_t>(DataType::kInt32, {1, 2});
 
-  auto name_col = std::make_shared<StringColumnVector>(DataType::kString);
-  name_col->Append("Alice");
-  name_col->Append("Bob");
+  auto name_col = MakeColumn<std::string_view>(DataType::kString, {"Alice", "Bob"});
 
   RecordBatch batch(schema, {id_col, name_col});
 
@@ -582,13 +356,9 @@ TEST(RecordBatchTest, ToCSVWithNulls) {
       Field("name", DataType::kString, Repetition::kOptional)};
   Schema schema(fields);
 
-  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
-  id_col->Append(1);
-  id_col->Append(2);
+  auto id_col = MakeColumn<int32_t>(DataType::kInt32, {1, 2});
 
-  auto name_col = std::make_shared<StringColumnVector>(DataType::kString);
-  name_col->Append("Alice");
-  name_col->AppendNull();
+  auto name_col = MakeColumn<std::string_view>(DataType::kString, {"Alice", std::nullopt});
 
   RecordBatch batch(schema, {id_col, name_col});
 

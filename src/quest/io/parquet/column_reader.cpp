@@ -52,23 +52,22 @@ template <typename ReadFn, typename AppendFn, typename AppendNullFn>
 /// @brief @p in with @p convert (From -> Result<To>) applied to each value, as a column of
 /// @p type.
 template <typename To, typename From, typename Convert>
-[[nodiscard]] Result<std::shared_ptr<ColumnVector>> ConvertValues(const ColumnVector& in,
-                                                                  DataType type, Convert convert) {
-  // ReadAll decoded @p in as the column's physical type, From.
-  const auto& from = static_cast<const TypedColumnVector<From>&>(in);
-  auto out = std::make_shared<TypedColumnVector<To>>(type, from.size());
-  for (size_t i = 0; i < from.size(); ++i) {
+[[nodiscard]] Result<ColumnVectorPtr> ConvertValues(const ColumnVector& in, DataType type,
+                                                    Convert convert) {
+  const auto from = in.View<From>();
+  ColumnBuilder<To> out(type, in.size());
+  for (size_t i = 0; i < in.size(); ++i) {
     if (from.IsNull(i)) {
-      out->AppendNull();
+      out.AppendNull();
       continue;
     }
-    Result<To> value = convert(from.GetTypedValue(i));
+    Result<To> value = convert(from[i]);
     if (!value) {
       return std::unexpected(std::move(value).error());
     }
-    out->Append(*value);
+    out.Append(*value);
   }
-  return out;
+  return std::move(out).Finish();
 }
 
 [[nodiscard]] Result<int64_t> ToMicros(int64_t value, TimeUnit unit) {
@@ -114,11 +113,12 @@ template <typename To, typename From, typename Convert>
 
 /// @brief Decodes a dictionary data page (a bit width, then RLE/bit-packed indices) into
 /// @p column, looking each index up in @p dictionary.
-template <typename T>
-[[nodiscard]] Status DecodeDictionaryIndices(std::span<const T> dictionary,
+/// @tparam T The builder's CType; a dictionary entry (D) converts to it.
+template <typename T, typename D>
+[[nodiscard]] Status DecodeDictionaryIndices(std::span<const D> dictionary,
                                              std::span<const uint8_t> data, size_t num_values,
                                              const std::vector<int32_t>& def_levels,
-                                             TypedColumnVector<T>* column) {
+                                             ColumnBuilder<T>& builder) {
   if (data.empty()) {
     return {};
   }
@@ -145,15 +145,14 @@ template <typename T>
           return std::unexpected(
               Error::OutOfRange("Dictionary index out of range"));
         }
-        return dictionary[idx];
+        return T(dictionary[idx]);
       },
-      [column](T val) { column->Append(val); },
-      [column]() { column->AppendNull(); });
+      [&builder](T val) { builder.Append(val); }, [&builder]() { builder.AppendNull(); });
 }
 
 }  // namespace
 
-Result<std::shared_ptr<ColumnVector>> ColumnReader::ReadAll() {
+Result<ColumnVectorPtr> ColumnReader::ReadAll() {
   if (column_meta_.num_values < 0) {
     return Error::ColumnDecodeError("Negative column chunk value count");
   }
@@ -161,9 +160,23 @@ Result<std::shared_ptr<ColumnVector>> ColumnReader::ReadAll() {
   // A converted column decodes as its physical type; Convert() then makes its DataType.
   const bool decode_physical = leaf_.conversion != LeafType::Conversion::kNone &&
                                leaf_.conversion != LeafType::Conversion::kInt96;
-  auto column = CreateColumnVector(
-      decode_physical ? PhysicalTypeToDataType(column_meta_.type) : leaf_.type, total_values);
+  const DataType decode_type =
+      decode_physical ? PhysicalTypeToDataType(column_meta_.type) : leaf_.type;
+  auto column = columnar::VisitType(decode_type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
+    ColumnBuilder<typename Tag::CType> builder(decode_type, total_values);
+    if (auto status = ReadPages(builder); !status) {
+      return std::unexpected(std::move(status).error());
+    }
+    return std::move(builder).Finish();
+  });
+  if (!column || !decode_physical) {
+    return column;
+  }
+  return Convert(**column);
+}
 
+template <typename T>
+Status ColumnReader::ReadPages(ColumnBuilder<T>& builder) {
   while (page_reader_.HasNextPage()) {
     auto header_result = page_reader_.ReadPageHeader();
     if (!header_result.has_value()) {
@@ -179,46 +192,34 @@ Result<std::shared_ptr<ColumnVector>> ColumnReader::ReadAll() {
     if (!page_data_result.has_value()) {
       return std::unexpected(page_data_result.error());
     }
-    auto compressed_data = page_data_result.value();
-
-    // Decompress page data if needed.
-    auto decompressed_result = DecompressPageData(header, compressed_data);
+    auto decompressed_result = DecompressPageData(header, page_data_result.value());
     if (!decompressed_result.has_value()) {
       return std::unexpected(decompressed_result.error());
     }
     auto page_data = decompressed_result.value();
 
+    Status status;
     switch (header.type) {
       case PageType::kDictionaryPage:
         ReadDictionaryPage(header, page_data);
         break;
-      case PageType::kDataPage: {
-        auto status = ReadDataPage(header, page_data, column.get());
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
+      case PageType::kDataPage:
+        status = ReadDataPage(header, page_data, builder);
         break;
-      }
-      case PageType::kDataPageV2: {
-        auto status = ReadDataPageV2(header, page_data, column.get());
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
+      case PageType::kDataPageV2:
+        status = ReadDataPageV2(header, page_data, builder);
         break;
-      }
       default:
-        // Skip unknown page types.
-        break;
+        break;  // Skip unknown page types.
+    }
+    if (!status) {
+      return status;
     }
   }
-
-  if (decode_physical) {
-    return Convert(*column);
-  }
-  return column;
+  return {};
 }
 
-Result<std::shared_ptr<ColumnVector>> ColumnReader::Convert(const ColumnVector& physical) const {
+Result<ColumnVectorPtr> ColumnReader::Convert(const ColumnVector& physical) const {
   using Conversion = LeafType::Conversion;
   const bool is_int64 = column_meta_.type == PhysicalType::kInt64;
   switch (leaf_.conversion) {
@@ -287,9 +288,9 @@ void ColumnReader::ReadDictionaryPage(const PageHeader& header,
   has_dictionary_ = true;
 }
 
-Status ColumnReader::ReadDataPage(const PageHeader& header,
-                                  std::span<const uint8_t> data,
-                                  ColumnVector* column) {
+template <typename T>
+Status ColumnReader::ReadDataPage(const PageHeader& header, std::span<const uint8_t> data,
+                                  ColumnBuilder<T>& builder) {
   size_t pos = 0;
   int max_def_level = field_.IsNullable() ? 1 : 0;
 
@@ -316,13 +317,12 @@ Status ColumnReader::ReadDataPage(const PageHeader& header,
   }
 
   auto values_data = data.subspan(pos);
-  return DecodeValues(header.encoding, values_data, header.num_values,
-                      def_levels, column);
+  return DecodeValues(header.encoding, values_data, header.num_values, def_levels, builder);
 }
 
-Status ColumnReader::ReadDataPageV2(const PageHeader& header,
-                                    std::span<const uint8_t> data,
-                                    ColumnVector* column) {
+template <typename T>
+Status ColumnReader::ReadDataPageV2(const PageHeader& header, std::span<const uint8_t> data,
+                                    ColumnBuilder<T>& builder) {
   if (header.repetition_levels_byte_length < 0 || header.definition_levels_byte_length < 0 ||
       header.num_nulls < 0 || header.num_nulls > header.num_values) {
     return Error::PageDecodeError("Invalid data page V2 header");
@@ -353,8 +353,7 @@ Status ColumnReader::ReadDataPageV2(const PageHeader& header,
   auto values_data = data.subspan(pos);
   // V2 pages store non-null value count.
   size_t num_non_null = header.num_values - header.num_nulls;
-  return DecodeValues(header.encoding, values_data, num_non_null, def_levels,
-                      column);
+  return DecodeValues(header.encoding, values_data, num_non_null, def_levels, builder);
 }
 
 Result<std::vector<int32_t>> ColumnReader::DecodeDefinitionLevelsRle(
@@ -370,11 +369,10 @@ Result<std::vector<int32_t>> ColumnReader::DecodeDefinitionLevelsRle(
   return levels;
 }
 
-Status ColumnReader::DecodeValues(Encoding encoding,
-                                  std::span<const uint8_t> data,
-                                  size_t num_values,
-                                  const std::vector<int32_t>& def_levels,
-                                  ColumnVector* column) {
+template <typename T>
+Status ColumnReader::DecodeValues(Encoding encoding, std::span<const uint8_t> data,
+                                  size_t num_values, const std::vector<int32_t>& def_levels,
+                                  ColumnBuilder<T>& builder) {
   bool use_dictionary = (encoding == Encoding::kPlainDictionary ||
                          encoding == Encoding::kRleDictionary);
 
@@ -383,180 +381,88 @@ Status ColumnReader::DecodeValues(Encoding encoding,
         "Dictionary encoding but no dictionary page found");
   }
 
-  switch (column_meta_.type) {
-    case PhysicalType::kBoolean:
-      return DecodeBooleanValues(encoding, data, num_values, def_levels,
-                                 column);
-    case PhysicalType::kInt32:
-      if (field_.data_type == columnar::DataType::kDate32) {
-        return DecodeFixedWidthValues<columnar::Date32>(encoding, data, num_values, def_levels,
-                                                        column);
-      }
-      return DecodeFixedWidthValues<int32_t>(encoding, data, num_values,
-                                             def_levels, column);
-    case PhysicalType::kInt64:
-      return DecodeFixedWidthValues<int64_t>(encoding, data, num_values,
-                                             def_levels, column);
-    case PhysicalType::kFloat:
-      return DecodeFixedWidthValues<float>(encoding, data, num_values,
-                                           def_levels, column);
-    case PhysicalType::kDouble:
-      return DecodeFixedWidthValues<double>(encoding, data, num_values,
-                                            def_levels, column);
-    case PhysicalType::kByteArray:
-      return DecodeBinaryValues(encoding, data, num_values, def_levels,
-                                column);
-    case PhysicalType::kFixedLenByteArray:
-      std::unreachable();  // ResolveLeafType rejects FIXED_LEN_BYTE_ARRAY columns
-    case PhysicalType::kInt96:
-      return DecodeInt96Values(encoding, data, num_values, def_levels,
-                               column);
+  // ResolveLeafType and PhysicalTypeToDataType make T match the physical type: BOOLEAN is
+  // bool, BYTE_ARRAY is String, INT96 is Timestamp, and the rest are fixed-width values.
+  if constexpr (std::same_as<T, bool>) {
+    return DecodeBooleanValues(data, num_values, def_levels, builder);
+  } else if constexpr (std::same_as<T, std::string_view>) {
+    return DecodeBinaryValues(encoding, data, num_values, def_levels, builder);
+  } else if constexpr (std::same_as<T, columnar::Timestamp>) {
+    return DecodeInt96Values(encoding, data, num_values, def_levels, builder);
+  } else {
+    return DecodeFixedWidthValues<T>(encoding, data, num_values, def_levels, builder);
   }
-  return {};
 }
 
-Status ColumnReader::DecodeBooleanValues(
-    Encoding /*encoding*/, std::span<const uint8_t> data, size_t num_values,
-    const std::vector<int32_t>& def_levels, ColumnVector* column) {
-  auto* typed_col = dynamic_cast<TypedColumnVector<bool>*>(column);
-  if (!typed_col) {
-    return Error::TypeError("Column type mismatch for boolean");
-  }
-
+Status ColumnReader::DecodeBooleanValues(std::span<const uint8_t> data, size_t num_values,
+                                         const std::vector<int32_t>& def_levels,
+                                         ColumnBuilder<bool>& builder) {
   PlainDecoder<bool> decoder;
   decoder.SetData(data);
   decoder.SetNumValues(num_values);
 
   return ProcessWithDefLevels(
-      num_values, def_levels,
-      [&decoder]() { return decoder.ReadValue(); },
-      [typed_col](bool val) { typed_col->Append(val); },
-      [typed_col]() { typed_col->AppendNull(); });
+      num_values, def_levels, [&decoder]() { return decoder.ReadValue(); },
+      [&builder](bool val) { builder.Append(val); }, [&builder]() { builder.AppendNull(); });
 }
 
 template <typename T>
-Status ColumnReader::DecodeFixedWidthValues(
-    Encoding encoding, std::span<const uint8_t> data, size_t num_values,
-    const std::vector<int32_t>& def_levels, ColumnVector* column) {
-  auto* typed_col = dynamic_cast<TypedColumnVector<T>*>(column);
-  if (!typed_col) {
-    return Error::TypeError("Column type mismatch");
-  }
-
-  bool use_dictionary = (encoding == Encoding::kPlainDictionary ||
-                         encoding == Encoding::kRleDictionary);
-
-  if (use_dictionary) {
-    return DecodeDictionaryValues<T>(data, num_values, def_levels, typed_col);
+Status ColumnReader::DecodeFixedWidthValues(Encoding encoding, std::span<const uint8_t> data,
+                                            size_t num_values,
+                                            const std::vector<int32_t>& def_levels,
+                                            ColumnBuilder<T>& builder) {
+  if (encoding == Encoding::kPlainDictionary || encoding == Encoding::kRleDictionary) {
+    PlainDecoder<T> dict_decoder;
+    dict_decoder.SetData(dictionary_data_);
+    std::vector<T> dictionary(dict_num_values_);
+    if (dict_decoder.ReadBatch(dictionary) != dictionary.size()) {
+      return Error::ColumnDecodeError("Dictionary page shorter than its value count");
+    }
+    return DecodeDictionaryIndices(std::span<const T>(dictionary), data, num_values, def_levels,
+                                   builder);
   }
 
   PlainDecoder<T> decoder;
   decoder.SetData(data);
 
   return ProcessWithDefLevels(
-      num_values, def_levels,
-      [&decoder]() { return decoder.ReadValue(); },
-      [typed_col](T val) { typed_col->Append(val); },
-      [typed_col]() { typed_col->AppendNull(); });
+      num_values, def_levels, [&decoder]() { return decoder.ReadValue(); },
+      [&builder](T val) { builder.Append(val); }, [&builder]() { builder.AppendNull(); });
 }
 
-template <typename T>
-Status ColumnReader::DecodeDictionaryValues(
-    std::span<const uint8_t> data, size_t num_values,
-    const std::vector<int32_t>& def_levels, TypedColumnVector<T>* column) {
-  PlainDecoder<T> dict_decoder;
-  dict_decoder.SetData(dictionary_data_);
-  std::vector<T> dictionary(dict_num_values_);
-  if (dict_decoder.ReadBatch(dictionary) != dictionary.size()) {
-    return Error::ColumnDecodeError("Dictionary page shorter than its value count");
-  }
-
-  return DecodeDictionaryIndices(std::span<const T>(dictionary), data, num_values, def_levels,
-                                 column);
-}
-
-Status ColumnReader::DecodeBinaryValues(Encoding encoding,
-                                        std::span<const uint8_t> data,
+Status ColumnReader::DecodeBinaryValues(Encoding encoding, std::span<const uint8_t> data,
                                         size_t num_values,
                                         const std::vector<int32_t>& def_levels,
-                                        ColumnVector* column) {
-  auto* str_col = dynamic_cast<StringColumnVector*>(column);
-  if (!str_col) {
-    return Error::TypeError("Column type mismatch for binary");
-  }
-
-  bool use_dictionary = (encoding == Encoding::kPlainDictionary ||
-                         encoding == Encoding::kRleDictionary);
-
-  if (use_dictionary) {
-    return DecodeDictionaryBinaryValues(data, num_values, def_levels, str_col);
+                                        ColumnBuilder<std::string_view>& builder) {
+  if (encoding == Encoding::kPlainDictionary || encoding == Encoding::kRleDictionary) {
+    PlainBinaryDecoder dict_decoder;
+    dict_decoder.SetData(dictionary_data_);
+    std::vector<std::string> dictionary;
+    dictionary.reserve(dict_num_values_);
+    for (size_t i = 0; i < static_cast<size_t>(dict_num_values_); ++i) {
+      auto result = dict_decoder.ReadValue();
+      if (!result.has_value()) {
+        return std::unexpected(result.error());
+      }
+      dictionary.push_back(std::move(result.value()));
+    }
+    return DecodeDictionaryIndices(std::span<const std::string>(dictionary), data, num_values,
+                                   def_levels, builder);
   }
 
   PlainBinaryDecoder decoder;
   decoder.SetData(data);
 
   return ProcessWithDefLevels(
-      num_values, def_levels,
-      [&decoder]() { return decoder.ReadValue(); },
-      [str_col](std::string val) { str_col->Append(std::move(val)); },
-      [str_col]() { str_col->AppendNull(); });
+      num_values, def_levels, [&decoder]() { return decoder.ReadValue(); },
+      [&builder](const std::string& val) { builder.Append(val); },
+      [&builder]() { builder.AppendNull(); });
 }
 
-Status ColumnReader::DecodeDictionaryBinaryValues(
-    std::span<const uint8_t> data, size_t num_values,
-    const std::vector<int32_t>& def_levels, StringColumnVector* column) {
-  PlainBinaryDecoder dict_decoder;
-  dict_decoder.SetData(dictionary_data_);
-  std::vector<std::string> dictionary;
-  dictionary.reserve(dict_num_values_);
-  for (size_t i = 0; i < static_cast<size_t>(dict_num_values_); ++i) {
-    auto result = dict_decoder.ReadValue();
-    if (!result.has_value()) {
-      return std::unexpected(result.error());
-    }
-    dictionary.push_back(std::move(result.value()));
-  }
-
-  if (data.empty()) {
-    return {};
-  }
-  int bit_width = data[0];
-  auto indices_data = data.subspan(1);
-
-  RleBitPackingDecoder index_decoder(bit_width);
-  size_t non_null_count =
-      def_levels.empty()
-          ? num_values
-          : std::count_if(def_levels.begin(), def_levels.end(),
-                          [](int32_t level) { return level == 1; });
-  index_decoder.SetData(indices_data, non_null_count);
-
-  return ProcessWithDefLevels(
-      num_values, def_levels,
-      [&index_decoder, &dictionary]() -> Result<std::string> {
-        auto idx_result = index_decoder.ReadValue();
-        if (!idx_result.has_value()) {
-          return std::unexpected(idx_result.error());
-        }
-        int32_t idx = idx_result.value();
-        if (idx < 0 || static_cast<size_t>(idx) >= dictionary.size()) {
-          return std::unexpected(
-              Error::OutOfRange("Dictionary index out of range"));
-        }
-        return dictionary[idx];
-      },
-      [column](std::string val) { column->Append(std::move(val)); },
-      [column]() { column->AppendNull(); });
-}
-
-Status ColumnReader::DecodeInt96Values(
-    Encoding encoding, std::span<const uint8_t> data, size_t num_values,
-    const std::vector<int32_t>& def_levels, ColumnVector* column) {
-  auto* timestamps = dynamic_cast<TypedColumnVector<columnar::Timestamp>*>(column);
-  if (!timestamps) {
-    return Error::TypeError("Column type mismatch for INT96");
-  }
-
+Status ColumnReader::DecodeInt96Values(Encoding encoding, std::span<const uint8_t> data,
+                                       size_t num_values,
+                                       const std::vector<int32_t>& def_levels,
+                                       ColumnBuilder<columnar::Timestamp>& builder) {
   if (encoding == Encoding::kPlainDictionary || encoding == Encoding::kRleDictionary) {
     std::vector<columnar::Timestamp> dictionary;
     dictionary.reserve(static_cast<size_t>(dict_num_values_));
@@ -569,14 +475,14 @@ Status ColumnReader::DecodeInt96Values(
       dictionary.push_back(*value);
     }
     return DecodeDictionaryIndices(std::span<const columnar::Timestamp>(dictionary), data,
-                                   num_values, def_levels, timestamps);
+                                   num_values, def_levels, builder);
   }
 
   size_t pos = 0;
   return ProcessWithDefLevels(
       num_values, def_levels, [&data, &pos]() { return ReadInt96(data, pos); },
-      [timestamps](columnar::Timestamp value) { timestamps->Append(value); },
-      [timestamps]() { timestamps->AppendNull(); });
+      [&builder](columnar::Timestamp value) { builder.Append(value); },
+      [&builder]() { builder.AppendNull(); });
 }
 
 }  // namespace quest::io::parquet

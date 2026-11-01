@@ -1,12 +1,16 @@
-// Copyright 2024
-// Licensed under the Apache License, Version 2.0
+// Copyright 2024 Quest Authors
+// SPDX-License-Identifier: Apache-2.0
 
 /// @file test_column_vector.cpp
-/// @brief Unit tests for ColumnVector implementations.
+/// @brief ColumnBuilder, ColumnVector and ColumnView: layout, nulls, constants, Value bridge.
 
 #include <gtest/gtest.h>
 
+#include <cmath>
+#include <limits>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "quest/columnar/column_vector.hpp"
@@ -14,360 +18,181 @@
 #include "support/test_utils.hpp"
 
 using namespace quest::columnar;
+using quest::testing::MakeColumn;
 
 // =============================================================================
-// TypedColumnVector<int32_t> Tests
+// Fixed-width columns
 // =============================================================================
 
-TEST(TypedColumnVectorInt32Test, Construction) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
-  EXPECT_EQ(col.size(), 0U);
-  EXPECT_EQ(col.GetType(), DataType::kInt32);
-}
+TEST(ColumnBuilderTest, Int32ValuesWithoutNullsHaveNoBitmap) {
+  ColumnBuilder<int32_t> builder(DataType::kInt32, 3);
+  builder.Append(10);
+  builder.Append(-20);
+  builder.Append(30);
+  EXPECT_EQ(builder.size(), 3U);
+  const auto col = std::move(builder).Finish();
 
-TEST(TypedColumnVectorInt32Test, AppendAndGet) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
-
-  col.Append(42);
-  col.Append(100);
-  col.Append(-5);
-
-  EXPECT_EQ(col.size(), 3U);
-  EXPECT_EQ(col.GetTypedValue(0), 42);
-  EXPECT_EQ(col.GetTypedValue(1), 100);
-  EXPECT_EQ(col.GetTypedValue(2), -5);
-}
-
-TEST(TypedColumnVectorInt32Test, GetValueVariant) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 5);
-  col.Append(123);
-
-  Value val = col.GetValue(0);
-  ASSERT_TRUE(std::holds_alternative<int32_t>(val));
-  EXPECT_EQ(std::get<int32_t>(val), 123);
-}
-
-TEST(TypedColumnVectorInt32Test, NullHandling) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
-
-  col.Append(10);
-  col.AppendNull();
-  col.Append(30);
-
-  EXPECT_EQ(col.size(), 3U);
-  EXPECT_FALSE(col.IsNull(0));
-  EXPECT_TRUE(col.IsNull(1));
-  EXPECT_FALSE(col.IsNull(2));
-}
-
-TEST(TypedColumnVectorInt32Test, SetValue) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
-  col.Append(0);
-  col.Append(0);
-
-  col.SetValue(0, 999);
-  col.SetValue(1, -999);
-
-  EXPECT_EQ(col.GetTypedValue(0), 999);
-  EXPECT_EQ(col.GetTypedValue(1), -999);
-}
-
-TEST(TypedColumnVectorInt32Test, SetNull) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
-  col.Append(42);
-
-  EXPECT_FALSE(col.IsNull(0));
-  col.SetNull(0);
-  EXPECT_TRUE(col.IsNull(0));
-  col.SetValid(0);
-  EXPECT_FALSE(col.IsNull(0));
-}
-
-TEST(TypedColumnVectorInt32Test, Resize) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
-  col.Append(1);
-  col.Append(2);
-  col.Append(3);
-
-  col.SetSize(5);
-  EXPECT_EQ(col.size(), 5U);
-
-  col.SetSize(2);
-  EXPECT_EQ(col.size(), 2U);
-}
-
-TEST(TypedColumnVectorInt32Test, Spans) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
-  col.Append(10);
-  col.Append(20);
-  col.Append(30);
-
-  auto values = col.GetValues();
-  EXPECT_EQ(values.size(), 3U);
-  EXPECT_EQ(values[0], 10);
-  EXPECT_EQ(values[1], 20);
-  EXPECT_EQ(values[2], 30);
-
-  auto mut_values = col.GetMutableValues();
-  mut_values[0] = 100;
-  EXPECT_EQ(col.GetTypedValue(0), 100);
-}
-
-// =============================================================================
-// TypedColumnVector<int64_t> Tests
-// =============================================================================
-
-TEST(TypedColumnVectorInt64Test, BasicOperations) {
-  TypedColumnVector<int64_t> col(DataType::kInt64, 10);
-
-  col.Append(1000000000000LL);
-  col.Append(-1000000000000LL);
-
-  EXPECT_EQ(col.size(), 2U);
-  EXPECT_EQ(col.GetTypedValue(0), 1000000000000LL);
-  EXPECT_EQ(col.GetTypedValue(1), -1000000000000LL);
-}
-
-// =============================================================================
-// TypedColumnVector<double> Tests
-// =============================================================================
-
-TEST(TypedColumnVectorDoubleTest, BasicOperations) {
-  TypedColumnVector<double> col(DataType::kDouble, 10);
-
-  col.Append(3.14159);
-  col.Append(-2.71828);
-  col.AppendNull();
-
-  EXPECT_EQ(col.size(), 3U);
-  EXPECT_NEAR(col.GetTypedValue(0), 3.14159, 1e-5);
-  EXPECT_NEAR(col.GetTypedValue(1), -2.71828, 1e-5);
-  EXPECT_TRUE(col.IsNull(2));
-}
-
-TEST(TypedColumnVectorDoubleTest, SpecialValues) {
-  TypedColumnVector<double> col(DataType::kDouble, 10);
-
-  col.Append(std::numeric_limits<double>::infinity());
-  col.Append(-std::numeric_limits<double>::infinity());
-  col.Append(std::numeric_limits<double>::quiet_NaN());
-
-  EXPECT_TRUE(std::isinf(col.GetTypedValue(0)));
-  EXPECT_TRUE(std::isinf(col.GetTypedValue(1)));
-  EXPECT_TRUE(std::isnan(col.GetTypedValue(2)));
-}
-
-// =============================================================================
-// TypedColumnVector<float> Tests
-// =============================================================================
-
-TEST(TypedColumnVectorFloatTest, BasicOperations) {
-  TypedColumnVector<float> col(DataType::kFloat, 10);
-
-  col.Append(1.5f);
-  col.Append(-2.5f);
-
-  EXPECT_EQ(col.size(), 2U);
-  EXPECT_NEAR(col.GetTypedValue(0), 1.5f, 1e-5f);
-  EXPECT_NEAR(col.GetTypedValue(1), -2.5f, 1e-5f);
-}
-
-// =============================================================================
-// TypedColumnVector<bool> Tests
-// =============================================================================
-
-TEST(TypedColumnVectorBoolTest, BasicOperations) {
-  TypedColumnVector<bool> col(DataType::kBool, 10);
-
-  col.Append(true);
-  col.Append(false);
-  col.Append(true);
-
-  EXPECT_EQ(col.size(), 3U);
-  EXPECT_TRUE(col.GetTypedValue(0));
-  EXPECT_FALSE(col.GetTypedValue(1));
-  EXPECT_TRUE(col.GetTypedValue(2));
-}
-
-TEST(TypedColumnVectorBoolTest, NullHandling) {
-  TypedColumnVector<bool> col(DataType::kBool, 10);
-
-  col.Append(true);
-  col.AppendNull();
-  col.Append(false);
-
-  EXPECT_FALSE(col.IsNull(0));
-  EXPECT_TRUE(col.IsNull(1));
-  EXPECT_FALSE(col.IsNull(2));
-}
-
-// =============================================================================
-// StringColumnVector Tests
-// =============================================================================
-
-TEST(StringColumnVectorTest, Construction) {
-  StringColumnVector col(DataType::kString, 10);
-  EXPECT_EQ(col.size(), 0U);
-  EXPECT_EQ(col.GetType(), DataType::kString);
-}
-
-TEST(StringColumnVectorTest, AppendAndGet) {
-  StringColumnVector col(DataType::kString, 10);
-
-  col.Append("hello");
-  col.Append("world");
-  col.Append("");
-
-  EXPECT_EQ(col.size(), 3U);
-  EXPECT_EQ(col.GetString(0), "hello");
-  EXPECT_EQ(col.GetString(1), "world");
-  EXPECT_EQ(col.GetString(2), "");
-}
-
-TEST(StringColumnVectorTest, GetValueVariant) {
-  StringColumnVector col(DataType::kString, 5);
-  col.Append("test");
-
-  Value val = col.GetValue(0);
-  ASSERT_TRUE(std::holds_alternative<std::string>(val));
-  EXPECT_EQ(std::get<std::string>(val), "test");
-}
-
-TEST(StringColumnVectorTest, NullHandling) {
-  StringColumnVector col(DataType::kString, 10);
-
-  col.Append("first");
-  col.AppendNull();
-  col.Append("third");
-
-  EXPECT_FALSE(col.IsNull(0));
-  EXPECT_TRUE(col.IsNull(1));
-  EXPECT_FALSE(col.IsNull(2));
-}
-
-TEST(StringColumnVectorTest, UnicodeStrings) {
-  StringColumnVector col(DataType::kString, 10);
-
-  col.Append("Hello, 世界!");
-  col.Append("🎉🎊🎈");
-  col.Append("Ñoño");
-
-  EXPECT_EQ(col.GetString(0), "Hello, 世界!");
-  EXPECT_EQ(col.GetString(1), "🎉🎊🎈");
-  EXPECT_EQ(col.GetString(2), "Ñoño");
-}
-
-TEST(StringColumnVectorTest, LongStrings) {
-  StringColumnVector col(DataType::kString, 10);
-
-  std::string long_str(10000, 'x');
-  col.Append(long_str);
-
-  EXPECT_EQ(col.GetString(0), long_str);
-  EXPECT_EQ(col.GetString(0).size(), 10000U);
-}
-
-// =============================================================================
-// Binary Column Vector Tests
-// =============================================================================
-
-TEST(StringColumnVectorTest, BinaryData) {
-  StringColumnVector col(DataType::kString, 10);
-
-  // Build a binary string with embedded null bytes
-  std::string binary_data;
-  binary_data.push_back('\x01');
-  binary_data.push_back('\x00');
-  binary_data.push_back('\x02');
-  binary_data.push_back('\x00');
-  binary_data.push_back('\x03');
-  col.Append(binary_data);
-
-  EXPECT_EQ(col.GetString(0).size(), 5U);
-}
-
-// =============================================================================
-// CreateColumnVector Factory Tests
-// =============================================================================
-
-TEST(CreateColumnVectorTest, Bool) {
-  auto col = CreateColumnVector(DataType::kBool, 10);
-  EXPECT_NE(col, nullptr);
-  EXPECT_EQ(col->GetType(), DataType::kBool);
-}
-
-TEST(CreateColumnVectorTest, Int32) {
-  auto col = CreateColumnVector(DataType::kInt32, 10);
-  EXPECT_NE(col, nullptr);
   EXPECT_EQ(col->GetType(), DataType::kInt32);
+  EXPECT_EQ(col->size(), 3U);
+  EXPECT_EQ(col->null_count(), 0U);
+  EXPECT_FALSE(col->is_constant());
+  EXPECT_EQ(col->Get<int32_t>(1), -20);
+  EXPECT_FALSE(col->IsNull(2));
+  EXPECT_EQ(col->size_in_bytes(), 3 * sizeof(int32_t));  // values only
+
+  const auto view = col->View<int32_t>();
+  EXPECT_FALSE(view.has_nulls());
+  EXPECT_EQ(view.size(), 3U);
+  EXPECT_EQ(view[0] + view[2], 40);
 }
 
-TEST(CreateColumnVectorTest, Int64) {
-  auto col = CreateColumnVector(DataType::kInt64, 10);
-  EXPECT_NE(col, nullptr);
-  EXPECT_EQ(col->GetType(), DataType::kInt64);
+TEST(ColumnBuilderTest, FirstNullMakesTheBitmapAndKeepsEarlierRowsValid) {
+  // The first null comes after a full byte of valid rows, and rows follow it across the next
+  // byte boundary.
+  ColumnBuilder<int64_t> builder(DataType::kInt64);
+  for (int64_t i = 0; i < 20; ++i) {
+    i == 9 || i == 17 ? builder.AppendNull() : builder.Append(i);
+  }
+  const auto col = std::move(builder).Finish();
+
+  EXPECT_EQ(col->null_count(), 2U);
+  for (int64_t i = 0; i < 20; ++i) {
+    const bool is_null = i == 9 || i == 17;
+    EXPECT_EQ(col->IsNull(i), is_null) << "row " << i;
+    if (!is_null) {
+      EXPECT_EQ(col->Get<int64_t>(i), i);
+    }
+  }
+  EXPECT_EQ(col->size_in_bytes(), 20 * sizeof(int64_t) + 3);  // values + 3 bitmap bytes
+  EXPECT_TRUE(col->View<int64_t>().has_nulls());
 }
 
-TEST(CreateColumnVectorTest, Float) {
-  auto col = CreateColumnVector(DataType::kFloat, 10);
-  EXPECT_NE(col, nullptr);
-  EXPECT_EQ(col->GetType(), DataType::kFloat);
+TEST(ColumnBuilderTest, AllNullsAndEmptyColumns) {
+  auto nulls = MakeColumn<double>(DataType::kDouble, {std::nullopt, std::nullopt, std::nullopt});
+  EXPECT_EQ(nulls->size(), 3U);
+  EXPECT_EQ(nulls->null_count(), 3U);
+  EXPECT_TRUE(nulls->IsNull(0));
+  EXPECT_TRUE(nulls->IsNull(2));
+
+  auto empty = ColumnBuilder<float>(DataType::kFloat).Finish();
+  EXPECT_EQ(empty->size(), 0U);
+  EXPECT_EQ(empty->null_count(), 0U);
+  EXPECT_EQ(empty->size_in_bytes(), 0U);
 }
 
-TEST(CreateColumnVectorTest, Double) {
-  auto col = CreateColumnVector(DataType::kDouble, 10);
-  EXPECT_NE(col, nullptr);
-  EXPECT_EQ(col->GetType(), DataType::kDouble);
+TEST(ColumnBuilderTest, BoolIsOneBytePerRow) {
+  auto col = MakeColumn<bool>(DataType::kBool, {true, false, std::nullopt, true});
+  EXPECT_EQ(col->size_in_bytes(), 4U + 1U);  // 4 value bytes + 1 bitmap byte
+  const auto view = col->View<bool>();
+  EXPECT_TRUE(view[0]);
+  EXPECT_FALSE(view[1]);
+  EXPECT_TRUE(view.IsNull(2));
+  EXPECT_TRUE(view[3]);
 }
 
-TEST(CreateColumnVectorTest, String) {
-  auto col = CreateColumnVector(DataType::kString, 10);
-  EXPECT_NE(col, nullptr);
-  EXPECT_EQ(col->GetType(), DataType::kString);
+TEST(ColumnBuilderTest, DoubleKeepsSpecialValues) {
+  auto col = MakeColumn<double>(DataType::kDouble, {std::numeric_limits<double>::infinity(),
+                                                    std::numeric_limits<double>::quiet_NaN(),
+                                                    -0.0});
+  EXPECT_TRUE(std::isinf(col->Get<double>(0)));
+  EXPECT_TRUE(std::isnan(col->Get<double>(1)));
+  EXPECT_TRUE(std::signbit(col->Get<double>(2)));
+  EXPECT_FALSE(col->IsNull(1));  // NaN is a value, not a null
 }
 
-TEST(CreateColumnVectorTest, Binary) {
-  auto col = CreateColumnVector(DataType::kString, 10);
-  EXPECT_NE(col, nullptr);
-  EXPECT_EQ(col->GetType(), DataType::kString);
+TEST(ColumnBuilderTest, Date32AndTimestamp) {
+  auto dates = MakeColumn<Date32>(DataType::kDate32, {Date32{8766}, std::nullopt});
+  EXPECT_EQ(dates->Get<Date32>(0), Date32{8766});
+  EXPECT_TRUE(dates->IsNull(1));
+
+  auto times = MakeColumn<Timestamp>(DataType::kTimestamp, {Timestamp{-1}});
+  EXPECT_EQ(times->Get<Timestamp>(0), Timestamp{-1});
+  EXPECT_EQ(times->size_in_bytes(), sizeof(Timestamp));
 }
 
 // =============================================================================
-// Edge Cases
+// String columns
 // =============================================================================
 
-TEST(ColumnVectorEdgeCaseTest, EmptyColumn) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 0);
-  EXPECT_EQ(col.size(), 0U);
+TEST(StringColumnTest, OffsetsAndCharsHoldEveryRow) {
+  auto col = MakeColumn<std::string_view>(DataType::kString,
+                                          {"MAIL", std::nullopt, "", "SHIP"});
+  EXPECT_EQ(col->size(), 4U);
+  EXPECT_EQ(col->null_count(), 1U);
+  EXPECT_EQ(col->Get<std::string_view>(0), "MAIL");
+  EXPECT_TRUE(col->IsNull(1));
+  EXPECT_FALSE(col->IsNull(2));  // an empty string is not a null
+  EXPECT_EQ(col->Get<std::string_view>(2), "");
+  EXPECT_EQ(col->Get<std::string_view>(3), "SHIP");
+  // 8 chars, 5 int64 offsets, 1 bitmap byte.
+  EXPECT_EQ(col->size_in_bytes(), 8U + 5 * sizeof(int64_t) + 1U);
 }
 
-TEST(ColumnVectorEdgeCaseTest, LargeColumn) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 100000);
-
-  for (int i = 0; i < 10000; ++i) {
-    col.Append(i);
-  }
-
-  EXPECT_EQ(col.size(), 10000U);
-  EXPECT_EQ(col.GetTypedValue(0), 0);
-  EXPECT_EQ(col.GetTypedValue(9999), 9999);
-}
-
-TEST(ColumnVectorEdgeCaseTest, AllNulls) {
-  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
-
-  for (int i = 0; i < 5; ++i) {
-    col.AppendNull();
-  }
-
-  EXPECT_EQ(col.size(), 5U);
-  for (size_t i = 0; i < col.size(); ++i) {
-    EXPECT_TRUE(col.IsNull(i));
-  }
+TEST(StringColumnTest, KeepsBytesUnicodeAndLongStrings) {
+  const std::string long_string(10'000, 'x');
+  const std::string bytes("a\0b\xff", 4);
+  auto col = MakeColumn<std::string_view>(DataType::kString,
+                                          {"héllo wörld 你好", long_string, bytes});
+  EXPECT_EQ(col->Get<std::string_view>(0), "héllo wörld 你好");
+  EXPECT_EQ(col->Get<std::string_view>(1), long_string);
+  EXPECT_EQ(col->Get<std::string_view>(2), bytes);
 }
 
 // =============================================================================
-// Date32 Tests
+// Constant columns (literals)
+// =============================================================================
+
+TEST(ConstantColumnTest, OneRowStandsForEveryRowAndSharesBuffers) {
+  auto one_row = MakeColumn<std::string_view>(DataType::kString, {"MAIL"});
+  auto col = ColumnVector::Constant(*one_row, 1000);
+
+  EXPECT_TRUE(col->is_constant());
+  EXPECT_EQ(col->size(), 1000U);
+  EXPECT_EQ(col->null_count(), 0U);
+  EXPECT_EQ(col->size_in_bytes(), one_row->size_in_bytes());
+  const auto view = col->View<std::string_view>();
+  EXPECT_EQ(view[0], "MAIL");
+  EXPECT_EQ(view[999], "MAIL");
+  EXPECT_EQ(col->GetValue(500), Value{std::string("MAIL")});
+}
+
+TEST(ConstantColumnTest, NullConstantIsNullInEveryRow) {
+  auto one_row = MakeColumn<int32_t>(DataType::kInt32, {std::nullopt});
+  auto col = ColumnVector::Constant(*one_row, 4);
+  EXPECT_EQ(col->null_count(), 4U);
+  EXPECT_TRUE(col->IsNull(0));
+  EXPECT_TRUE(col->IsNull(3));
+  EXPECT_TRUE(col->View<int32_t>().IsNull(3));
+}
+
+// =============================================================================
+// Value bridge (until the Value variant goes)
+// =============================================================================
+
+TEST(ValueBridgeTest, GetValueGivesTheTypedAlternative) {
+  auto ints = MakeColumn<int16_t>(DataType::kInt16, {7, std::nullopt});
+  EXPECT_EQ(ints->GetValue(0), Value{int16_t{7}});
+  EXPECT_TRUE(std::holds_alternative<std::monostate>(ints->GetValue(1)));
+  EXPECT_TRUE(std::holds_alternative<std::monostate>(ints->GetValue(2)));  // past the end
+
+  auto strings = MakeColumn<std::string_view>(DataType::kString, {"abc"});
+  EXPECT_EQ(strings->GetValue(0), Value{std::string("abc")});
+}
+
+TEST(ValueBridgeTest, ColumnFromValuesChecksTypes) {
+  const std::vector<Value> values = {Value{int32_t{1}}, Value{}, Value{int32_t{3}}};
+  ASSERT_OK_AND_ASSIGN(auto col, ColumnFromValues(DataType::kInt32, values));
+  EXPECT_EQ(col->Get<int32_t>(2), 3);
+  EXPECT_TRUE(col->IsNull(1));
+
+  const std::vector<Value> mixed = {Value{int32_t{1}}, Value{std::string("x")}};
+  auto bad = ColumnFromValues(DataType::kInt32, mixed);
+  ASSERT_FALSE(bad.has_value());
+  EXPECT_EQ(bad.error().code(), quest::ErrorCode::TypeError);
+}
+
+// =============================================================================
+// Date32 and Timestamp
 // =============================================================================
 
 TEST(Date32Test, ValueToStringIsIsoDate) {
@@ -391,27 +216,10 @@ TEST(Date32Test, TypeTraits) {
                         []<typename Tag>(Tag) { return std::same_as<typename Tag::CType, Date32>; }));
 }
 
-TEST(Date32Test, CreateColumnVectorHoldsDate32Values) {
-  auto col = CreateColumnVector(DataType::kDate32, 2);
-  auto* typed = dynamic_cast<TypedColumnVector<Date32>*>(col.get());
-  ASSERT_NE(typed, nullptr);
-  typed->Append(Date32{8766});
-  typed->AppendNull();
-
-  EXPECT_EQ(col->GetType(), DataType::kDate32);
-  EXPECT_EQ(col->GetValue(0), Value{Date32{8766}});
-  EXPECT_TRUE(col->IsNull(1));
-}
-
 TEST(Date32Test, ConcatenateKeepsDate32) {
   Schema schema({Field("d", DataType::kDate32, Repetition::kOptional)});
-  auto first = std::make_shared<TypedColumnVector<Date32>>(DataType::kDate32, 1);
-  first->Append(Date32{1});
-  auto second = std::make_shared<TypedColumnVector<Date32>>(DataType::kDate32, 2);
-  second->AppendNull();
-  second->Append(Date32{2});
-  RecordBatch a(schema, {first});
-  RecordBatch b(schema, {second});
+  RecordBatch a(schema, {MakeColumn<Date32>(DataType::kDate32, {Date32{1}})});
+  RecordBatch b(schema, {MakeColumn<Date32>(DataType::kDate32, {std::nullopt, Date32{2}})});
 
   ASSERT_OK_AND_ASSIGN(auto merged, ConcatenateRecordBatches({&a, &b}));
   ASSERT_EQ(merged.num_rows(), 3U);
@@ -419,4 +227,18 @@ TEST(Date32Test, ConcatenateKeepsDate32) {
   EXPECT_EQ(merged.column(0).GetValue(0), Value{Date32{1}});
   EXPECT_TRUE(merged.column(0).IsNull(1));
   EXPECT_EQ(merged.column(0).GetValue(2), Value{Date32{2}});
+}
+
+TEST(ConcatenateTest, StringsAcrossBatchesKeepOffsets) {
+  Schema schema({Field("s", DataType::kString, Repetition::kOptional)});
+  RecordBatch a(schema, {MakeColumn<std::string_view>(DataType::kString, {"ab", std::nullopt})});
+  RecordBatch b(schema, {MakeColumn<std::string_view>(DataType::kString, {"", "cde"})});
+
+  ASSERT_OK_AND_ASSIGN(auto merged, ConcatenateRecordBatches({&a, &b}));
+  const auto view = merged.column(0).View<std::string_view>();
+  ASSERT_EQ(view.size(), 4U);
+  EXPECT_EQ(view[0], "ab");
+  EXPECT_TRUE(view.IsNull(1));
+  EXPECT_EQ(view[2], "");
+  EXPECT_EQ(view[3], "cde");
 }

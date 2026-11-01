@@ -18,7 +18,7 @@
 namespace quest::execution {
 
 /// @brief Gather selected rows from a column into a new materialized column, keeping nulls.
-[[nodiscard]] std::shared_ptr<columnar::ColumnVector> GatherColumn(
+[[nodiscard]] columnar::ColumnVectorPtr GatherColumn(
     const columnar::ColumnVector& col, const std::vector<size_t>& indices);
 
 /// @brief Apply a boolean mask expression and gather the rows where it is true; a null

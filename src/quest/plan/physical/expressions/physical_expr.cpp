@@ -37,30 +37,27 @@ std::optional<bool> CompareValues(const Value& left, const Value& right) {
       left, right);
 }
 
+/// @brief A one-row column holding @p value.
+template <typename T>
+[[nodiscard]] ColumnVectorPtr OneRow(DataType type, T value) {
+  columnar::ColumnBuilder<T> builder(type, 1);
+  builder.Append(value);
+  return std::move(builder).Finish();
+}
+
 /// @brief Applies @p fn to each row pair; a `std::nullopt` row result is stored as null.
 template <typename T, typename Fn>
-[[nodiscard]] Result<std::shared_ptr<ColumnVector>> MapRows(const ColumnVector& left,
-                                                            const ColumnVector& right,
-                                                            size_t num_rows, DataType type,
-                                                            Fn fn) {
-  std::vector<T> values(num_rows);
-  std::vector<bool> validity(num_rows, true);
-  bool has_null = false;
+[[nodiscard]] Result<ColumnVectorPtr> MapRows(const ColumnVector& left, const ColumnVector& right,
+                                              size_t num_rows, DataType type, Fn fn) {
+  columnar::ColumnBuilder<T> builder(type, num_rows);
   for (size_t i = 0; i < num_rows; ++i) {
     Result<std::optional<T>> row = fn(left.GetValue(i), right.GetValue(i));
     if (!row) {
       return std::unexpected(row.error());
     }
-    if (*row) {
-      values[i] = **row;
-    } else {
-      validity[i] = false;
-      has_null = true;
-    }
+    *row ? builder.Append(**row) : builder.AppendNull();
   }
-  return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(values)}, std::move(type),
-      has_null ? std::move(validity) : std::vector<bool>{});
+  return std::move(builder).Finish();
 }
 
 [[nodiscard]] Result<std::optional<bool>> ToBool(const Value& v, BinaryOp op) {
@@ -162,9 +159,9 @@ template <typename T>
   }
 }
 
+/// @brief True for a NULL literal: only literals are constant columns.
 [[nodiscard]] bool IsNullLiteral(const ColumnVector& col) {
-  const auto* lit = dynamic_cast<const LiteralColumnVector*>(&col);
-  return lit != nullptr && std::holds_alternative<std::monostate>(lit->value());
+  return col.is_constant() && col.IsNull(0);
 }
 
 [[nodiscard]] Result<DataType> OperandResultType(BinaryOp op, const ColumnVector& l,
@@ -173,7 +170,7 @@ template <typename T>
                           IsNullLiteral(r) ? l.GetType() : r.GetType());
 }
 
-[[nodiscard]] Result<std::shared_ptr<ColumnVector>> EvaluateArithmetic(BinaryOp op,
+[[nodiscard]] Result<ColumnVectorPtr> EvaluateArithmetic(BinaryOp op,
                                                                        const ColumnVector& l,
                                                                        const ColumnVector& r,
                                                                        size_t n) {
@@ -181,7 +178,7 @@ template <typename T>
   if (!type) {
     return std::unexpected(type.error());
   }
-  return columnar::VisitType(*type, [&]<typename Tag>(Tag) -> Result<std::shared_ptr<ColumnVector>> {
+  return columnar::VisitType(*type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
     using T = typename Tag::CType;
     if constexpr (std::is_arithmetic_v<T> && !std::same_as<T, bool>) {
       return MapRows<T>(l, r, n, *type,
@@ -217,40 +214,16 @@ struct Lane {
   [[nodiscard]] bool Valid(size_t i) const { return validity.empty() || validity[Row(i)]; }
 };
 
-/// @brief Converts @p col to a `Lane<T>`. Literals and expression results are converted in
-/// bulk; other columns (e.g. scanned ones) go through `GetValue`.
+/// @brief Converts @p col to a `Lane<T>`; a literal becomes a one-row broadcast lane.
 template <typename T>
 [[nodiscard]] Lane<T> ToLane(const ColumnVector& col, size_t num_rows) {
   Lane<T> lane;
-  if (const auto* lit = dynamic_cast<const LiteralColumnVector*>(&col)) {
-    lane.broadcast = true;
-    if (std::holds_alternative<std::monostate>(lit->value())) {
-      lane.values.emplace_back();
-      lane.validity.push_back(false);
-    } else {
-      lane.values.push_back(
-          std::visit([](const auto& x) { return ConvertTo<T>(x); }, lit->value()));
-    }
-    return lane;
-  }
-  if (const auto* mat = dynamic_cast<const MaterializedColumnVector*>(&col)) {
-    std::visit(
-        [&lane](const auto& src) {
-          // Explicit source type: vector<bool> iterates proxies, not bools.
-          using S = typename std::decay_t<decltype(src)>::value_type;
-          lane.values.reserve(src.size());
-          for (const auto& x : src) {
-            lane.values.push_back(ConvertTo<T, S>(x));
-          }
-        },
-        mat->data());
-    lane.validity = mat->validity();
-    return lane;
-  }
-  lane.values.resize(num_rows);
-  lane.validity.assign(num_rows, true);
+  lane.broadcast = col.is_constant();
+  const size_t rows = lane.broadcast ? 1 : num_rows;
+  lane.values.resize(rows);
+  lane.validity.assign(rows, true);
   bool has_null = false;
-  for (size_t i = 0; i < num_rows; ++i) {
+  for (size_t i = 0; i < rows; ++i) {
     const Value v = col.GetValue(i);
     if (std::holds_alternative<std::monostate>(v)) {
       lane.validity[i] = false;
@@ -267,24 +240,23 @@ template <typename T>
 
 /// @brief Per row, copies `results[b]` for the first `whens[b]` that is true, else
 /// `results.back()` (the ELSE).
+/// @tparam T The result's CType.
 template <typename T>
-[[nodiscard]] std::shared_ptr<ColumnVector> SelectRows(
-    const std::vector<std::shared_ptr<ColumnVector>>& whens,
-    const std::vector<std::shared_ptr<ColumnVector>>& results, size_t num_rows, DataType type) {
+[[nodiscard]] ColumnVectorPtr SelectRows(const std::vector<ColumnVectorPtr>& whens,
+                                         const std::vector<ColumnVectorPtr>& results,
+                                         size_t num_rows, DataType type) {
   std::vector<Lane<bool>> conditions;
   conditions.reserve(whens.size());
   for (const auto& when : whens) {
     conditions.push_back(ToLane<bool>(*when, num_rows));
   }
-  std::vector<Lane<T>> lanes;
+  std::vector<Lane<columnar::ValueOf<T>>> lanes;
   lanes.reserve(results.size());
   for (const auto& result : results) {
-    lanes.push_back(ToLane<T>(*result, num_rows));
+    lanes.push_back(ToLane<columnar::ValueOf<T>>(*result, num_rows));
   }
 
-  std::vector<T> values(num_rows);
-  std::vector<bool> validity(num_rows, true);
-  bool has_null = false;
+  columnar::ColumnBuilder<T> builder(type, num_rows);
   for (size_t i = 0; i < num_rows; ++i) {
     size_t pick = conditions.size();
     for (size_t b = 0; b < conditions.size(); ++b) {
@@ -294,44 +266,23 @@ template <typename T>
         break;
       }
     }
-    const Lane<T>& lane = lanes[pick];
+    const auto& lane = lanes[pick];
     if (lane.Valid(i)) {
-      values[i] = lane.values[lane.Row(i)];
+      builder.Append(lane.values[lane.Row(i)]);
     } else {
-      validity[i] = false;
-      has_null = true;
+      builder.AppendNull();
     }
   }
-  return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(values)}, std::move(type),
-      has_null ? std::move(validity) : std::vector<bool>{});
+  return std::move(builder).Finish();
 }
 
 }  // namespace
 
 // =============================================================================
-// Materialized Column Vector
-// =============================================================================
-
-Value MaterializedColumnVector::GetValue(size_t index) const {
-  if (IsNull(index)) {
-    return std::monostate{};
-  }
-  return std::visit(
-      [index](const auto& vec) -> Value {
-        if (index >= vec.size()) {
-          return std::monostate{};
-        }
-        return vec[index];
-      },
-      data_);
-}
-
-// =============================================================================
 // Literal Expression
 // =============================================================================
 
-Result<std::shared_ptr<ColumnVector>> LiteralExpression::Evaluate(
+Result<ColumnVectorPtr> LiteralExpression::Evaluate(
     const RecordBatch& input) const {
   DataType dtype = std::visit(
       [](const auto& val) -> DataType {
@@ -359,7 +310,11 @@ Result<std::shared_ptr<ColumnVector>> LiteralExpression::Evaluate(
         }
       },
       value_);
-  return std::make_shared<LiteralColumnVector>(value_, dtype, input.num_rows());
+  auto one_row = columnar::ColumnFromValues(dtype, std::span<const Value>(&value_, 1));
+  if (!one_row) {
+    return std::unexpected(one_row.error());
+  }
+  return ColumnVector::Constant(**one_row, input.num_rows());
 }
 
 std::string LiteralExpression::ToString() const {
@@ -389,7 +344,7 @@ std::string LiteralExpression::ToString() const {
 // Column Expression
 // =============================================================================
 
-Result<std::shared_ptr<ColumnVector>> ColumnExpression::Evaluate(
+Result<ColumnVectorPtr> ColumnExpression::Evaluate(
     const RecordBatch& input) const {
   if (index_ >= input.num_columns()) {
     return std::unexpected(
@@ -403,7 +358,7 @@ Result<std::shared_ptr<ColumnVector>> ColumnExpression::Evaluate(
 // Binary Expression
 // =============================================================================
 
-Result<std::shared_ptr<ColumnVector>> BinaryExpression::Evaluate(
+Result<ColumnVectorPtr> BinaryExpression::Evaluate(
     const RecordBatch& input) const {
   auto left_result = left_->Evaluate(input);
   if (!left_result) {
@@ -418,7 +373,7 @@ Result<std::shared_ptr<ColumnVector>> BinaryExpression::Evaluate(
   const auto& r = **right_result;
   const size_t n = input.num_rows();
 
-  auto compare = [&]<typename Op>() -> Result<std::shared_ptr<ColumnVector>> {
+  auto compare = [&]<typename Op>() -> Result<ColumnVectorPtr> {
     if (auto type = OperandResultType(op_, l, r); !type) {
       return std::unexpected(type.error());
     }
@@ -461,9 +416,9 @@ std::string BinaryExpression::ToString() const {
 // CASE Expression
 // =============================================================================
 
-Result<std::shared_ptr<ColumnVector>> CaseExpression::Evaluate(const RecordBatch& input) const {
-  std::vector<std::shared_ptr<ColumnVector>> whens;
-  std::vector<std::shared_ptr<ColumnVector>> results;
+Result<ColumnVectorPtr> CaseExpression::Evaluate(const RecordBatch& input) const {
+  std::vector<ColumnVectorPtr> whens;
+  std::vector<ColumnVectorPtr> results;
   whens.reserve(branches_.size());
   results.reserve(branches_.size() + 1);
   for (const auto& [when, then] : branches_) {
@@ -510,8 +465,8 @@ Result<std::shared_ptr<ColumnVector>> CaseExpression::Evaluate(const RecordBatch
   }
 
   const size_t n = input.num_rows();
-  return columnar::VisitType(*type, [&]<typename Tag>(Tag) -> Result<std::shared_ptr<ColumnVector>> {
-    return SelectRows<columnar::ValueOf<typename Tag::CType>>(whens, results, n, *type);
+  return columnar::VisitType(*type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
+    return SelectRows<typename Tag::CType>(whens, results, n, *type);
   });
 }
 
@@ -540,7 +495,7 @@ double AggregateExpression::ToDouble(const Value& val) {
       val);
 }
 
-Result<std::shared_ptr<ColumnVector>> SumExpression::Evaluate(
+Result<ColumnVectorPtr> SumExpression::Evaluate(
     const RecordBatch& input) const {
   auto input_result = input_->Evaluate(input);
   if (!input_result) {
@@ -556,12 +511,10 @@ Result<std::shared_ptr<ColumnVector>> SumExpression::Evaluate(
     }
   }
 
-  std::vector<double> result{sum};
-  return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(result)}, columnar::DataType::kDouble);
+  return OneRow<double>(columnar::DataType::kDouble, sum);
 }
 
-Result<std::shared_ptr<ColumnVector>> AvgExpression::Evaluate(
+Result<ColumnVectorPtr> AvgExpression::Evaluate(
     const RecordBatch& input) const {
   auto input_result = input_->Evaluate(input);
   if (!input_result) {
@@ -581,12 +534,10 @@ Result<std::shared_ptr<ColumnVector>> AvgExpression::Evaluate(
 
   double avg = (count > 0) ? (sum / static_cast<double>(count)) : 0.0;
 
-  std::vector<double> result{avg};
-  return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(result)}, columnar::DataType::kDouble);
+  return OneRow<double>(columnar::DataType::kDouble, avg);
 }
 
-Result<std::shared_ptr<ColumnVector>> CountExpression::Evaluate(
+Result<ColumnVectorPtr> CountExpression::Evaluate(
     const RecordBatch& input) const {
   auto input_result = input_->Evaluate(input);
   if (!input_result) {
@@ -602,19 +553,15 @@ Result<std::shared_ptr<ColumnVector>> CountExpression::Evaluate(
     }
   }
 
-  std::vector<int64_t> result{count};
-  return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(result)}, columnar::DataType::kInt64);
+  return OneRow<int64_t>(columnar::DataType::kInt64, count);
 }
 
-Result<std::shared_ptr<ColumnVector>> CountStarExpression::Evaluate(
+Result<ColumnVectorPtr> CountStarExpression::Evaluate(
     const RecordBatch& input) const {
-  std::vector<int64_t> result{static_cast<int64_t>(input.num_rows())};
-  return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(result)}, columnar::DataType::kInt64);
+  return OneRow<int64_t>(columnar::DataType::kInt64, static_cast<int64_t>(input.num_rows()));
 }
 
-Result<std::shared_ptr<ColumnVector>> MinExpression::Evaluate(
+Result<ColumnVectorPtr> MinExpression::Evaluate(
     const RecordBatch& input) const {
   auto input_result = input_->Evaluate(input);
   if (!input_result) {
@@ -623,9 +570,7 @@ Result<std::shared_ptr<ColumnVector>> MinExpression::Evaluate(
 
   auto& col = **input_result;
   if (col.size() == 0) {
-    std::vector<double> result{std::numeric_limits<double>::quiet_NaN()};
-    return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, columnar::DataType::kDouble);
+    return OneRow<double>(columnar::DataType::kDouble, std::numeric_limits<double>::quiet_NaN());
   }
 
   double min_val = std::numeric_limits<double>::max();
@@ -645,12 +590,10 @@ Result<std::shared_ptr<ColumnVector>> MinExpression::Evaluate(
     min_val = std::numeric_limits<double>::quiet_NaN();
   }
 
-  std::vector<double> result{min_val};
-  return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(result)}, columnar::DataType::kDouble);
+  return OneRow<double>(columnar::DataType::kDouble, min_val);
 }
 
-Result<std::shared_ptr<ColumnVector>> MaxExpression::Evaluate(
+Result<ColumnVectorPtr> MaxExpression::Evaluate(
     const RecordBatch& input) const {
   auto input_result = input_->Evaluate(input);
   if (!input_result) {
@@ -659,9 +602,7 @@ Result<std::shared_ptr<ColumnVector>> MaxExpression::Evaluate(
 
   auto& col = **input_result;
   if (col.size() == 0) {
-    std::vector<double> result{std::numeric_limits<double>::quiet_NaN()};
-    return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, columnar::DataType::kDouble);
+    return OneRow<double>(columnar::DataType::kDouble, std::numeric_limits<double>::quiet_NaN());
   }
 
   double max_val = std::numeric_limits<double>::lowest();
@@ -681,9 +622,7 @@ Result<std::shared_ptr<ColumnVector>> MaxExpression::Evaluate(
     max_val = std::numeric_limits<double>::quiet_NaN();
   }
 
-  std::vector<double> result{max_val};
-  return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(result)}, columnar::DataType::kDouble);
+  return OneRow<double>(columnar::DataType::kDouble, max_val);
 }
 
 }  // namespace quest::plan::physical

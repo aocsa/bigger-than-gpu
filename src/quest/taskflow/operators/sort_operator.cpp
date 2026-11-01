@@ -124,7 +124,7 @@ Status SortOperator::FinalizeSink() {
     return false;
   });
 
-  std::vector<std::shared_ptr<columnar::ColumnVector>> columns;
+  std::vector<columnar::ColumnVectorPtr> columns;
   columns.reserve(merged->num_columns());
   for (std::size_t c = 0; c < merged->num_columns(); ++c) {
     columns.push_back(execution::GatherColumn(merged->column(c), order));

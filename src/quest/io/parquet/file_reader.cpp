@@ -142,7 +142,7 @@ Result<RecordBatch> ParquetFileReader::ReadRowGroup(
     projected_schema = std::move(*selected);
   }
 
-  std::vector<std::shared_ptr<ColumnVector>> column_vectors;
+  std::vector<ColumnVectorPtr> column_vectors;
   column_vectors.reserve(column_indices.size());
 
   for (size_t col_idx : column_indices) {

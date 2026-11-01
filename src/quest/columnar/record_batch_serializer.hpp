@@ -53,17 +53,8 @@ class RecordBatchSerializer {
 
   static Status WriteColumnValues(std::vector<uint8_t>& buffer, const ColumnVector& column, size_t num_rows);
 
-  static Result<std::shared_ptr<ColumnVector>> ReadColumn(const std::vector<uint8_t>& buffer,
-                                                           size_t& offset,
-                                                           DataType type,
-                                                           size_t num_rows);
-
-  static Status ReadColumnValues(const std::vector<uint8_t>& buffer,
-                                size_t& offset,
-                                ColumnVector& column,
-                                DataType type,
-                                size_t num_rows,
-                                const std::vector<uint8_t>& null_bitmap);
+  static Result<ColumnVectorPtr> ReadColumn(const std::vector<uint8_t>& buffer, size_t& offset,
+                                            DataType type, size_t num_rows);
 };
 
 }  // namespace quest::columnar

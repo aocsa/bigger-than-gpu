@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <initializer_list>
+#include <optional>
 #include <utility>
 
 #include "quest/columnar/column_vector.hpp"
@@ -16,6 +18,18 @@
 
 namespace quest::testing {
 
+/// @brief A column of @p type holding @p values; std::nullopt is a null.
+/// @tparam T The column's CType (std::string_view for String).
+template <typename T>
+[[nodiscard]] columnar::ColumnVectorPtr MakeColumn(columnar::DataType type,
+                                                   std::initializer_list<std::optional<T>> values) {
+  columnar::ColumnBuilder<T> builder(type, values.size());
+  for (const auto& value : values) {
+    value ? builder.Append(*value) : builder.AppendNull();
+  }
+  return std::move(builder).Finish();
+}
+
 /// @brief Single int32 column named "value"; values are 0, 1, 2, …
 inline columnar::RecordBatch MakeTestRecordBatch(size_t num_rows) {
   using namespace quest::columnar;
@@ -23,12 +37,12 @@ inline columnar::RecordBatch MakeTestRecordBatch(size_t num_rows) {
   std::vector<Field> fields = {Field("value", DataType::kInt32)};
   Schema schema(fields);
 
-  auto col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, num_rows);
+  ColumnBuilder<int32_t> col(DataType::kInt32, num_rows);
   for (size_t i = 0; i < num_rows; ++i) {
-    col->Append(static_cast<int32_t>(i));
+    col.Append(static_cast<int32_t>(i));
   }
 
-  return RecordBatch(schema, {col});
+  return RecordBatch(schema, {std::move(col).Finish()});
 }
 
 /// @brief Multiple int32 columns named "col0", "col1", etc.
@@ -36,15 +50,15 @@ inline columnar::RecordBatch MakeTestRecordBatch(size_t num_rows, size_t num_col
   using namespace quest::columnar;
 
   std::vector<Field> fields;
-  std::vector<std::shared_ptr<ColumnVector>> columns;
+  std::vector<ColumnVectorPtr> columns;
 
   for (size_t c = 0; c < num_columns; ++c) {
     fields.emplace_back("col" + std::to_string(c), DataType::kInt32);
-    auto col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, num_rows);
+    ColumnBuilder<int32_t> col(DataType::kInt32, num_rows);
     for (size_t r = 0; r < num_rows; ++r) {
-      col->Append(static_cast<int32_t>(r * num_columns + c));
+      col.Append(static_cast<int32_t>(r * num_columns + c));
     }
-    columns.push_back(col);
+    columns.push_back(std::move(col).Finish());
   }
 
   Schema schema(fields);

@@ -4,6 +4,7 @@
 #include "quest/execution/kernels/batch_kernels.hpp"
 
 #include <algorithm>
+#include <numeric>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -11,39 +12,16 @@
 
 namespace quest::execution {
 
-namespace {
-
-template <typename T>
-[[nodiscard]] std::shared_ptr<columnar::ColumnVector> GatherTyped(
-    const columnar::ColumnVector& col, const std::vector<size_t>& indices,
-    columnar::DataType type) {
-  std::vector<T> data;
-  data.reserve(indices.size());
-  std::vector<bool> validity;
-  validity.reserve(indices.size());
-  bool has_null = false;
-  for (size_t idx : indices) {
-    auto val = col.GetValue(idx);
-    if (auto* v = std::get_if<T>(&val)) {
-      data.push_back(std::move(*v));
-      validity.push_back(true);
-    } else {
-      data.push_back(T{});
-      validity.push_back(false);
-      has_null = true;
-    }
-  }
-  return std::make_shared<plan::physical::MaterializedColumnVector>(
-      plan::physical::ColumnData{std::move(data)}, type,
-      has_null ? std::move(validity) : std::vector<bool>{});
-}
-
-}  // namespace
-
-std::shared_ptr<columnar::ColumnVector> GatherColumn(
-    const columnar::ColumnVector& col, const std::vector<size_t>& indices) {
+columnar::ColumnVectorPtr GatherColumn(const columnar::ColumnVector& col,
+                                       const std::vector<size_t>& indices) {
   return columnar::VisitType(col.GetType(), [&]<typename Tag>(Tag) {
-    return GatherTyped<columnar::ValueOf<typename Tag::CType>>(col, indices, Tag::kId);
+    using T = typename Tag::CType;
+    const auto view = col.View<T>();
+    columnar::ColumnBuilder<T> builder(col.GetType(), indices.size());
+    for (const size_t index : indices) {
+      view.IsNull(index) ? builder.AppendNull() : builder.Append(view[index]);
+    }
+    return std::move(builder).Finish();
   });
 }
 
@@ -70,7 +48,7 @@ Result<columnar::RecordBatch> FilterRecordBatch(
     return columnar::RecordBatch(batch.schema(), {});
   }
 
-  std::vector<std::shared_ptr<columnar::ColumnVector>> new_columns;
+  std::vector<columnar::ColumnVectorPtr> new_columns;
   new_columns.reserve(batch.num_columns());
   for (size_t col_idx = 0; col_idx < batch.num_columns(); ++col_idx) {
     new_columns.push_back(GatherColumn(batch.column(col_idx), indices));
@@ -89,7 +67,7 @@ Result<columnar::RecordBatch> TruncateRecordBatch(
     indices[i] = i;
   }
 
-  std::vector<std::shared_ptr<columnar::ColumnVector>> new_columns;
+  std::vector<columnar::ColumnVectorPtr> new_columns;
   new_columns.reserve(batch.num_columns());
   for (size_t col_idx = 0; col_idx < batch.num_columns(); ++col_idx) {
     new_columns.push_back(GatherColumn(batch.column(col_idx), indices));
@@ -100,12 +78,18 @@ Result<columnar::RecordBatch> TruncateRecordBatch(
 Result<columnar::RecordBatch> ProjectRecordBatch(
     const columnar::RecordBatch& batch, const columnar::Schema& schema,
     const std::vector<plan::physical::ExpressionPtr>& expressions) {
-  std::vector<std::shared_ptr<columnar::ColumnVector>> columns;
+  std::vector<columnar::ColumnVectorPtr> columns;
   columns.reserve(expressions.size());
   for (const auto& expr : expressions) {
     auto result = expr->Evaluate(batch);
     if (!result) {
       return std::unexpected(result.error());
+    }
+    // A literal evaluates to a constant column; a batch holds only plain columns.
+    if ((*result)->is_constant()) {
+      std::vector<size_t> rows(batch.num_rows());
+      std::iota(rows.begin(), rows.end(), size_t{0});
+      result = GatherColumn(**result, rows);
     }
     columns.push_back(std::move(*result));
   }

@@ -28,6 +28,7 @@ using namespace quest::columnar;
 using namespace quest::plan::physical;
 using namespace quest::plan::logical;
 using namespace quest::execution;
+using quest::testing::MakeColumn;
 
 // =============================================================================
 // Test Helpers
@@ -36,26 +37,11 @@ using namespace quest::execution;
 namespace {
 
 RecordBatch MakeTestBatch() {
-  auto col_a = std::make_unique<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
-  col_a->Append(10);
-  col_a->Append(20);
-  col_a->Append(30);
-  col_a->Append(40);
-  col_a->Append(50);
+  auto col_a = MakeColumn<int32_t>(DataType::kInt32, {10, 20, 30, 40, 50});
 
-  auto col_b = std::make_unique<TypedColumnVector<double>>(DataType::kDouble, 5);
-  col_b->Append(1.0);
-  col_b->Append(2.0);
-  col_b->Append(3.0);
-  col_b->Append(4.0);
-  col_b->Append(5.0);
+  auto col_b = MakeColumn<double>(DataType::kDouble, {1.0, 2.0, 3.0, 4.0, 5.0});
 
-  auto col_c = std::make_unique<TypedColumnVector<bool>>(DataType::kBool, 5);
-  col_c->Append(true);
-  col_c->Append(false);
-  col_c->Append(true);
-  col_c->Append(false);
-  col_c->Append(true);
+  auto col_c = MakeColumn<bool>(DataType::kBool, {true, false, true, false, true});
 
   std::vector<Field> fields = {
       Field("a", DataType::kInt32),
@@ -64,7 +50,7 @@ RecordBatch MakeTestBatch() {
   };
   Schema schema(fields);
 
-  std::vector<std::shared_ptr<ColumnVector>> columns;
+  std::vector<ColumnVectorPtr> columns;
   columns.push_back(std::move(col_a));
   columns.push_back(std::move(col_b));
   columns.push_back(std::move(col_c));
@@ -73,17 +59,12 @@ RecordBatch MakeTestBatch() {
 }
 
 RecordBatch MakeNullableBatch() {
-  auto col = std::make_unique<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
-  col->Append(10);
-  col->AppendNull();
-  col->Append(30);
-  col->AppendNull();
-  col->Append(50);
+  auto col = MakeColumn<int32_t>(DataType::kInt32, {10, std::nullopt, 30, std::nullopt, 50});
 
   std::vector<Field> fields = {Field("a", DataType::kInt32, Repetition::kOptional)};
   Schema schema(fields);
 
-  std::vector<std::shared_ptr<ColumnVector>> columns;
+  std::vector<ColumnVectorPtr> columns;
   columns.push_back(std::move(col));
 
   return RecordBatch(schema, std::move(columns));
@@ -485,8 +466,8 @@ TEST(PhysicalExprEdgeCaseTest, EmptyBatch) {
   std::vector<Field> fields = {Field("a", DataType::kInt32)};
   Schema schema(fields);
 
-  auto col = std::make_unique<TypedColumnVector<int32_t>>(DataType::kInt32, 0);
-  std::vector<std::shared_ptr<ColumnVector>> columns;
+  auto col = MakeColumn<int32_t>(DataType::kInt32, {});
+  std::vector<ColumnVectorPtr> columns;
   columns.push_back(std::move(col));
 
   RecordBatch empty_batch(schema, std::move(columns));
@@ -500,15 +481,12 @@ TEST(PhysicalExprEdgeCaseTest, EmptyBatch) {
 }
 
 TEST(PhysicalExprEdgeCaseTest, NegativeNumbers) {
-  auto col = std::make_unique<TypedColumnVector<int32_t>>(DataType::kInt32, 3);
-  col->Append(-10);
-  col->Append(0);
-  col->Append(10);
+  auto col = MakeColumn<int32_t>(DataType::kInt32, {-10, 0, 10});
 
   std::vector<Field> fields = {Field("a", DataType::kInt32)};
   Schema schema(fields);
 
-  std::vector<std::shared_ptr<ColumnVector>> columns;
+  std::vector<ColumnVectorPtr> columns;
   columns.push_back(std::move(col));
 
   RecordBatch batch(schema, std::move(columns));
@@ -587,17 +565,17 @@ namespace {
 /// Two nullable bool columns "l", "r" covering all nine {true, false, null} pairs.
 RecordBatch MakeTruthTableBatch() {
   const std::optional<bool> kVals[] = {true, false, std::nullopt};
-  auto l = std::make_shared<TypedColumnVector<bool>>(DataType::kBool, 9);
-  auto r = std::make_shared<TypedColumnVector<bool>>(DataType::kBool, 9);
+  ColumnBuilder<bool> l(DataType::kBool, 9);
+  ColumnBuilder<bool> r(DataType::kBool, 9);
   for (auto lv : kVals) {
     for (auto rv : kVals) {
-      lv ? l->Append(*lv) : l->AppendNull();
-      rv ? r->Append(*rv) : r->AppendNull();
+      lv ? l.Append(*lv) : l.AppendNull();
+      rv ? r.Append(*rv) : r.AppendNull();
     }
   }
   Schema schema({Field("l", DataType::kBool, Repetition::kOptional),
                  Field("r", DataType::kBool, Repetition::kOptional)});
-  return RecordBatch(schema, {l, r});
+  return RecordBatch(schema, {std::move(l).Finish(), std::move(r).Finish()});
 }
 
 /// Expects @p col to hold exactly @p expected, with std::nullopt meaning SQL null.
@@ -848,13 +826,7 @@ ExpressionPtr Gt(ExpressionPtr l, ExpressionPtr r) {
 
 /// o_orderpriority: ["1-URGENT", "2-HIGH", "3-MEDIUM", null, "5-LOW", "2-HIGH"].
 RecordBatch MakePriorityBatch() {
-  auto p = std::make_shared<StringColumnVector>(DataType::kString, 6);
-  p->Append("1-URGENT");
-  p->Append("2-HIGH");
-  p->Append("3-MEDIUM");
-  p->AppendNull();
-  p->Append("5-LOW");
-  p->Append("2-HIGH");
+  auto p = MakeColumn<std::string_view>(DataType::kString, {"1-URGENT", "2-HIGH", "3-MEDIUM", std::nullopt, "5-LOW", "2-HIGH"});
   return RecordBatch(Schema({Field("o_orderpriority", DataType::kString, Repetition::kOptional)}), {p});
 }
 
@@ -946,7 +918,7 @@ TEST(CaseExpressionTest, ToString) {
 
 TEST(CaseExpressionTest, EmptyBatch) {
   RecordBatch empty(Schema({Field("c", DataType::kBool)}),
-                    {std::make_shared<TypedColumnVector<bool>>(DataType::kBool, 0)});
+                    {MakeColumn<bool>(DataType::kBool, {})});
   auto expr = Case(Col(0), Lit(Value{1}), Col(0));
   ASSERT_FALSE(expr->Evaluate(empty).has_value());  // int32 vs bool is still a type error
   auto ok = Case(Col(0), Lit(Value{1}), Lit(Value{0}));
@@ -1079,18 +1051,9 @@ constexpr Date32 k19950615{9296};
 
 /// a: [1994-01-01, null, 1995-06-15], b: [1994-01-01, 1994-01-01, 1994-12-31], i: int32
 RecordBatch MakeDateBatch() {
-  auto a = std::make_shared<TypedColumnVector<Date32>>(DataType::kDate32, 3);
-  a->Append(k19940101);
-  a->AppendNull();
-  a->Append(k19950615);
-  auto b = std::make_shared<TypedColumnVector<Date32>>(DataType::kDate32, 3);
-  b->Append(k19940101);
-  b->Append(k19940101);
-  b->Append(k19941231);
-  auto i = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 3);
-  i->Append(8766);
-  i->Append(8766);
-  i->Append(9130);
+  auto a = MakeColumn<Date32>(DataType::kDate32, {k19940101, std::nullopt, k19950615});
+  auto b = MakeColumn<Date32>(DataType::kDate32, {k19940101, k19940101, k19941231});
+  auto i = MakeColumn<int32_t>(DataType::kInt32, {8766, 8766, 9130});
   return RecordBatch(Schema({Field("a", DataType::kDate32, Repetition::kOptional),
                              Field("b", DataType::kDate32), Field("i", DataType::kInt32)}),
                      {a, b, i});
@@ -1153,12 +1116,8 @@ TEST(Date32ExprTest, ArithmeticOnDatesIsTypeError) {
 }
 
 TEST(TimestampExprTest, ComparesOnlyWithTimestamps) {
-  auto ts = std::make_shared<TypedColumnVector<Timestamp>>(DataType::kTimestamp, 2);
-  ts->Append(Timestamp{-1});
-  ts->Append(Timestamp{1'704'164'645'500'000});
-  auto date = std::make_shared<TypedColumnVector<Date32>>(DataType::kDate32, 2);
-  date->Append(Date32{0});
-  date->Append(Date32{19724});
+  auto ts = MakeColumn<Timestamp>(DataType::kTimestamp, {Timestamp{-1}, Timestamp{1'704'164'645'500'000}});
+  auto date = MakeColumn<Date32>(DataType::kDate32, {Date32{0}, Date32{19724}});
   RecordBatch batch(Schema({Field("ts", DataType::kTimestamp), Field("d", DataType::kDate32)}),
                     {ts, date});
 

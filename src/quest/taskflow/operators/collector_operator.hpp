@@ -91,7 +91,7 @@ class CollectorOperator : public Operator {
       }
       // Copy columns into a new RecordBatch (HostMemoryBlock owns the original).
       const auto& rb = *host->record_batch();
-      std::vector<std::shared_ptr<columnar::ColumnVector>> cols;
+      std::vector<columnar::ColumnVectorPtr> cols;
       cols.reserve(rb.num_columns());
       for (size_t i = 0; i < rb.num_columns(); ++i) {
         cols.push_back(rb.column_ptr(i));

@@ -58,15 +58,14 @@ class GenerateOperator : public Operator {
       return std::optional<cache::DataBlockPtr>{std::nullopt};
     }
 
-    std::vector<std::shared_ptr<columnar::ColumnVector>> columns;
+    std::vector<columnar::ColumnVectorPtr> columns;
     columns.reserve(num_columns_);
     for (std::size_t col_idx = 0; col_idx < num_columns_; ++col_idx) {
-      auto column = std::make_shared<columnar::TypedColumnVector<std::int32_t>>(
-          columnar::DataType::kInt32, rows_per_batch_);
+      columnar::ColumnBuilder<std::int32_t> column(columnar::DataType::kInt32, rows_per_batch_);
       for (std::size_t row = 0; row < rows_per_batch_; ++row) {
-        column->Append(static_cast<std::int32_t>(((next_row_ + row) * num_columns_) + col_idx));
+        column.Append(static_cast<std::int32_t>(((next_row_ + row) * num_columns_) + col_idx));
       }
-      columns.push_back(std::move(column));
+      columns.push_back(std::move(column).Finish());
     }
 
     next_row_ += rows_per_batch_;

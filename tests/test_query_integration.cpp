@@ -74,49 +74,16 @@ class QueryIntegrationTest : public ::testing::Test {
   }
 
   void CreateTestBatch() {
-    auto id_col = std::make_unique<TypedColumnVector<int32_t>>(DataType::kInt32, 10);
-    auto name_col = std::make_unique<StringColumnVector>(DataType::kString, 10);
-    auto salary_col =
-        std::make_unique<TypedColumnVector<double>>(DataType::kDouble, 10);
-    auto dept_col = std::make_unique<StringColumnVector>(DataType::kString, 10);
-    auto active_col = std::make_unique<TypedColumnVector<bool>>(DataType::kBool, 10);
-
-    id_col->Append(1);
-    name_col->Append("Alice");
-    salary_col->Append(75000.0);
-    dept_col->Append("Engineering");
-    active_col->Append(true);
-
-    id_col->Append(2);
-    name_col->Append("Bob");
-    salary_col->Append(65000.0);
-    dept_col->Append("Engineering");
-    active_col->Append(true);
-
-    id_col->Append(3);
-    name_col->Append("Charlie");
-    salary_col->Append(80000.0);
-    dept_col->Append("Sales");
-    active_col->Append(false);
-
-    id_col->Append(4);
-    name_col->Append("Diana");
-    salary_col->Append(90000.0);
-    dept_col->Append("Engineering");
-    active_col->Append(true);
-
-    id_col->Append(5);
-    name_col->Append("Eve");
-    salary_col->Append(55000.0);
-    dept_col->Append("HR");
-    active_col->Append(true);
-
-    std::vector<std::shared_ptr<ColumnVector>> columns;
-    columns.push_back(std::move(id_col));
-    columns.push_back(std::move(name_col));
-    columns.push_back(std::move(salary_col));
-    columns.push_back(std::move(dept_col));
-    columns.push_back(std::move(active_col));
+    using quest::testing::MakeColumn;
+    std::vector<ColumnVectorPtr> columns = {
+        MakeColumn<int32_t>(DataType::kInt32, {1, 2, 3, 4, 5}),
+        MakeColumn<std::string_view>(DataType::kString,
+                                     {"Alice", "Bob", "Charlie", "Diana", "Eve"}),
+        MakeColumn<double>(DataType::kDouble, {75000.0, 65000.0, 80000.0, 90000.0, 55000.0}),
+        MakeColumn<std::string_view>(DataType::kString,
+                                     {"Engineering", "Engineering", "Sales", "Engineering", "HR"}),
+        MakeColumn<bool>(DataType::kBool, {true, true, false, true, true}),
+    };
 
     batches_.emplace_back(schema_, std::move(columns));
   }

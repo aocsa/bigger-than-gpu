@@ -16,6 +16,7 @@ namespace quest::taskflow {
 namespace {
 
 using columnar::ColumnVector;
+using columnar::ColumnVectorPtr;
 using columnar::DataType;
 using columnar::Value;
 
@@ -89,32 +90,6 @@ template <typename T>
   std::unreachable();
 }
 
-/// @brief Read-only column over a list of Values, used to append them with
-///        columnar::AppendColumnValues into a typed column.
-class ValueListColumn : public ColumnVector {
- public:
-  ValueListColumn(DataType type, const std::vector<Value>& values)
-      : type_(std::move(type)), values_(values) {}
-
-  [[nodiscard]] DataType GetType() const override { return type_; }
-  [[nodiscard]] Value GetValue(size_t index) const override { return values_[index]; }
-  [[nodiscard]] bool IsNull(size_t index) const override { return IsNullValue(values_[index]); }
-  [[nodiscard]] size_t size() const override { return values_.size(); }
-
- private:
-  DataType type_;
-  const std::vector<Value>& values_;
-};
-
-[[nodiscard]] Result<std::shared_ptr<ColumnVector>> MakeColumn(const DataType& type,
-                                                               const std::vector<Value>& values) {
-  std::shared_ptr<ColumnVector> column = columnar::CreateColumnVector(type, values.size());
-  if (auto status = columnar::AppendColumnValues(*column, ValueListColumn(type, values)); !status) {
-    return std::unexpected(status.error());
-  }
-  return column;
-}
-
 [[nodiscard]] Status CheckedAdd(std::int64_t& sum, std::int64_t addend, std::string_view name) {
   if (__builtin_add_overflow(sum, addend, &sum)) {
     return Error::OutOfRange(std::format("HashAggregateOperator: SUM overflow in '{}'", name));
@@ -172,7 +147,7 @@ Status HashAggregateOperator::Sink(cache::DataBlockPtr batch) {
   }
 
   const std::size_t num_aggregates = aggregates_.size();
-  std::vector<std::shared_ptr<ColumnVector>> inputs(num_aggregates);
+  std::vector<ColumnVectorPtr> inputs(num_aggregates);
   std::vector<NumericClass> classes(num_aggregates, NumericClass::kOther);
   for (std::size_t i = 0; i < num_aggregates; ++i) {
     const auto& spec = aggregates_[i];
@@ -323,7 +298,7 @@ Result<std::optional<cache::DataBlockPtr>> HashAggregateOperator::GetNextBatch()
 
 Result<columnar::RecordBatch> HashAggregateOperator::BuildOutput() const {
   std::vector<columnar::Field> fields;
-  std::vector<std::shared_ptr<ColumnVector>> columns;
+  std::vector<ColumnVectorPtr> columns;
   std::vector<Value> values;
   values.reserve(table_.groups.size());
 
@@ -333,7 +308,7 @@ Result<columnar::RecordBatch> HashAggregateOperator::BuildOutput() const {
     for (const auto& group : table_.groups) {
       values.push_back(group.key[k]);
     }
-    auto column = MakeColumn(field.data_type, values);
+    auto column = columnar::ColumnFromValues(field.data_type, values);
     if (!column) {
       return std::unexpected(column.error());
     }
@@ -375,7 +350,7 @@ Result<columnar::RecordBatch> HashAggregateOperator::BuildOutput() const {
           break;
       }
     }
-    auto column = MakeColumn(type, values);
+    auto column = columnar::ColumnFromValues(type, values);
     if (!column) {
       return std::unexpected(column.error());
     }

@@ -140,7 +140,7 @@ Result<cache::DataBlockPtr> HashJoinOperator::ProcessBatch(cache::DataBlockPtr i
   }
 
   std::vector<columnar::Field> fields = probe->schema().fields();
-  std::vector<std::shared_ptr<columnar::ColumnVector>> columns;
+  std::vector<columnar::ColumnVectorPtr> columns;
   columns.reserve(probe->num_columns() + (build_batch_ ? build_batch_->num_columns() : 0));
   for (std::size_t col = 0; col < probe->num_columns(); ++col) {
     columns.push_back(execution::GatherColumn(probe->column(col), probe_rows));

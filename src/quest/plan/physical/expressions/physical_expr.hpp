@@ -20,80 +20,13 @@
 namespace quest::plan::physical {
 
 using columnar::ColumnVector;
+using columnar::ColumnVectorPtr;
 using plan::BinaryOp;
 using columnar::DataType;
 using columnar::Field;
 using columnar::RecordBatch;
 using columnar::Schema;
 using columnar::Value;
-
-// =============================================================================
-// Column Data Type (for expression evaluation)
-// =============================================================================
-
-/// @brief Variant type for column data storage during expression evaluation.
-using ColumnData = std::variant<std::vector<bool>, std::vector<int8_t>,
-                                std::vector<int16_t>, std::vector<int32_t>,
-                                std::vector<int64_t>, std::vector<float>,
-                                std::vector<double>, std::vector<std::string>,
-                                std::vector<columnar::Date32>, std::vector<columnar::Timestamp>>;
-
-// =============================================================================
-// Materialized Column Vector
-// =============================================================================
-
-/// @brief A column vector that owns its data (for expression results).
-class MaterializedColumnVector : public ColumnVector {
- public:
-  /// @param validity Per-row valid flag; empty means no row is null.
-  MaterializedColumnVector(ColumnData data, DataType type, std::vector<bool> validity = {})
-      : data_(std::move(data)), type_(std::move(type)), validity_(std::move(validity)) {}
-
-  [[nodiscard]] DataType GetType() const override { return type_; }
-
-  [[nodiscard]] size_t size() const override {
-    return std::visit([](const auto& vec) { return vec.size(); }, data_);
-  }
-
-  [[nodiscard]] bool IsNull(size_t index) const override {
-    return index < validity_.size() && !validity_[index];
-  }
-
-  [[nodiscard]] Value GetValue(size_t index) const override;
-
-  [[nodiscard]] const ColumnData& data() const { return data_; }
-
-  /// @brief Per-row valid flag; empty means no row is null.
-  [[nodiscard]] const std::vector<bool>& validity() const noexcept { return validity_; }
-
- private:
-  ColumnData data_;
-  DataType type_;
-  std::vector<bool> validity_;
-};
-
-/// @brief A column vector that broadcasts a single value.
-class LiteralColumnVector : public ColumnVector {
- public:
-  LiteralColumnVector(Value value, DataType type, size_t count)
-      : value_(std::move(value)), type_(std::move(type)), count_(count) {}
-
-  [[nodiscard]] DataType GetType() const override { return type_; }
-  [[nodiscard]] size_t size() const override { return count_; }
-  [[nodiscard]] bool IsNull(size_t /*index*/) const override {
-    return std::holds_alternative<std::monostate>(value_);
-  }
-  [[nodiscard]] Value GetValue(size_t /*index*/) const override {
-    return value_;
-  }
-
-  [[nodiscard]] const Value& value() const { return value_; }
-
- private:
-  Value value_;
-  DataType type_;
-  size_t count_;
-};
 
 // =============================================================================
 // Abstract Expression Base Class
@@ -104,7 +37,7 @@ class Expression {
  public:
   virtual ~Expression() = default;
 
-  [[nodiscard]] virtual Result<std::shared_ptr<ColumnVector>> Evaluate(
+  [[nodiscard]] virtual Result<ColumnVectorPtr> Evaluate(
       const RecordBatch& input) const = 0;
   [[nodiscard]] virtual std::string ToString() const = 0;
 };
@@ -120,7 +53,7 @@ class LiteralExpression : public Expression {
  public:
   explicit LiteralExpression(Value value) : value_(std::move(value)) {}
 
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+  [[nodiscard]] Result<ColumnVectorPtr> Evaluate(
       const RecordBatch& input) const override;
 
   [[nodiscard]] std::string ToString() const override;
@@ -138,7 +71,7 @@ class ColumnExpression : public Expression {
  public:
   explicit ColumnExpression(size_t index) : index_(index) {}
 
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+  [[nodiscard]] Result<ColumnVectorPtr> Evaluate(
       const RecordBatch& input) const override;
 
   [[nodiscard]] std::string ToString() const override {
@@ -163,7 +96,7 @@ class BinaryExpression : public Expression {
   BinaryExpression(BinaryOp op, ExpressionPtr left, ExpressionPtr right)
       : op_(op), left_(std::move(left)), right_(std::move(right)) {}
 
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+  [[nodiscard]] Result<ColumnVectorPtr> Evaluate(
       const RecordBatch& input) const override;
 
   /// @brief `l op r`; arithmetic is parenthesized, `(l op r)`.
@@ -197,7 +130,7 @@ class CaseExpression : public Expression {
       : branches_(std::move(branches)), otherwise_(std::move(otherwise)) {}
 
   /// @return The selected values, or `TypeError` for a non-bool WHEN or incompatible results.
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+  [[nodiscard]] Result<ColumnVectorPtr> Evaluate(
       const RecordBatch& input) const override;
 
   /// @brief `CASE WHEN <c> THEN <a> ... ELSE <b> END`.
@@ -228,7 +161,7 @@ class SumExpression : public AggregateExpression {
  public:
   using AggregateExpression::AggregateExpression;
 
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+  [[nodiscard]] Result<ColumnVectorPtr> Evaluate(
       const RecordBatch& input) const override;
 
   [[nodiscard]] std::string ToString() const override {
@@ -240,7 +173,7 @@ class AvgExpression : public AggregateExpression {
  public:
   using AggregateExpression::AggregateExpression;
 
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+  [[nodiscard]] Result<ColumnVectorPtr> Evaluate(
       const RecordBatch& input) const override;
 
   [[nodiscard]] std::string ToString() const override {
@@ -253,7 +186,7 @@ class CountExpression : public AggregateExpression {
  public:
   using AggregateExpression::AggregateExpression;
 
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+  [[nodiscard]] Result<ColumnVectorPtr> Evaluate(
       const RecordBatch& input) const override;
 
   [[nodiscard]] std::string ToString() const override {
@@ -266,7 +199,7 @@ class CountStarExpression : public Expression {
  public:
   CountStarExpression() = default;
 
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+  [[nodiscard]] Result<ColumnVectorPtr> Evaluate(
       const RecordBatch& input) const override;
 
   [[nodiscard]] std::string ToString() const override {
@@ -278,7 +211,7 @@ class MinExpression : public AggregateExpression {
  public:
   using AggregateExpression::AggregateExpression;
 
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+  [[nodiscard]] Result<ColumnVectorPtr> Evaluate(
       const RecordBatch& input) const override;
 
   [[nodiscard]] std::string ToString() const override {
@@ -290,7 +223,7 @@ class MaxExpression : public AggregateExpression {
  public:
   using AggregateExpression::AggregateExpression;
 
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+  [[nodiscard]] Result<ColumnVectorPtr> Evaluate(
       const RecordBatch& input) const override;
 
   [[nodiscard]] std::string ToString() const override {

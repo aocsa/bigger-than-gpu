@@ -41,7 +41,7 @@ namespace {
 
 using cache::DataBlockPtr;
 using cache::HostMemoryBlock;
-using columnar::ColumnVector;
+using columnar::ColumnVectorPtr;
 using columnar::DataType;
 using columnar::Field;
 using columnar::RecordBatch;
@@ -54,40 +54,33 @@ using plan::physical::ExpressionPtr;
 // =============================================================================
 
 template <typename T>
-[[nodiscard]] std::shared_ptr<ColumnVector> MakeColumn(
+[[nodiscard]] ColumnVectorPtr MakeColumn(
     DataType type, const std::vector<std::optional<T>>& values) {
-  if constexpr (std::is_same_v<T, std::string>) {
-    auto col = std::make_shared<columnar::StringColumnVector>(type, values.size());
-    for (const auto& v : values) {
-      v ? col->Append(*v) : col->AppendNull();
-    }
-    return col;
-  } else {
-    auto col = std::make_shared<columnar::TypedColumnVector<T>>(type, values.size());
-    for (const auto& v : values) {
-      v ? col->Append(*v) : col->AppendNull();
-    }
-    return col;
+  using CType = std::conditional_t<std::is_same_v<T, std::string>, std::string_view, T>;
+  columnar::ColumnBuilder<CType> col(type, values.size());
+  for (const auto& v : values) {
+    v ? col.Append(*v) : col.AppendNull();
   }
+  return std::move(col).Finish();
 }
 
-[[nodiscard]] std::shared_ptr<ColumnVector> Int32s(std::vector<std::optional<int32_t>> v) {
+[[nodiscard]] ColumnVectorPtr Int32s(std::vector<std::optional<int32_t>> v) {
   return MakeColumn<int32_t>(columnar::DataType::kInt32, v);
 }
-[[nodiscard]] std::shared_ptr<ColumnVector> Int64s(std::vector<std::optional<int64_t>> v) {
+[[nodiscard]] ColumnVectorPtr Int64s(std::vector<std::optional<int64_t>> v) {
   return MakeColumn<int64_t>(columnar::DataType::kInt64, v);
 }
-[[nodiscard]] std::shared_ptr<ColumnVector> Doubles(std::vector<std::optional<double>> v) {
+[[nodiscard]] ColumnVectorPtr Doubles(std::vector<std::optional<double>> v) {
   return MakeColumn<double>(columnar::DataType::kDouble, v);
 }
-[[nodiscard]] std::shared_ptr<ColumnVector> Strings(std::vector<std::optional<std::string>> v) {
+[[nodiscard]] ColumnVectorPtr Strings(std::vector<std::optional<std::string>> v) {
   return MakeColumn<std::string>(columnar::DataType::kString, v);
 }
 
 [[nodiscard]] RecordBatch MakeBatch(
-    std::vector<std::pair<std::string, std::shared_ptr<ColumnVector>>> columns) {
+    std::vector<std::pair<std::string, ColumnVectorPtr>> columns) {
   std::vector<Field> fields;
-  std::vector<std::shared_ptr<ColumnVector>> cols;
+  std::vector<ColumnVectorPtr> cols;
   for (auto& [name, col] : columns) {
     fields.emplace_back(name, col->GetType(), columnar::Repetition::kOptional);
     cols.push_back(std::move(col));

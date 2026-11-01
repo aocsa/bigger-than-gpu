@@ -114,7 +114,7 @@ Result<RecordBatch> RecordBatchSerializer::Deserialize(const std::vector<uint8_t
 
   Schema schema(std::move(fields));
 
-  std::vector<std::shared_ptr<ColumnVector>> columns;
+  std::vector<ColumnVectorPtr> columns;
   columns.reserve(*num_columns);
 
   for (uint32_t i = 0; i < *num_columns; ++i) {
@@ -205,33 +205,18 @@ Status RecordBatchSerializer::WriteColumnValues(std::vector<uint8_t>& buffer,
   });
 }
 
-Result<std::shared_ptr<ColumnVector>> RecordBatchSerializer::ReadColumn(
-    const std::vector<uint8_t>& buffer, size_t& offset, DataType type, size_t num_rows) {
+Result<ColumnVectorPtr> RecordBatchSerializer::ReadColumn(const std::vector<uint8_t>& buffer,
+                                                          size_t& offset, DataType type,
+                                                          size_t num_rows) {
   auto bitmap_size = ReadValue<uint32_t>(buffer, offset);
   if (!bitmap_size) return std::unexpected(bitmap_size.error());
   std::vector<uint8_t> null_bitmap(buffer.begin() + offset,
                                    buffer.begin() + offset + *bitmap_size);
   offset += *bitmap_size;
 
-  std::shared_ptr<ColumnVector> column = CreateColumnVector(type, num_rows);
-  if (auto status = ReadColumnValues(buffer, offset, *column, type, num_rows, null_bitmap);
-      !status) {
-    return std::unexpected(status.error());
-  }
-
-  return column;
-}
-
-Status RecordBatchSerializer::ReadColumnValues(const std::vector<uint8_t>& buffer,
-                                               size_t& offset,
-                                               ColumnVector& column,
-                                               DataType type,
-                                               size_t num_rows,
-                                               const std::vector<uint8_t>& null_bitmap) {
-  return VisitType(type, [&]<typename Tag>(Tag) -> Status {
+  return VisitType(type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
     using T = ValueOf<typename Tag::CType>;
-    // ReadColumn made @p column with CreateColumnVector(type, ...).
-    auto& typed = static_cast<ColumnOf<typename Tag::CType>&>(column);
+    ColumnBuilder<typename Tag::CType> builder(type, num_rows);
     for (size_t i = 0; i < num_rows; ++i) {
       T val{};
       if constexpr (std::same_as<T, std::string>) {
@@ -245,12 +230,12 @@ Status RecordBatchSerializer::ReadColumnValues(const std::vector<uint8_t>& buffe
         val = *read;
       }
       if ((null_bitmap[i / 8] & (1 << (i % 8))) == 0) {
-        typed.AppendNull();
+        builder.AppendNull();
       } else {
-        typed.Append(std::move(val));
+        builder.Append(val);
       }
     }
-    return {};
+    return std::move(builder).Finish();
   });
 }
 

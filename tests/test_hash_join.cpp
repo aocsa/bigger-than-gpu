@@ -43,36 +43,24 @@ namespace {
 using OptInt = std::optional<std::int64_t>;
 
 /// @brief Int64 (or Int32 when @p as_int32) column; nullopt entries are null.
-[[nodiscard]] std::shared_ptr<ColumnVector> IntColumn(const std::vector<OptInt>& values,
-                                                      bool as_int32 = false) {
-  std::vector<bool> validity;
-  bool has_null = false;
-  for (const auto& value : values) {
-    validity.push_back(value.has_value());
-    has_null |= !value.has_value();
-  }
-  if (!has_null) {
-    validity.clear();
-  }
-  if (as_int32) {
-    std::vector<std::int32_t> data;
+[[nodiscard]] ColumnVectorPtr IntColumn(const std::vector<OptInt>& values, bool as_int32 = false) {
+  const auto build = [&]<typename T>(DataType type) {
+    columnar::ColumnBuilder<T> col(type, values.size());
     for (const auto& value : values) {
-      data.push_back(static_cast<std::int32_t>(value.value_or(0)));
+      value ? col.Append(static_cast<T>(*value)) : col.AppendNull();
     }
-    return std::make_shared<plan::physical::MaterializedColumnVector>(
-        plan::physical::ColumnData{std::move(data)}, DataType::kInt32, std::move(validity));
-  }
-  std::vector<std::int64_t> data;
-  for (const auto& value : values) {
-    data.push_back(value.value_or(0));
-  }
-  return std::make_shared<plan::physical::MaterializedColumnVector>(
-      plan::physical::ColumnData{std::move(data)}, DataType::kInt64, std::move(validity));
+    return std::move(col).Finish();
+  };
+  return as_int32 ? build.template operator()<std::int32_t>(DataType::kInt32)
+                  : build.template operator()<std::int64_t>(DataType::kInt64);
 }
 
-[[nodiscard]] std::shared_ptr<ColumnVector> StringColumn(std::vector<std::string> values) {
-  return std::make_shared<plan::physical::MaterializedColumnVector>(
-      plan::physical::ColumnData{std::move(values)}, DataType::kString);
+[[nodiscard]] ColumnVectorPtr StringColumn(const std::vector<std::string>& values) {
+  columnar::ColumnBuilder<std::string_view> col(DataType::kString, values.size());
+  for (const auto& value : values) {
+    col.Append(value);
+  }
+  return std::move(col).Finish();
 }
 
 /// @brief Two-column block: an integer key column and a string payload column.

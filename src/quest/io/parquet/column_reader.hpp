@@ -18,11 +18,10 @@
 
 namespace quest::io::parquet {
 
+using columnar::ColumnBuilder;
 using columnar::ColumnVector;
-using columnar::CreateColumnVector;
+using columnar::ColumnVectorPtr;
 using columnar::Field;
-using columnar::StringColumnVector;
-using columnar::TypedColumnVector;
 
 class ParquetFileReader;
 
@@ -44,11 +43,11 @@ class ColumnReader {
         page_reader_(data),
         codec_(std::move(codec)) {}
 
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> ReadAll();
+  [[nodiscard]] Result<ColumnVectorPtr> ReadAll();
 
  private:
   /// @brief @p physical (decoded as the physical type) as the leaf's DataType.
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Convert(const ColumnVector& physical) const;
+  [[nodiscard]] Result<ColumnVectorPtr> Convert(const ColumnVector& physical) const;
 
   // ===========================================================================
   // Decompression
@@ -64,13 +63,17 @@ class ColumnReader {
   void ReadDictionaryPage(const PageHeader& header,
                           std::span<const uint8_t> data);
 
-  [[nodiscard]] Status ReadDataPage(const PageHeader& header,
-                                     std::span<const uint8_t> data,
-                                     ColumnVector* column);
+  /// @brief Decodes every page of the chunk into @p builder.
+  template <typename T>
+  [[nodiscard]] Status ReadPages(ColumnBuilder<T>& builder);
 
-  [[nodiscard]] Status ReadDataPageV2(const PageHeader& header,
-                                       std::span<const uint8_t> data,
-                                       ColumnVector* column);
+  template <typename T>
+  [[nodiscard]] Status ReadDataPage(const PageHeader& header, std::span<const uint8_t> data,
+                                    ColumnBuilder<T>& builder);
+
+  template <typename T>
+  [[nodiscard]] Status ReadDataPageV2(const PageHeader& header, std::span<const uint8_t> data,
+                                      ColumnBuilder<T>& builder);
 
   // ===========================================================================
   // Definition Level Decoding
@@ -83,43 +86,35 @@ class ColumnReader {
   // Value Decoding Dispatch
   // ===========================================================================
 
-  [[nodiscard]] Status DecodeValues(Encoding encoding,
-                                     std::span<const uint8_t> data,
-                                     size_t num_values,
-                                     const std::vector<int32_t>& def_levels,
-                                     ColumnVector* column);
+  /// @brief Decodes one page's values; @p T (the builder's CType) picks the decoder.
+  template <typename T>
+  [[nodiscard]] Status DecodeValues(Encoding encoding, std::span<const uint8_t> data,
+                                    size_t num_values, const std::vector<int32_t>& def_levels,
+                                    ColumnBuilder<T>& builder);
 
   // ===========================================================================
   // Type-Specific Decoders
   // ===========================================================================
 
-  [[nodiscard]] Status DecodeBooleanValues(
-      Encoding /*encoding*/, std::span<const uint8_t> data, size_t num_values,
-      const std::vector<int32_t>& def_levels, ColumnVector* column);
-
-  template <typename T>
-  [[nodiscard]] Status DecodeFixedWidthValues(
-      Encoding encoding, std::span<const uint8_t> data, size_t num_values,
-      const std::vector<int32_t>& def_levels, ColumnVector* column);
-
-  template <typename T>
-  [[nodiscard]] Status DecodeDictionaryValues(
-      std::span<const uint8_t> data, size_t num_values,
-      const std::vector<int32_t>& def_levels, TypedColumnVector<T>* column);
-
-  [[nodiscard]] Status DecodeBinaryValues(Encoding encoding,
-                                           std::span<const uint8_t> data,
-                                           size_t num_values,
+  [[nodiscard]] Status DecodeBooleanValues(std::span<const uint8_t> data, size_t num_values,
                                            const std::vector<int32_t>& def_levels,
-                                           ColumnVector* column);
+                                           ColumnBuilder<bool>& builder);
 
-  [[nodiscard]] Status DecodeDictionaryBinaryValues(
-      std::span<const uint8_t> data, size_t num_values,
-      const std::vector<int32_t>& def_levels, StringColumnVector* column);
+  template <typename T>
+  [[nodiscard]] Status DecodeFixedWidthValues(Encoding encoding, std::span<const uint8_t> data,
+                                              size_t num_values,
+                                              const std::vector<int32_t>& def_levels,
+                                              ColumnBuilder<T>& builder);
 
-  [[nodiscard]] Status DecodeInt96Values(
-      Encoding /*encoding*/, std::span<const uint8_t> data, size_t num_values,
-      const std::vector<int32_t>& def_levels, ColumnVector* column);
+  [[nodiscard]] Status DecodeBinaryValues(Encoding encoding, std::span<const uint8_t> data,
+                                          size_t num_values,
+                                          const std::vector<int32_t>& def_levels,
+                                          ColumnBuilder<std::string_view>& builder);
+
+  [[nodiscard]] Status DecodeInt96Values(Encoding encoding, std::span<const uint8_t> data,
+                                         size_t num_values,
+                                         const std::vector<int32_t>& def_levels,
+                                         ColumnBuilder<columnar::Timestamp>& builder);
 
   Field field_;
   LeafType leaf_;
