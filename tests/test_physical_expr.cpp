@@ -1321,3 +1321,16 @@ TEST(SqlNullTest, BoolComparesWithIntegerAsInteger) {
   ASSERT_OK_AND_ASSIGN(auto result, eq_one.Evaluate(batch));
   ExpectColumn<bool>(*result, {true, false, std::nullopt});
 }
+
+TEST(SqlNullTest, ComputedNullKeepsItsType) {
+  // NULL + 1.5 is a Double of nulls, not an untyped NULL literal: int + it is Double.
+  RecordBatch batch(Schema({Field("x", DataType::kInt32)}),
+                    {MakeColumn<int32_t>(DataType::kInt32, {1, 2})});
+  BinaryExpression expr(
+      BinaryOp::kAdd, Col(0),
+      std::make_unique<BinaryExpression>(BinaryOp::kAdd, Lit(std::monostate{}), Lit(Value{1.5})));
+  ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
+  EXPECT_EQ(result->GetType(), DataType::kDouble);
+  EXPECT_TRUE(result->IsNull(0));
+  EXPECT_TRUE(result->IsNull(1));
+}

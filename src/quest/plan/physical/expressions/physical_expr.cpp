@@ -32,12 +32,15 @@ template <typename T>
   return col.is_constant() && col.IsNull(0);
 }
 
-/// @brief @p n nulls of @p type, as one constant row.
+/// @brief @p n nulls of @p type: a computed result, not a constant, so IsNullLiteral (and with
+/// it the typing of a NULL operand) sees only real NULL literals.
 [[nodiscard]] ColumnVectorPtr AllNull(DataType type, size_t n) {
   return columnar::VisitType(type, [&]<typename Tag>(Tag) {
-    ColumnBuilder<typename Tag::CType> builder(type, 1);
-    builder.AppendNull();
-    return ColumnVector::Constant(*std::move(builder).Finish(), n);
+    ColumnBuilder<typename Tag::CType> builder(type, n);
+    for (size_t i = 0; i < n; ++i) {
+      builder.AppendNull();
+    }
+    return std::move(builder).Finish();
   });
 }
 
