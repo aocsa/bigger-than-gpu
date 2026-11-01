@@ -64,800 +64,174 @@ void ApplyConvertedTypeDetails(int32_t converted, SchemaElement& elem) {
   }
 }
 
-// Reads a thrift struct's fields, calling read_field(field_id, type) for each; it returns
-// true if it read the value and false to have the value skipped.
-template <typename ReadField>
-Status ReadStructFields(ThriftDecoder& decoder, ReadField&& read_field) {
-  int16_t last_field_id = 0;
-  while (true) {
-    auto header = decoder.ReadFieldHeader(last_field_id);
-    if (!header) {
-      return std::unexpected(std::move(header).error());
-    }
-    if (!*header) {
-      return {};
-    }
-    last_field_id = (*header)->field_id;
-    auto read = read_field(last_field_id, (*header)->type);
-    if (!read) {
-      return std::unexpected(std::move(read).error());
-    }
-    if (!*read) {
-      if (auto skipped = decoder.SkipField((*header)->type); !skipped) {
-        return skipped;
-      }
-    }
-  }
-}
-
 // TimestampType { 1: bool isAdjustedToUTC; 2: TimeUnit unit }, where TimeUnit is a union of
 // empty structs: 1 MILLIS, 2 MICROS, 3 NANOS. QUEST ignores isAdjustedToUTC.
-Status ReadTimestampType(ThriftDecoder& decoder, SchemaElement& elem) {
-  return ReadStructFields(decoder, [&](int16_t id, ThriftType type) -> Result<bool> {
+Status ReadTimestampType(ThriftDecoder& d, SchemaElement& elem) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
     if (id != 2 || type != ThriftType::kStruct) {
-      return false;
+      return d.SkipField(type);
     }
-    auto unit = ReadStructFields(decoder, [&](int16_t unit_id, ThriftType) -> Result<bool> {
+    return ReadStruct(d, [&](int16_t unit_id, ThriftType unit_type) -> Status {
       if (unit_id >= 1 && unit_id <= 3) {
         elem.time_unit = static_cast<TimeUnit>(unit_id - 1);
       }
-      return false;
+      return d.SkipField(unit_type);
     });
-    if (!unit) {
-      return std::unexpected(std::move(unit).error());
-    }
-    return true;
   });
 }
 
 // IntType { 1: i8 bitWidth; 2: bool isSigned }; compact thrift puts a bool in its header.
-Status ReadIntType(ThriftDecoder& decoder, SchemaElement& elem) {
-  return ReadStructFields(decoder, [&](int16_t id, ThriftType type) -> Result<bool> {
+Status ReadIntType(ThriftDecoder& d, SchemaElement& elem) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
     if (id == 1 && type == ThriftType::kByte) {
-      auto width = decoder.ReadByte();
-      if (!width) {
-        return std::unexpected(std::move(width).error());
-      }
-      elem.bit_width = static_cast<int8_t>(*width);
-      return true;
+      return d.ReadByte().transform(
+          [&](uint8_t width) { elem.bit_width = static_cast<int8_t>(width); });
     }
     if (id == 2 && (type == ThriftType::kBoolTrue || type == ThriftType::kBoolFalse)) {
       elem.is_signed = type == ThriftType::kBoolTrue;
-      return true;
+      return {};
     }
-    return false;
+    return d.SkipField(type);
   });
 }
 
 // SchemaElement.logicalType is a union: the id of its one set field names the type.
-Result<std::optional<LogicalType>> ReadLogicalTypeUnion(ThriftDecoder& decoder,
-                                                        SchemaElement& elem) {
+Status ReadLogicalType(ThriftDecoder& d, SchemaElement& elem) {
   std::optional<LogicalType> logical;
-  auto status = ReadStructFields(decoder, [&](int16_t id, ThriftType type) -> Result<bool> {
+  auto read = ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
     logical = FromLogicalTypeField(id);
-    if (type != ThriftType::kStruct) {
-      return false;
+    if (type == ThriftType::kStruct && logical == LogicalType::kTimestamp) {
+      return ReadTimestampType(d, elem);
     }
-    if (logical == LogicalType::kTimestamp) {
-      auto read = ReadTimestampType(decoder, elem);
-      return read ? Result<bool>{true} : std::unexpected(std::move(read).error());
+    if (type == ThriftType::kStruct && logical == LogicalType::kInteger) {
+      return ReadIntType(d, elem);
     }
-    if (logical == LogicalType::kInteger) {
-      auto read = ReadIntType(decoder, elem);
-      return read ? Result<bool>{true} : std::unexpected(std::move(read).error());
-    }
-    return false;
+    return d.SkipField(type);
   });
-  if (!status) {
-    return std::unexpected(std::move(status).error());
+  if (read && logical) {
+    elem.logical_type = logical;
   }
-  return logical;
+  return read;
 }
 
 }  // namespace
 
-Result<FileMetadata> MetadataParser::Parse(
-    std::span<const uint8_t> data) {
+// The struct readers below are static rather than in the anonymous namespace: the
+// Read(std::vector<T>&) and Read(std::optional<T>&) templates find them by ADL.
+
+static Status Read(ThriftDecoder& d, KeyValue& kv) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
+    switch (id) {
+      case 1: return Read(d, kv.key);
+      case 2: return Read(d, kv.value);
+      default: return d.SkipField(type);
+    }
+  });
+}
+
+static Status Read(ThriftDecoder& d, ColumnStatistics& stats) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
+    switch (id) {
+      case 1: return Read(d, stats.max_value);  // deprecated max, but still written
+      case 2: return Read(d, stats.min_value);  // deprecated min, but still written
+      case 3: return Read(d, stats.null_count);
+      case 4: return Read(d, stats.distinct_count);
+      case 5: return stats.max_value ? d.SkipField(type) : Read(d, stats.max_value);
+      case 6: return stats.min_value ? d.SkipField(type) : Read(d, stats.min_value);
+      default: return d.SkipField(type);
+    }
+  });
+}
+
+// ColumnChunk.meta_data, read into the chunk itself.
+static Status ReadColumnMetaData(ThriftDecoder& d, ColumnChunkMetadata& cc) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
+    switch (id) {
+      case 1: return Read(d, cc.type);
+      case 2: return Read(d, cc.encodings);
+      case 3: return Read(d, cc.path_in_schema);
+      case 4: return Read(d, cc.codec);
+      case 5: return Read(d, cc.num_values);
+      case 6: return Read(d, cc.total_uncompressed_size);
+      case 7: return Read(d, cc.total_compressed_size);
+      case 9: return Read(d, cc.data_page_offset);
+      case 10: return Read(d, cc.index_page_offset);
+      case 11: return Read(d, cc.dictionary_page_offset);
+      case 12:  // replaces earlier statistics, as fields 5 and 6 look at what 1 and 2 set
+        cc.statistics = {};
+        return Read(d, cc.statistics);
+      default: return d.SkipField(type);
+    }
+  });
+}
+
+static Status Read(ThriftDecoder& d, ColumnChunkMetadata& cc) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
+    switch (id) {
+      case 1: return Read(d, cc.file_path);
+      case 2: return Read(d, cc.file_offset);
+      case 3: return ReadColumnMetaData(d, cc);
+      default: return d.SkipField(type);
+    }
+  });
+}
+
+static Status Read(ThriftDecoder& d, RowGroupMetadata& rg) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
+    switch (id) {
+      case 1: return Read(d, rg.columns);
+      case 2: return Read(d, rg.total_byte_size);
+      case 3: return Read(d, rg.num_rows);
+      case 4: return Read(d, rg.file_offset);
+      case 5: return Read(d, rg.total_compressed_size);
+      case 6: return Read(d, rg.ordinal);
+      default: return d.SkipField(type);
+    }
+  });
+}
+
+static Status Read(ThriftDecoder& d, SchemaElement& elem) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
+    switch (id) {
+      case 1: return Read(d, elem.type);
+      case 2: return Read(d, elem.type_length);
+      case 3: return Read(d, elem.repetition);
+      case 4: return Read(d, elem.name);
+      case 5: return Read(d, elem.num_children);
+      case 6:  // converted_type (legacy; logicalType takes precedence)
+        return d.ReadI32().transform([&](int32_t converted) {
+          if (!elem.logical_type) {
+            elem.logical_type = FromConvertedType(converted);
+          }
+          ApplyConvertedTypeDetails(converted, elem);
+        });
+      case 7: return Read(d, elem.scale);
+      case 8: return Read(d, elem.precision);
+      case 9: return Read(d, elem.field_id);
+      case 10: return ReadLogicalType(d, elem);
+      default: return d.SkipField(type);
+    }
+  });
+}
+
+static Status Read(ThriftDecoder& d, FileMetadata& metadata) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
+    switch (id) {
+      case 1: return Read(d, metadata.version);
+      case 2: return Read(d, metadata.schema_elements);
+      case 3: return Read(d, metadata.num_rows);
+      case 4: return Read(d, metadata.row_groups);
+      case 5: return Read(d, metadata.key_value_metadata);
+      case 6: return Read(d, metadata.created_by);
+      default: return d.SkipField(type);
+    }
+  });
+}
+
+Result<FileMetadata> MetadataParser::Parse(std::span<const uint8_t> data) {
   ThriftDecoder decoder(data);
-  return ParseFileMetadata(decoder);
-}
-
-Result<FileMetadata> MetadataParser::ParseFileMetadata(
-    ThriftDecoder& decoder) {
   FileMetadata metadata;
-  int16_t last_field_id = 0;
-
-  while (true) {
-    // Read field header.
-    auto header_result = decoder.ReadFieldHeader(last_field_id);
-    if (!header_result.has_value()) {
-      return std::unexpected(header_result.error());
-    }
-    auto header = header_result.value();
-    if (!header) {
-      break;  // STOP field.
-    }
-    last_field_id = header->field_id;
-
-    switch (header->field_id) {
-      case 1: {  // version
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        metadata.version = result.value();
-        break;
-      }
-      case 2: {  // schema
-        auto result = ParseSchemaElements(decoder);
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        metadata.schema_elements = std::move(result.value());
-        break;
-      }
-      case 3: {  // num_rows
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        metadata.num_rows = result.value();
-        break;
-      }
-      case 4: {  // row_groups
-        auto result = ParseRowGroups(decoder);
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        metadata.row_groups = std::move(result.value());
-        break;
-      }
-      case 5: {  // key_value_metadata
-        auto result = ParseKeyValueMetadata(decoder);
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        metadata.key_value_metadata = std::move(result.value());
-        break;
-      }
-      case 6: {  // created_by
-        auto result = decoder.ReadString();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        metadata.created_by = std::move(result.value());
-        break;
-      }
-      default: {
-        auto status = decoder.SkipField(header->type);
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
-        break;
-      }
-    }
-  }
-  return metadata;
-}
-
-Result<std::vector<SchemaElement>> MetadataParser::ParseSchemaElements(
-    ThriftDecoder& decoder) {
-  auto list_header_result = decoder.ReadListHeader();
-  if (!list_header_result.has_value()) {
-    return std::unexpected(list_header_result.error());
-  }
-  auto list_header = list_header_result.value();
-
-  std::vector<SchemaElement> elements;
-  elements.reserve(list_header.size);
-
-  for (uint32_t i = 0; i < list_header.size; ++i) {
-    auto elem_result = ParseSchemaElement(decoder);
-    if (!elem_result.has_value()) {
-      return std::unexpected(elem_result.error());
-    }
-    elements.push_back(std::move(elem_result.value()));
-  }
-  return elements;
-}
-
-Result<SchemaElement> MetadataParser::ParseSchemaElement(
-    ThriftDecoder& decoder) {
-  SchemaElement elem;
-  int16_t last_field_id = 0;
-
-  while (true) {
-    auto header_result = decoder.ReadFieldHeader(last_field_id);
-    if (!header_result.has_value()) {
-      return std::unexpected(header_result.error());
-    }
-    auto header = header_result.value();
-    if (!header) {
-      break;
-    }
-    last_field_id = header->field_id;
-
-    switch (header->field_id) {
-      case 1: {  // type (physical type)
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        elem.type = static_cast<PhysicalType>(result.value());
-        break;
-      }
-      case 2: {  // type_length
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        elem.type_length = result.value();
-        break;
-      }
-      case 3: {  // repetition_type
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        elem.repetition = static_cast<Repetition>(result.value());
-        break;
-      }
-      case 4: {  // name
-        auto result = decoder.ReadString();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        elem.name = std::move(result.value());
-        break;
-      }
-      case 5: {  // num_children
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        elem.num_children = result.value();
-        break;
-      }
-      case 6: {  // converted_type (legacy; logicalType below takes precedence)
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        if (!elem.logical_type) {
-          elem.logical_type = FromConvertedType(result.value());
-        }
-        ApplyConvertedTypeDetails(result.value(), elem);
-        break;
-      }
-      case 7: {  // scale
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        elem.scale = result.value();
-        break;
-      }
-      case 8: {  // precision
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        elem.precision = result.value();
-        break;
-      }
-      case 9: {  // field_id
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        elem.field_id = result.value();
-        break;
-      }
-      case 10: {  // logicalType
-        auto result = ReadLogicalTypeUnion(decoder, elem);
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        if (*result) {
-          elem.logical_type = *result;
-        }
-        break;
-      }
-      default: {
-        auto status = decoder.SkipField(header->type);
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
-        break;
-      }
-    }
-  }
-  return elem;
-}
-
-Result<std::vector<RowGroupMetadata>> MetadataParser::ParseRowGroups(
-    ThriftDecoder& decoder) {
-  auto list_header_result = decoder.ReadListHeader();
-  if (!list_header_result.has_value()) {
-    return std::unexpected(list_header_result.error());
-  }
-  auto list_header = list_header_result.value();
-
-  std::vector<RowGroupMetadata> row_groups;
-  row_groups.reserve(list_header.size);
-
-  for (uint32_t i = 0; i < list_header.size; ++i) {
-    auto rg_result = ParseRowGroup(decoder);
-    if (!rg_result.has_value()) {
-      return std::unexpected(rg_result.error());
-    }
-    row_groups.push_back(std::move(rg_result.value()));
-  }
-  return row_groups;
-}
-
-Result<RowGroupMetadata> MetadataParser::ParseRowGroup(
-    ThriftDecoder& decoder) {
-  RowGroupMetadata rg;
-  int16_t last_field_id = 0;
-
-  while (true) {
-    auto header_result = decoder.ReadFieldHeader(last_field_id);
-    if (!header_result.has_value()) {
-      return std::unexpected(header_result.error());
-    }
-    auto header = header_result.value();
-    if (!header) {
-      break;
-    }
-    last_field_id = header->field_id;
-
-    switch (header->field_id) {
-      case 1: {  // columns
-        auto result = ParseColumnChunks(decoder);
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        rg.columns = std::move(result.value());
-        break;
-      }
-      case 2: {  // total_byte_size
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        rg.total_byte_size = result.value();
-        break;
-      }
-      case 3: {  // num_rows
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        rg.num_rows = result.value();
-        break;
-      }
-      case 4: {  // file_offset
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        rg.file_offset = result.value();
-        break;
-      }
-      case 5: {  // total_compressed_size
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        rg.total_compressed_size = result.value();
-        break;
-      }
-      case 6: {  // ordinal
-        auto result = decoder.ReadI16();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        rg.ordinal = result.value();
-        break;
-      }
-      default: {
-        auto status = decoder.SkipField(header->type);
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
-        break;
-      }
-    }
-  }
-  return rg;
-}
-
-Result<std::vector<ColumnChunkMetadata>> MetadataParser::ParseColumnChunks(
-    ThriftDecoder& decoder) {
-  auto list_header_result = decoder.ReadListHeader();
-  if (!list_header_result.has_value()) {
-    return std::unexpected(list_header_result.error());
-  }
-  auto list_header = list_header_result.value();
-
-  std::vector<ColumnChunkMetadata> columns;
-  columns.reserve(list_header.size);
-
-  for (uint32_t i = 0; i < list_header.size; ++i) {
-    auto cc_result = ParseColumnChunk(decoder);
-    if (!cc_result.has_value()) {
-      return std::unexpected(cc_result.error());
-    }
-    columns.push_back(std::move(cc_result.value()));
-  }
-  return columns;
-}
-
-Result<ColumnChunkMetadata> MetadataParser::ParseColumnChunk(
-    ThriftDecoder& decoder) {
-  ColumnChunkMetadata cc;
-  int16_t last_field_id = 0;
-
-  while (true) {
-    auto header_result = decoder.ReadFieldHeader(last_field_id);
-    if (!header_result.has_value()) {
-      return std::unexpected(header_result.error());
-    }
-    auto header = header_result.value();
-    if (!header) {
-      break;
-    }
-    last_field_id = header->field_id;
-
-    switch (header->field_id) {
-      case 1: {  // file_path
-        auto result = decoder.ReadString();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.file_path = std::move(result.value());
-        break;
-      }
-      case 2: {  // file_offset
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.file_offset = result.value();
-        break;
-      }
-      case 3: {  // meta_data
-        auto status = ParseColumnMetadata(decoder, cc);
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
-        break;
-      }
-      default: {
-        auto status = decoder.SkipField(header->type);
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
-        break;
-      }
-    }
-  }
-  return cc;
-}
-
-Status MetadataParser::ParseColumnMetadata(ThriftDecoder& decoder,
-                                           ColumnChunkMetadata& cc) {
-  int16_t last_field_id = 0;
-
-  while (true) {
-    auto header_result = decoder.ReadFieldHeader(last_field_id);
-    if (!header_result.has_value()) {
-      return std::unexpected(header_result.error());
-    }
-    auto header = header_result.value();
-    if (!header) {
-      break;
-    }
-    last_field_id = header->field_id;
-
-    switch (header->field_id) {
-      case 1: {  // type
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.type = static_cast<PhysicalType>(result.value());
-        break;
-      }
-      case 2: {  // encodings
-        auto result = ParseEncodings(decoder);
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.encodings = std::move(result.value());
-        break;
-      }
-      case 3: {  // path_in_schema
-        auto result = ParseStringList(decoder);
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.path_in_schema = std::move(result.value());
-        break;
-      }
-      case 4: {  // codec (compression)
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.codec = static_cast<CompressionType>(result.value());
-        break;
-      }
-      case 5: {  // num_values
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.num_values = result.value();
-        break;
-      }
-      case 6: {  // total_uncompressed_size
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.total_uncompressed_size = result.value();
-        break;
-      }
-      case 7: {  // total_compressed_size
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.total_compressed_size = result.value();
-        break;
-      }
-      case 9: {  // data_page_offset
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.data_page_offset = result.value();
-        break;
-      }
-      case 10: {  // index_page_offset
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.index_page_offset = result.value();
-        break;
-      }
-      case 11: {  // dictionary_page_offset
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.dictionary_page_offset = result.value();
-        break;
-      }
-      case 12: {  // statistics
-        auto result = ParseStatistics(decoder);
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        cc.statistics = std::move(result.value());
-        break;
-      }
-      default: {
-        auto status = decoder.SkipField(header->type);
-        if (!status.has_value()) {
-          return status;
-        }
-        break;
-      }
-    }
-  }
-  return {};
-}
-
-Result<std::vector<Encoding>> MetadataParser::ParseEncodings(
-    ThriftDecoder& decoder) {
-  auto list_header_result = decoder.ReadListHeader();
-  if (!list_header_result.has_value()) {
-    return std::unexpected(list_header_result.error());
-  }
-  auto list_header = list_header_result.value();
-
-  std::vector<Encoding> encodings;
-  encodings.reserve(list_header.size);
-
-  for (uint32_t i = 0; i < list_header.size; ++i) {
-    auto result = decoder.ReadI32();
-    if (!result.has_value()) {
-      return std::unexpected(result.error());
-    }
-    encodings.push_back(static_cast<Encoding>(result.value()));
-  }
-  return encodings;
-}
-
-Result<std::vector<std::string>> MetadataParser::ParseStringList(
-    ThriftDecoder& decoder) {
-  auto list_header_result = decoder.ReadListHeader();
-  if (!list_header_result.has_value()) {
-    return std::unexpected(list_header_result.error());
-  }
-  auto list_header = list_header_result.value();
-
-  std::vector<std::string> strings;
-  strings.reserve(list_header.size);
-
-  for (uint32_t i = 0; i < list_header.size; ++i) {
-    auto result = decoder.ReadString();
-    if (!result.has_value()) {
-      return std::unexpected(result.error());
-    }
-    strings.push_back(std::move(result.value()));
-  }
-  return strings;
-}
-
-Result<ColumnStatistics> MetadataParser::ParseStatistics(
-    ThriftDecoder& decoder) {
-  ColumnStatistics stats;
-  int16_t last_field_id = 0;
-
-  while (true) {
-    auto header_result = decoder.ReadFieldHeader(last_field_id);
-    if (!header_result.has_value()) {
-      return std::unexpected(header_result.error());
-    }
-    auto header = header_result.value();
-    if (!header) {
-      break;
-    }
-    last_field_id = header->field_id;
-
-    switch (header->field_id) {
-      case 1: {  // max (deprecated, but still used)
-        auto result = decoder.ReadBinary();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        stats.max_value = std::move(result.value());
-        break;
-      }
-      case 2: {  // min (deprecated, but still used)
-        auto result = decoder.ReadBinary();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        stats.min_value = std::move(result.value());
-        break;
-      }
-      case 3: {  // null_count
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        stats.null_count = result.value();
-        break;
-      }
-      case 4: {  // distinct_count
-        auto result = decoder.ReadI64();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        stats.distinct_count = result.value();
-        break;
-      }
-      case 5: {  // max_value (new field)
-        if (!stats.max_value) {
-          auto result = decoder.ReadBinary();
-          if (!result.has_value()) {
-            return std::unexpected(result.error());
-          }
-          stats.max_value = std::move(result.value());
-        } else {
-          auto status = decoder.SkipField(header->type);
-          if (!status.has_value()) {
-            return std::unexpected(status.error());
-          }
-        }
-        break;
-      }
-      case 6: {  // min_value (new field)
-        if (!stats.min_value) {
-          auto result = decoder.ReadBinary();
-          if (!result.has_value()) {
-            return std::unexpected(result.error());
-          }
-          stats.min_value = std::move(result.value());
-        } else {
-          auto status = decoder.SkipField(header->type);
-          if (!status.has_value()) {
-            return std::unexpected(status.error());
-          }
-        }
-        break;
-      }
-      default: {
-        auto status = decoder.SkipField(header->type);
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
-        break;
-      }
-    }
-  }
-  return stats;
-}
-
-Result<std::vector<KeyValue>> MetadataParser::ParseKeyValueMetadata(
-    ThriftDecoder& decoder) {
-  auto list_header_result = decoder.ReadListHeader();
-  if (!list_header_result.has_value()) {
-    return std::unexpected(list_header_result.error());
-  }
-  auto list_header = list_header_result.value();
-
-  std::vector<KeyValue> kvs;
-  kvs.reserve(list_header.size);
-
-  for (uint32_t i = 0; i < list_header.size; ++i) {
-    auto kv_result = ParseKeyValue(decoder);
-    if (!kv_result.has_value()) {
-      return std::unexpected(kv_result.error());
-    }
-    kvs.push_back(std::move(kv_result.value()));
-  }
-  return kvs;
-}
-
-Result<KeyValue> MetadataParser::ParseKeyValue(ThriftDecoder& decoder) {
-  KeyValue kv;
-  int16_t last_field_id = 0;
-
-  while (true) {
-    auto header_result = decoder.ReadFieldHeader(last_field_id);
-    if (!header_result.has_value()) {
-      return std::unexpected(header_result.error());
-    }
-    auto header = header_result.value();
-    if (!header) {
-      break;
-    }
-    last_field_id = header->field_id;
-
-    switch (header->field_id) {
-      case 1: {
-        auto result = decoder.ReadString();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        kv.key = std::move(result.value());
-        break;
-      }
-      case 2: {
-        auto result = decoder.ReadString();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        kv.value = std::move(result.value());
-        break;
-      }
-      default: {
-        auto status = decoder.SkipField(header->type);
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
-        break;
-      }
-    }
-  }
-  return kv;
+  return Read(decoder, metadata).transform([&] { return std::move(metadata); });
 }
 
 Result<LeafType> ResolveLeafType(const SchemaElement& elem) {

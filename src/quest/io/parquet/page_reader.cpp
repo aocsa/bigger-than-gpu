@@ -8,289 +8,72 @@
 
 namespace quest::io::parquet {
 
-Result<PageHeader> PageHeaderParser::Parse(std::span<const uint8_t> data,
-                                           size_t& bytes_read) {
+namespace {
+
+Status ReadDataPageHeader(ThriftDecoder& d, PageHeader& header) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
+    switch (id) {
+      case 1: return Read(d, header.num_values);
+      case 2: return Read(d, header.encoding);
+      case 3: return Read(d, header.definition_level_encoding);
+      case 4: return Read(d, header.repetition_level_encoding);
+      default: return d.SkipField(type);
+    }
+  });
+}
+
+Status ReadDataPageHeaderV2(ThriftDecoder& d, PageHeader& header) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
+    switch (id) {
+      case 1: return Read(d, header.num_values);
+      case 2: return Read(d, header.num_nulls);
+      case 3: return Read(d, header.num_rows);
+      case 4: return Read(d, header.encoding);
+      case 5: return Read(d, header.definition_levels_byte_length);
+      case 6: return Read(d, header.repetition_levels_byte_length);
+      case 7:  // is_compressed: compact thrift carries a bool in the field header
+        header.is_compressed = type == ThriftType::kBoolTrue;
+        return {};
+      default: return d.SkipField(type);
+    }
+  });
+}
+
+Status ReadDictionaryPageHeader(ThriftDecoder& d, PageHeader& header) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
+    switch (id) {
+      case 1: return Read(d, header.num_dict_values);
+      case 2: return Read(d, header.dict_encoding);
+      default: return d.SkipField(type);
+    }
+  });
+}
+
+Status Read(ThriftDecoder& d, PageHeader& header) {
+  return ReadStruct(d, [&](int16_t id, ThriftType type) -> Status {
+    switch (id) {
+      case 1: return Read(d, header.type);
+      case 2: return Read(d, header.uncompressed_page_size);
+      case 3: return Read(d, header.compressed_page_size);
+      case 4: return Read(d, header.crc);
+      case 5: return ReadDataPageHeader(d, header);
+      case 6: return d.SkipStruct();  // index_page_header
+      case 7: return ReadDictionaryPageHeader(d, header);
+      case 8: return ReadDataPageHeaderV2(d, header);
+      default: return d.SkipField(type);
+    }
+  });
+}
+
+}  // namespace
+
+Result<PageHeader> PageHeaderParser::Parse(std::span<const uint8_t> data, size_t& bytes_read) {
   ThriftDecoder decoder(data);
-  auto result = ParsePageHeader(decoder);
-  if (result.has_value()) {
-    bytes_read = decoder.position();
-  }
-  return result;
-}
-
-Result<PageHeader> PageHeaderParser::ParsePageHeader(
-    ThriftDecoder& decoder) {
   PageHeader header;
-  int16_t last_field_id = 0;
-
-  while (true) {
-    auto field_result = decoder.ReadFieldHeader(last_field_id);
-    if (!field_result.has_value()) {
-      return std::unexpected(field_result.error());
-    }
-    auto field = field_result.value();
-    if (!field) {
-      break;
-    }
-    last_field_id = field->field_id;
-
-    switch (field->field_id) {
-      case 1: {  // type
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.type = static_cast<PageType>(result.value());
-        break;
-      }
-      case 2: {  // uncompressed_page_size
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.uncompressed_page_size = result.value();
-        break;
-      }
-      case 3: {  // compressed_page_size
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.compressed_page_size = result.value();
-        break;
-      }
-      case 4: {  // crc
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.crc = result.value();
-        break;
-      }
-      case 5: {  // data_page_header
-        auto status = ParseDataPageHeader(decoder, header);
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
-        break;
-      }
-      case 6: {  // index_page_header
-        auto status = decoder.SkipStruct();
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
-        break;
-      }
-      case 7: {  // dictionary_page_header
-        auto status = ParseDictionaryPageHeader(decoder, header);
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
-        break;
-      }
-      case 8: {  // data_page_header_v2
-        auto status = ParseDataPageHeaderV2(decoder, header);
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
-        break;
-      }
-      default: {
-        auto status = decoder.SkipField(field->type);
-        if (!status.has_value()) {
-          return std::unexpected(status.error());
-        }
-        break;
-      }
-    }
-  }
-  return header;
-}
-
-Status PageHeaderParser::ParseDataPageHeader(ThriftDecoder& decoder,
-                                             PageHeader& header) {
-  int16_t last_field_id = 0;
-
-  while (true) {
-    auto field_result = decoder.ReadFieldHeader(last_field_id);
-    if (!field_result.has_value()) {
-      return std::unexpected(field_result.error());
-    }
-    auto field = field_result.value();
-    if (!field) {
-      break;
-    }
-    last_field_id = field->field_id;
-
-    switch (field->field_id) {
-      case 1: {  // num_values
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.num_values = result.value();
-        break;
-      }
-      case 2: {  // encoding
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.encoding = static_cast<Encoding>(result.value());
-        break;
-      }
-      case 3: {  // definition_level_encoding
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.definition_level_encoding =
-            static_cast<Encoding>(result.value());
-        break;
-      }
-      case 4: {  // repetition_level_encoding
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.repetition_level_encoding =
-            static_cast<Encoding>(result.value());
-        break;
-      }
-      default: {
-        auto status = decoder.SkipField(field->type);
-        if (!status.has_value()) {
-          return status;
-        }
-        break;
-      }
-    }
-  }
-  return {};
-}
-
-Status PageHeaderParser::ParseDataPageHeaderV2(ThriftDecoder& decoder,
-                                               PageHeader& header) {
-  int16_t last_field_id = 0;
-
-  while (true) {
-    auto field_result = decoder.ReadFieldHeader(last_field_id);
-    if (!field_result.has_value()) {
-      return std::unexpected(field_result.error());
-    }
-    auto field = field_result.value();
-    if (!field) {
-      break;
-    }
-    last_field_id = field->field_id;
-
-    switch (field->field_id) {
-      case 1: {  // num_values
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.num_values = result.value();
-        break;
-      }
-      case 2: {  // num_nulls
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.num_nulls = result.value();
-        break;
-      }
-      case 3: {  // num_rows
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.num_rows = result.value();
-        break;
-      }
-      case 4: {  // encoding
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.encoding = static_cast<Encoding>(result.value());
-        break;
-      }
-      case 5: {  // definition_levels_byte_length
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.definition_levels_byte_length = result.value();
-        break;
-      }
-      case 6: {  // repetition_levels_byte_length
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.repetition_levels_byte_length = result.value();
-        break;
-      }
-      case 7: {  // is_compressed
-        header.is_compressed = (field->type == ThriftType::kBoolTrue);
-        break;
-      }
-      default: {
-        auto status = decoder.SkipField(field->type);
-        if (!status.has_value()) {
-          return status;
-        }
-        break;
-      }
-    }
-  }
-  return {};
-}
-
-Status PageHeaderParser::ParseDictionaryPageHeader(ThriftDecoder& decoder,
-                                                   PageHeader& header) {
-  int16_t last_field_id = 0;
-
-  while (true) {
-    auto field_result = decoder.ReadFieldHeader(last_field_id);
-    if (!field_result.has_value()) {
-      return std::unexpected(field_result.error());
-    }
-    auto field = field_result.value();
-    if (!field) {
-      break;
-    }
-    last_field_id = field->field_id;
-
-    switch (field->field_id) {
-      case 1: {  // num_values
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.num_dict_values = result.value();
-        break;
-      }
-      case 2: {  // encoding
-        auto result = decoder.ReadI32();
-        if (!result.has_value()) {
-          return std::unexpected(result.error());
-        }
-        header.dict_encoding = static_cast<Encoding>(result.value());
-        break;
-      }
-      default: {
-        auto status = decoder.SkipField(field->type);
-        if (!status.has_value()) {
-          return status;
-        }
-        break;
-      }
-    }
-  }
-  return {};
+  return Read(decoder, header).transform([&] {
+    bytes_read = decoder.position();
+    return header;
+  });
 }
 
 Result<PageHeader> PageReader::ReadPageHeader() {

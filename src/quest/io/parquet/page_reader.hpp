@@ -11,8 +11,6 @@
 
 namespace quest::io::parquet {
 
-class ThriftDecoder;
-
 // =============================================================================
 // Page Header Structure
 // =============================================================================
@@ -47,19 +45,6 @@ class PageHeaderParser {
  public:
   [[nodiscard]] static Result<PageHeader> Parse(std::span<const uint8_t> data,
                                                  size_t& bytes_read);
-
- private:
-  [[nodiscard]] static Result<PageHeader> ParsePageHeader(
-      ThriftDecoder& decoder);
-
-  [[nodiscard]] static Status ParseDataPageHeader(ThriftDecoder& decoder,
-                                                   PageHeader& header);
-
-  [[nodiscard]] static Status ParseDataPageHeaderV2(ThriftDecoder& decoder,
-                                                     PageHeader& header);
-
-  [[nodiscard]] static Status ParseDictionaryPageHeader(ThriftDecoder& decoder,
-                                                         PageHeader& header);
 };
 
 // =============================================================================
