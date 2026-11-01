@@ -52,6 +52,13 @@ set(QUEST_SOURCES
     src/quest/memory/memory_resource.cpp
     src/quest/cache/data_block.cpp
     src/quest/cache/batch_holder.cpp
+    src/quest/io/parquet/thrift_decoder.cpp
+    src/quest/io/parquet/metadata.cpp
+    src/quest/io/parquet/page_reader.cpp
+    src/quest/io/parquet/column_reader.cpp
+    src/quest/io/parquet/file_reader.cpp
+    src/quest/execution/kernels/batch_kernels.cpp
+    src/quest/columnar/record_batch_serializer.cpp
     src/quest/taskflow/port.cpp
     src/quest/taskflow/operator.cpp
     src/quest/taskflow/graph.cpp
