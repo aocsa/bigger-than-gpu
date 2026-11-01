@@ -219,13 +219,17 @@ class CalendarDate {
   return ExprBuilder(plan::logical::lit(columnar::Value{date.date()}));
 }
 
-/// @brief Decimal literal `unscaled / 10^scale`, e.g. `LitDecimal(5, 2)` is 0.05, typed
-/// Decimal(3, 2) as DuckDB types `0.05`.
-/// @param unscaled The digits without the point.
-/// @param scale Digits after the point, 0..18.
+/// @brief Decimal literal `Unscaled / 10^Scale`, e.g. `LitDecimal<5, 2>()` is 0.05, typed
+/// Decimal(3, 2) as DuckDB types `0.05`. The arguments are checked at compile time: at most
+/// 18 digits and a scale of 0..18.
 /// @return A literal expression of a Decimal type.
-[[nodiscard]] inline ExprBuilder LitDecimal(std::int64_t unscaled, std::uint8_t scale) {
-  return ExprBuilder(plan::logical::lit(columnar::Value{columnar::DecimalValue{unscaled, scale}}));
+template <std::int64_t Unscaled, int Scale>
+  requires(Scale >= 0 && Scale <= columnar::DataType::kMaxDecimalPrecision &&
+           Unscaled > -columnar::PowerOfTen(columnar::DataType::kMaxDecimalPrecision) &&
+           Unscaled < columnar::PowerOfTen(columnar::DataType::kMaxDecimalPrecision))
+[[nodiscard]] ExprBuilder LitDecimal() {
+  return ExprBuilder(plan::logical::lit(
+      columnar::Value{columnar::DecimalValue{Unscaled, static_cast<std::uint8_t>(Scale)}}));
 }
 
 }  // namespace quest

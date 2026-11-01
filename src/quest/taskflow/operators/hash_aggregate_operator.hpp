@@ -33,6 +33,8 @@ struct AggregateSpec {
   AggregateKind kind;
   plan::physical::ExpressionPtr input;  ///< nullptr for kCountStar
   std::string output_name;
+  /// The planner's output type; it types the output when no input row arrives.
+  std::optional<columnar::DataType> output_type;
 };
 
 /// @brief Blocking hash aggregate: sink of the producer pipeline, source of the consumer.

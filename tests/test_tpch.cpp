@@ -172,8 +172,8 @@ TEST(TpchTest, Q6ForecastingRevenueChange) {
   auto query = Scan("lineitem")
                    .Where(Col("l_shipdate") >= LitDate(1994y / 1 / 1) &&
                           Col("l_shipdate") < LitDate(1995y / 1 / 1) &&
-                          Col("l_discount") >= LitDecimal(5, 2) &&
-                          Col("l_discount") <= LitDecimal(7, 2) && Col("l_quantity") < Lit(24))
+                          Col("l_discount") >= LitDecimal<5, 2>() &&
+                          Col("l_discount") <= LitDecimal<7, 2>() && Col("l_quantity") < Lit(24))
                    .GroupBy({})
                    .Aggregate({{"revenue", agg::Sum(Col("l_extendedprice") * Col("l_discount"))}});
   ExpectMatchesDuckDb(std::move(query), "q6");
@@ -195,4 +195,16 @@ TEST(TpchTest, Q10ReturnedItemReporting) {
                    .OrderBy(std::vector<SortKey>{{"revenue", false}})
                    .Limit(20);
   ExpectMatchesDuckDb(std::move(query), "q10");
+}
+
+TEST(TpchTest, SumOverNoRowsKeepsTheDecimalType) {
+  auto query = Scan("lineitem")
+                   .Where(Col("l_quantity") < Lit(0))
+                   .GroupBy({})
+                   .Aggregate({{"revenue", agg::Sum(Col("l_extendedprice") * Col("l_discount"))}});
+  ASSERT_OK_AND_ASSIGN(auto batches, std::move(query).ExecuteOnGraph());
+  ASSERT_EQ(batches.size(), 1U);
+  ASSERT_EQ(batches[0].num_rows(), 1U);
+  EXPECT_EQ(batches[0].column(0).GetType(), columnar::DataType::Decimal(18, 4));
+  EXPECT_TRUE(batches[0].column(0).IsNull(0));
 }

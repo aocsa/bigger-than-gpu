@@ -1282,9 +1282,15 @@ TEST(DecimalExprTest, CaseWidensAnIntegerBranchToTheDecimal) {
   branches.emplace_back(Col(1), Col(0));
   CaseExpression expr(std::move(branches), Lit(Value{0}));
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
-  EXPECT_EQ(result->GetType(), DataType::Decimal(16, 2));
+  EXPECT_EQ(result->GetType(), DataType::Decimal(15, 2));  // as DuckDB, no carry digit
   EXPECT_EQ(ValueToString(result->GetValue(0)), "1.25");
   EXPECT_EQ(ValueToString(result->GetValue(1)), "0.00");
+}
+
+TEST(DecimalExprTest, CommonTypeMatchesDuckDb) {
+  EXPECT_EQ(plan::CommonType(kMoney, DataType::kInt32), kMoney);
+  EXPECT_EQ(plan::CommonType(kMoney, DataType::Decimal(4, 3)), DataType::Decimal(16, 3));
+  EXPECT_EQ(plan::CommonType(kMoney, DataType::kDouble), DataType::kDouble);
 }
 
 TEST(DecimalExprTest, LiteralIsTypedLikeDuckDb) {

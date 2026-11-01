@@ -333,7 +333,9 @@ Result<columnar::RecordBatch> HashAggregateOperator::BuildOutput() const {
 
   for (std::size_t i = 0; i < aggregates_.size(); ++i) {
     const auto& spec = aggregates_[i];
-    const DataType type = OutputType(spec.kind, input_types_[i]);
+    const DataType type = input_types_[i] || !spec.output_type
+                              ? OutputType(spec.kind, input_types_[i])
+                              : *spec.output_type;
     const bool floating_sum = Classify(type) == NumericClass::kFloating;
     values.clear();
     for (const auto& group : table_.groups) {

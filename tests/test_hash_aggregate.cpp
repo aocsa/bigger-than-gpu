@@ -97,7 +97,7 @@ template <typename T>
 }
 
 [[nodiscard]] AggregateSpec Agg(AggregateKind kind, ExpressionPtr input, std::string name) {
-  return AggregateSpec{kind, std::move(input), std::move(name)};
+  return AggregateSpec{kind, std::move(input), std::move(name), std::nullopt};
 }
 
 /// @brief SUM, COUNT, COUNT(*), MIN, MAX, AVG over input column @p index.

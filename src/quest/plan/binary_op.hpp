@@ -134,13 +134,27 @@ inline constexpr std::array<std::string_view, 13> kBinaryOpSymbols = {
 /// @brief Type that both @p left and @p right convert to, e.g. the result type of the
 /// branches of a CASE; shared by `CaseExpr::ToField` and `CaseExpression::Evaluate`.
 ///
-/// Equal types yield that type; two numeric types widen as `BinaryResultType` does for `+`.
+/// Equal types yield that type. A Decimal and an integer or another Decimal give the larger
+/// integer part and scale, as DuckDB does; other numeric types widen as `BinaryResultType`
+/// does for `+`.
 /// Callers resolve a NULL literal, which has no type of its own, to the other type.
 /// @param left First type.
 /// @param right Second type.
 /// @return The common type, or `TypeError` if the types are incompatible.
 [[nodiscard]] inline Result<columnar::DataType> CommonType(columnar::DataType left,
                                                            columnar::DataType right) {
+  using columnar::DataType;
+  const bool exact = (columnar::IsInteger(left) || columnar::IsDecimal(left)) &&
+                     (columnar::IsInteger(right) || columnar::IsDecimal(right));
+  if (left != right && exact && (columnar::IsDecimal(left) || columnar::IsDecimal(right))) {
+    // DuckDB: the larger integer part and the larger scale, without the carry digit of '+'.
+    const DataType l = AsDecimal(left);
+    const DataType r = AsDecimal(right);
+    const int scale = std::max(l.scale, r.scale);
+    const int precision = std::min<int>(DataType::kMaxDecimalPrecision,
+                                        std::max(l.precision - l.scale, r.precision - r.scale) + scale);
+    return DataType::Decimal(static_cast<std::uint8_t>(precision), static_cast<std::uint8_t>(scale));
+  }
   if (left == right) {
     return left;
   }

@@ -88,7 +88,8 @@ namespace {
 [[nodiscard]] Result<taskflow::AggregateSpec> LowerAggregate(
     const plan::logical::NamedAggregate& aggregate, const plan::logical::LogicalPlan& input) {
   if (dynamic_cast<const plan::logical::CountStar*>(aggregate.expr.get()) != nullptr) {
-    return taskflow::AggregateSpec{taskflow::AggregateKind::kCountStar, nullptr, aggregate.name};
+    return taskflow::AggregateSpec{taskflow::AggregateKind::kCountStar, nullptr, aggregate.name,
+                                   columnar::DataType::kInt64};
   }
   const auto* call = dynamic_cast<const plan::logical::AggregateExpr*>(aggregate.expr.get());
   if (call == nullptr) {
@@ -111,7 +112,12 @@ namespace {
   if (!input_expr) {
     return std::unexpected(std::move(input_expr).error());
   }
-  return taskflow::AggregateSpec{kind->second, std::move(*input_expr), aggregate.name};
+  auto field = aggregate.expr->ToField(input);
+  if (!field) {
+    return std::unexpected(std::move(field).error());
+  }
+  return taskflow::AggregateSpec{kind->second, std::move(*input_expr), aggregate.name,
+                                 field->data_type};
 }
 
 /// @brief If every expression of @p projection is a pure column reference
