@@ -316,6 +316,36 @@ TEST(ParquetCorruptFileTest, NegativeCompressedPageSizeIsAnError) {
   EXPECT_FALSE(reader.GetPageData().has_value());
 }
 
+TEST(ParquetPageHeaderTest, DataPageV2HeaderIsParsed) {
+  // Compact-thrift PageHeader: type=DATA_PAGE_V2, uncompressed and compressed size 4,
+  // 8: data_page_header_v2 {num_values=5, num_nulls=1, num_rows=4, encoding=RLE_DICTIONARY,
+  // definition_levels_byte_length=2, repetition_levels_byte_length=0, is_compressed=false}.
+  const std::vector<uint8_t> page{
+      0x15, 0x06, 0x15, 0x08, 0x15, 0x08,  // 1: type = 3, 2: uncompressed = 4, 3: compressed = 4
+      0x5C,                                // 8: data_page_header_v2 (struct)
+      0x15, 0x0A, 0x15, 0x02, 0x15, 0x08,  //   num_values = 5, num_nulls = 1, num_rows = 4
+      0x15, 0x10, 0x15, 0x04, 0x15, 0x00,  //   encoding = 8, def length = 2, rep length = 0
+      0x12, 0x00,                          //   7: is_compressed = false (bool in header), stop
+      0x00,                                // stop
+      0xA1, 0xA2, 0xA3, 0xA4};
+  PageReader reader(page);
+  ASSERT_OK_AND_ASSIGN(auto header, reader.ReadPageHeader());
+  EXPECT_EQ(header.type, PageType::kDataPageV2);
+  EXPECT_EQ(header.uncompressed_page_size, 4);
+  EXPECT_EQ(header.compressed_page_size, 4);
+  EXPECT_EQ(header.num_values, 5);
+  EXPECT_EQ(header.num_nulls, 1);
+  EXPECT_EQ(header.num_rows, 4);
+  EXPECT_EQ(header.encoding, Encoding::kRleDictionary);
+  EXPECT_EQ(header.definition_levels_byte_length, 2);
+  EXPECT_EQ(header.repetition_levels_byte_length, 0);
+  EXPECT_FALSE(header.is_compressed);
+  ASSERT_OK_AND_ASSIGN(auto data, reader.GetPageData());
+  ASSERT_EQ(data.size(), 4U);
+  EXPECT_EQ(data[0], 0xA1);
+  EXPECT_FALSE(reader.HasNextPage());
+}
+
 TEST(ParquetCorruptFileTest, ListSizeBeyondBufferIsAnError) {
   // List header: size nibble 0xF -> varint size 0x7FFFFFFF, element type i32; no elements follow.
   const std::vector<uint8_t> buf{0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x07};

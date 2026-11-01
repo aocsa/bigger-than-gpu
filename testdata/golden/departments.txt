@@ -1,0 +1,909 @@
+version=2
+num_rows=100000
+created_by="parquet-cpp-arrow version 22.0.0"
+schema[0]: name="schema" type=0 type_length=- repetition=0 num_children=4 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[1]: name="id" type=2 type_length=- repetition=1 num_children=0 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[2]: name="name" type=6 type_length=- repetition=1 num_children=0 logical_type=1 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[3]: name="budget" type=2 type_length=- repetition=1 num_children=0 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[4]: name="location_id" type=1 type_length=- repetition=1 num_children=0 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+key_value[0]: key="ARROW:schema" value="/////xgBAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAQAAACwAAAAcAAAADwAAAAEAAAAcP///wAAAQIQAAAAHAAAAAQAAAAAAAAACwAAAGxvY2F0aW9uX2lkAGj///8AAAABIAAAAKT///8AAAECEAAAABgAAAAEAAAAAAAAAAYAAABidWRnZXQAAJj///8AAAABQAAAANT///8AAAEFEAAAABwAAAAEAAAAAAAAAAQAAABuYW1lAAAAAAQABAAEAAAAEAAUAAgABgAHAAwAAAAQABAAAAAAAAECEAAAABwAAAAEAAAAAAAAAAIAAABpZAAACAAMAAgABwAIAAAAAAAAAUAAAAAAAAAA"
+row_group[0]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=4 ordinal=15010
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5361 data_page_offset=4034 index_page_offset=- dictionary_page_offset=4
+    statistics: min=0100000000000000 max=e803000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1660 data_page_offset=6088 index_page_offset=- dictionary_page_offset=5365
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6627 data_page_offset=12321 index_page_offset=- dictionary_page_offset=7025
+    statistics: min=539e010000000000 max=0a7d980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=14074 index_page_offset=- dictionary_page_offset=13652
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[1]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=15014 ordinal=15035
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=19046 index_page_offset=- dictionary_page_offset=15014
+    statistics: min=e903000000000000 max=d007000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1678 data_page_offset=21118 index_page_offset=- dictionary_page_offset=20377
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6632 data_page_offset=27356 index_page_offset=- dictionary_page_offset=22055
+    statistics: min=2e8d010000000000 max=a876980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=29109 index_page_offset=- dictionary_page_offset=28687
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[2]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=30049 ordinal=15022
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5365 data_page_offset=34083 index_page_offset=- dictionary_page_offset=30049
+    statistics: min=d107000000000000 max=b80b000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1659 data_page_offset=36136 index_page_offset=- dictionary_page_offset=35414
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6636 data_page_offset=42378 index_page_offset=- dictionary_page_offset=37073
+    statistics: min=1cdc010000000000 max=fc89980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=44131 index_page_offset=- dictionary_page_offset=43709
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[3]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=45071 ordinal=15011
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=49103 index_page_offset=- dictionary_page_offset=45071
+    statistics: min=b90b000000000000 max=a00f000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1655 data_page_offset=51152 index_page_offset=- dictionary_page_offset=50434
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6631 data_page_offset=57389 index_page_offset=- dictionary_page_offset=52089
+    statistics: min=0fa0010000000000 max=3b68980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=59142 index_page_offset=- dictionary_page_offset=58720
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[4]: num_rows=1000 total_byte_size=22522 file_offset=- total_compressed_size=60082 ordinal=14979
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=64114 index_page_offset=- dictionary_page_offset=60082
+    statistics: min=a10f000000000000 max=8813000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1641 data_page_offset=66149 index_page_offset=- dictionary_page_offset=65445
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9335 total_compressed_size=6613 data_page_offset=72368 index_page_offset=- dictionary_page_offset=67086
+    statistics: min=15dd010000000000 max=1e1c980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=74121 index_page_offset=- dictionary_page_offset=73699
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[5]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=75061 ordinal=15014
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=79093 index_page_offset=- dictionary_page_offset=75061
+    statistics: min=8913000000000000 max=7017000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1652 data_page_offset=81139 index_page_offset=- dictionary_page_offset=80424
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6637 data_page_offset=87382 index_page_offset=- dictionary_page_offset=82076
+    statistics: min=2b93010000000000 max=9a65980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=89135 index_page_offset=- dictionary_page_offset=88713
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[6]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=90075 ordinal=15024
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=94107 index_page_offset=- dictionary_page_offset=90075
+    statistics: min=7117000000000000 max=581b000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1663 data_page_offset=96164 index_page_offset=- dictionary_page_offset=95438
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6636 data_page_offset=102406 index_page_offset=- dictionary_page_offset=97101
+    statistics: min=8388010000000000 max=0c63980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=104159 index_page_offset=- dictionary_page_offset=103737
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[7]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=105099 ordinal=15014
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=109131 index_page_offset=- dictionary_page_offset=105099
+    statistics: min=591b000000000000 max=401f000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1646 data_page_offset=111171 index_page_offset=- dictionary_page_offset=110462
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6643 data_page_offset=117420 index_page_offset=- dictionary_page_offset=112108
+    statistics: min=aaa0010000000000 max=2677980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=119173 index_page_offset=- dictionary_page_offset=118751
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[8]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=120113 ordinal=15023
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=124145 index_page_offset=- dictionary_page_offset=120113
+    statistics: min=411f000000000000 max=2823000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1653 data_page_offset=126192 index_page_offset=- dictionary_page_offset=125476
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6645 data_page_offset=132443 index_page_offset=- dictionary_page_offset=127129
+    statistics: min=4799010000000000 max=6d7b980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=134196 index_page_offset=- dictionary_page_offset=133774
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[9]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=135136 ordinal=15035
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5364 data_page_offset=139169 index_page_offset=- dictionary_page_offset=135136
+    statistics: min=2923000000000000 max=1027000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1661 data_page_offset=141224 index_page_offset=- dictionary_page_offset=140500
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6648 data_page_offset=147478 index_page_offset=- dictionary_page_offset=142161
+    statistics: min=9fa0010000000000 max=0c8a980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=149231 index_page_offset=- dictionary_page_offset=148809
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[10]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=150171 ordinal=15015
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=154203 index_page_offset=- dictionary_page_offset=150171
+    statistics: min=1127000000000000 max=f82a000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1651 data_page_offset=156248 index_page_offset=- dictionary_page_offset=155534
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6639 data_page_offset=162493 index_page_offset=- dictionary_page_offset=157185
+    statistics: min=c2c3010000000000 max=057c980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=164246 index_page_offset=- dictionary_page_offset=163824
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[11]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=165186 ordinal=15008
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=169218 index_page_offset=- dictionary_page_offset=165186
+    statistics: min=f92a000000000000 max=e02e000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1657 data_page_offset=171269 index_page_offset=- dictionary_page_offset=170549
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6626 data_page_offset=177501 index_page_offset=- dictionary_page_offset=172206
+    statistics: min=1df6010000000000 max=8145980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=179254 index_page_offset=- dictionary_page_offset=178832
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[12]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=180194 ordinal=15018
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5365 data_page_offset=184228 index_page_offset=- dictionary_page_offset=180194
+    statistics: min=e12e000000000000 max=c832000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1646 data_page_offset=186268 index_page_offset=- dictionary_page_offset=185559
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6645 data_page_offset=192519 index_page_offset=- dictionary_page_offset=187205
+    statistics: min=39df010000000000 max=0394980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=194272 index_page_offset=- dictionary_page_offset=193850
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[13]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=195212 ordinal=15024
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=199244 index_page_offset=- dictionary_page_offset=195212
+    statistics: min=c932000000000000 max=b036000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1652 data_page_offset=201290 index_page_offset=- dictionary_page_offset=200575
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6647 data_page_offset=207543 index_page_offset=- dictionary_page_offset=202227
+    statistics: min=b6d4010000000000 max=0155980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=209296 index_page_offset=- dictionary_page_offset=208874
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[14]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=210236 ordinal=15015
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=214268 index_page_offset=- dictionary_page_offset=210236
+    statistics: min=b136000000000000 max=983a000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1659 data_page_offset=216321 index_page_offset=- dictionary_page_offset=215599
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6631 data_page_offset=222558 index_page_offset=- dictionary_page_offset=217258
+    statistics: min=39be010000000000 max=8302980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=224311 index_page_offset=- dictionary_page_offset=223889
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[15]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=225251 ordinal=15019
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=229283 index_page_offset=- dictionary_page_offset=225251
+    statistics: min=993a000000000000 max=803e000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1659 data_page_offset=231336 index_page_offset=- dictionary_page_offset=230614
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6635 data_page_offset=237577 index_page_offset=- dictionary_page_offset=232273
+    statistics: min=711a020000000000 max=4d76980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=239330 index_page_offset=- dictionary_page_offset=238908
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[16]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=240270 ordinal=15026
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=244302 index_page_offset=- dictionary_page_offset=240270
+    statistics: min=813e000000000000 max=6842000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1650 data_page_offset=246346 index_page_offset=- dictionary_page_offset=245633
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6651 data_page_offset=252603 index_page_offset=- dictionary_page_offset=247283
+    statistics: min=9592010000000000 max=f235980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=254356 index_page_offset=- dictionary_page_offset=253934
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[17]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=255296 ordinal=15007
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=259328 index_page_offset=- dictionary_page_offset=255296
+    statistics: min=6942000000000000 max=5046000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1648 data_page_offset=261370 index_page_offset=- dictionary_page_offset=260659
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6634 data_page_offset=267610 index_page_offset=- dictionary_page_offset=262307
+    statistics: min=a8b1010000000000 max=8c4b980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=269363 index_page_offset=- dictionary_page_offset=268941
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[18]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=270303 ordinal=15019
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5365 data_page_offset=274337 index_page_offset=- dictionary_page_offset=270303
+    statistics: min=5146000000000000 max=384a000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1661 data_page_offset=276392 index_page_offset=- dictionary_page_offset=275668
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6631 data_page_offset=282629 index_page_offset=- dictionary_page_offset=277329
+    statistics: min=6eee010000000000 max=428a980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=284382 index_page_offset=- dictionary_page_offset=283960
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[19]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=285322 ordinal=15018
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=289354 index_page_offset=- dictionary_page_offset=285322
+    statistics: min=394a000000000000 max=204e000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1653 data_page_offset=291401 index_page_offset=- dictionary_page_offset=290685
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6640 data_page_offset=297647 index_page_offset=- dictionary_page_offset=292338
+    statistics: min=79ac010000000000 max=f77b980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=299400 index_page_offset=- dictionary_page_offset=298978
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[20]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=300340 ordinal=15017
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=304372 index_page_offset=- dictionary_page_offset=300340
+    statistics: min=214e000000000000 max=0852000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1650 data_page_offset=306416 index_page_offset=- dictionary_page_offset=305703
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6642 data_page_offset=312664 index_page_offset=- dictionary_page_offset=307353
+    statistics: min=77ce010000000000 max=3f5c980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=314417 index_page_offset=- dictionary_page_offset=313995
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[21]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=315357 ordinal=15008
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5367 data_page_offset=319393 index_page_offset=- dictionary_page_offset=315357
+    statistics: min=0952000000000000 max=f055000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1651 data_page_offset=321438 index_page_offset=- dictionary_page_offset=320724
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6628 data_page_offset=327672 index_page_offset=- dictionary_page_offset=322375
+    statistics: min=ebe3010000000000 max=8181980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=329425 index_page_offset=- dictionary_page_offset=329003
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[22]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=330365 ordinal=15012
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=334397 index_page_offset=- dictionary_page_offset=330365
+    statistics: min=f155000000000000 max=d859000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1650 data_page_offset=336441 index_page_offset=- dictionary_page_offset=335728
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6637 data_page_offset=342684 index_page_offset=- dictionary_page_offset=337378
+    statistics: min=3bbc010000000000 max=0b74980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=344437 index_page_offset=- dictionary_page_offset=344015
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[23]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=345377 ordinal=14999
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=349409 index_page_offset=- dictionary_page_offset=345377
+    statistics: min=d959000000000000 max=c05d000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1655 data_page_offset=351458 index_page_offset=- dictionary_page_offset=350740
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6619 data_page_offset=357683 index_page_offset=- dictionary_page_offset=352395
+    statistics: min=d4d7010000000000 max=1480980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=359436 index_page_offset=- dictionary_page_offset=359014
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[24]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=360376 ordinal=15003
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=364408 index_page_offset=- dictionary_page_offset=360376
+    statistics: min=c15d000000000000 max=a861000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1648 data_page_offset=366450 index_page_offset=- dictionary_page_offset=365739
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6630 data_page_offset=372686 index_page_offset=- dictionary_page_offset=367387
+    statistics: min=408a010000000000 max=a83e980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=374439 index_page_offset=- dictionary_page_offset=374017
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[25]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=375379 ordinal=15024
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=379411 index_page_offset=- dictionary_page_offset=375379
+    statistics: min=a961000000000000 max=9065000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1663 data_page_offset=381468 index_page_offset=- dictionary_page_offset=380742
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6636 data_page_offset=387710 index_page_offset=- dictionary_page_offset=382405
+    statistics: min=06f6010000000000 max=5271980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=389463 index_page_offset=- dictionary_page_offset=389041
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[26]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=390403 ordinal=15026
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=394435 index_page_offset=- dictionary_page_offset=390403
+    statistics: min=9165000000000000 max=7869000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1653 data_page_offset=396482 index_page_offset=- dictionary_page_offset=395766
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6648 data_page_offset=402736 index_page_offset=- dictionary_page_offset=397419
+    statistics: min=b5a7010000000000 max=ea8e980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=404489 index_page_offset=- dictionary_page_offset=404067
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[27]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=405429 ordinal=15038
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5367 data_page_offset=409465 index_page_offset=- dictionary_page_offset=405429
+    statistics: min=7969000000000000 max=606d000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1662 data_page_offset=411521 index_page_offset=- dictionary_page_offset=410796
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6647 data_page_offset=417774 index_page_offset=- dictionary_page_offset=412458
+    statistics: min=2fd3010000000000 max=a48e980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=419527 index_page_offset=- dictionary_page_offset=419105
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[28]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=420467 ordinal=15026
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5365 data_page_offset=424501 index_page_offset=- dictionary_page_offset=420467
+    statistics: min=616d000000000000 max=4871000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1653 data_page_offset=426548 index_page_offset=- dictionary_page_offset=425832
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6646 data_page_offset=432800 index_page_offset=- dictionary_page_offset=427485
+    statistics: min=2d98010000000000 max=8388980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=434553 index_page_offset=- dictionary_page_offset=434131
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[29]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=435493 ordinal=15027
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=439525 index_page_offset=- dictionary_page_offset=435493
+    statistics: min=4971000000000000 max=3075000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1654 data_page_offset=441573 index_page_offset=- dictionary_page_offset=440856
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6648 data_page_offset=447827 index_page_offset=- dictionary_page_offset=442510
+    statistics: min=6299010000000000 max=ac7b980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=449580 index_page_offset=- dictionary_page_offset=449158
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[30]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=450520 ordinal=15014
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5367 data_page_offset=454556 index_page_offset=- dictionary_page_offset=450520
+    statistics: min=3175000000000000 max=1879000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1658 data_page_offset=456608 index_page_offset=- dictionary_page_offset=455887
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6627 data_page_offset=462841 index_page_offset=- dictionary_page_offset=457545
+    statistics: min=a6ae010000000000 max=3b91980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=464594 index_page_offset=- dictionary_page_offset=464172
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[31]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=465534 ordinal=15020
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=469566 index_page_offset=- dictionary_page_offset=465534
+    statistics: min=1979000000000000 max=007d000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1659 data_page_offset=471619 index_page_offset=- dictionary_page_offset=470897
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6636 data_page_offset=477861 index_page_offset=- dictionary_page_offset=472556
+    statistics: min=1ceb010000000000 max=c462980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=479614 index_page_offset=- dictionary_page_offset=479192
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[32]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=480554 ordinal=15042
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5368 data_page_offset=484591 index_page_offset=- dictionary_page_offset=480554
+    statistics: min=017d000000000000 max=e880000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1687 data_page_offset=486672 index_page_offset=- dictionary_page_offset=485922
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6625 data_page_offset=492903 index_page_offset=- dictionary_page_offset=487609
+    statistics: min=1098010000000000 max=0f96980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=494656 index_page_offset=- dictionary_page_offset=494234
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[33]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=495596 ordinal=15016
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=499628 index_page_offset=- dictionary_page_offset=495596
+    statistics: min=e980000000000000 max=d084000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1655 data_page_offset=501677 index_page_offset=- dictionary_page_offset=500959
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6636 data_page_offset=507919 index_page_offset=- dictionary_page_offset=502614
+    statistics: min=649d010000000000 max=5e76980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=509672 index_page_offset=- dictionary_page_offset=509250
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[34]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=510612 ordinal=15029
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5367 data_page_offset=514648 index_page_offset=- dictionary_page_offset=510612
+    statistics: min=d184000000000000 max=b888000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1660 data_page_offset=516702 index_page_offset=- dictionary_page_offset=515979
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6640 data_page_offset=522948 index_page_offset=- dictionary_page_offset=517639
+    statistics: min=d6a6010000000000 max=7379980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=524701 index_page_offset=- dictionary_page_offset=524279
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[35]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=525641 ordinal=15028
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=529673 index_page_offset=- dictionary_page_offset=525641
+    statistics: min=b988000000000000 max=a08c000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1653 data_page_offset=531720 index_page_offset=- dictionary_page_offset=531004
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6650 data_page_offset=537976 index_page_offset=- dictionary_page_offset=532657
+    statistics: min=8f90010000000000 max=227f980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=539729 index_page_offset=- dictionary_page_offset=539307
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[36]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=540669 ordinal=15031
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=544701 index_page_offset=- dictionary_page_offset=540669
+    statistics: min=a18c000000000000 max=8890000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1671 data_page_offset=546766 index_page_offset=- dictionary_page_offset=546032
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6635 data_page_offset=553007 index_page_offset=- dictionary_page_offset=547703
+    statistics: min=338a010000000000 max=e38e980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=554760 index_page_offset=- dictionary_page_offset=554338
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[37]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=555700 ordinal=15002
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5366 data_page_offset=559735 index_page_offset=- dictionary_page_offset=555700
+    statistics: min=8990000000000000 max=7094000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1648 data_page_offset=561777 index_page_offset=- dictionary_page_offset=561066
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6626 data_page_offset=568009 index_page_offset=- dictionary_page_offset=562714
+    statistics: min=fa8e010000000000 max=1892980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=569762 index_page_offset=- dictionary_page_offset=569340
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[38]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=570702 ordinal=15031
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=574734 index_page_offset=- dictionary_page_offset=570702
+    statistics: min=7194000000000000 max=5898000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1670 data_page_offset=576798 index_page_offset=- dictionary_page_offset=576065
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6636 data_page_offset=583040 index_page_offset=- dictionary_page_offset=577735
+    statistics: min=8b9f010000000000 max=c392980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=584793 index_page_offset=- dictionary_page_offset=584371
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[39]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=585733 ordinal=14994
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5365 data_page_offset=589767 index_page_offset=- dictionary_page_offset=585733
+    statistics: min=5998000000000000 max=409c000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1643 data_page_offset=591804 index_page_offset=- dictionary_page_offset=591098
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6624 data_page_offset=598034 index_page_offset=- dictionary_page_offset=592741
+    statistics: min=ff8c010000000000 max=ea22980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=599787 index_page_offset=- dictionary_page_offset=599365
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[40]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=600727 ordinal=15011
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5364 data_page_offset=604760 index_page_offset=- dictionary_page_offset=600727
+    statistics: min=419c000000000000 max=28a0000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1643 data_page_offset=606797 index_page_offset=- dictionary_page_offset=606091
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6642 data_page_offset=613045 index_page_offset=- dictionary_page_offset=607734
+    statistics: min=988a010000000000 max=e379980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=614798 index_page_offset=- dictionary_page_offset=614376
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[41]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=615738 ordinal=14998
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=619770 index_page_offset=- dictionary_page_offset=615738
+    statistics: min=29a0000000000000 max=10a4000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1642 data_page_offset=621806 index_page_offset=- dictionary_page_offset=621101
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6631 data_page_offset=628043 index_page_offset=- dictionary_page_offset=622743
+    statistics: min=5a96010000000000 max=e768980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=629796 index_page_offset=- dictionary_page_offset=629374
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[42]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=630736 ordinal=15026
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5365 data_page_offset=634770 index_page_offset=- dictionary_page_offset=630736
+    statistics: min=11a4000000000000 max=f8a7000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1666 data_page_offset=636830 index_page_offset=- dictionary_page_offset=636101
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6633 data_page_offset=643069 index_page_offset=- dictionary_page_offset=637767
+    statistics: min=87d2010000000000 max=da72980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=644822 index_page_offset=- dictionary_page_offset=644400
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[43]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=645762 ordinal=15016
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5364 data_page_offset=649795 index_page_offset=- dictionary_page_offset=645762
+    statistics: min=f9a7000000000000 max=e0ab000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1655 data_page_offset=651844 index_page_offset=- dictionary_page_offset=651126
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6635 data_page_offset=658085 index_page_offset=- dictionary_page_offset=652781
+    statistics: min=2eb9010000000000 max=1f7e980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=659838 index_page_offset=- dictionary_page_offset=659416
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[44]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=660778 ordinal=15015
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=664810 index_page_offset=- dictionary_page_offset=660778
+    statistics: min=e1ab000000000000 max=c8af000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1662 data_page_offset=666866 index_page_offset=- dictionary_page_offset=666141
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6628 data_page_offset=673100 index_page_offset=- dictionary_page_offset=667803
+    statistics: min=2ffd010000000000 max=e85d980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=674853 index_page_offset=- dictionary_page_offset=674431
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[45]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=675793 ordinal=15030
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=679825 index_page_offset=- dictionary_page_offset=675793
+    statistics: min=c9af000000000000 max=b0b3000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1663 data_page_offset=681882 index_page_offset=- dictionary_page_offset=681156
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6642 data_page_offset=688130 index_page_offset=- dictionary_page_offset=682819
+    statistics: min=84b5010000000000 max=4f3c980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=689883 index_page_offset=- dictionary_page_offset=689461
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[46]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=690823 ordinal=15001
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5366 data_page_offset=694858 index_page_offset=- dictionary_page_offset=690823
+    statistics: min=b1b3000000000000 max=98b7000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1645 data_page_offset=696897 index_page_offset=- dictionary_page_offset=696189
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6628 data_page_offset=703131 index_page_offset=- dictionary_page_offset=697834
+    statistics: min=388f010000000000 max=3c82980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=704884 index_page_offset=- dictionary_page_offset=704462
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[47]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=705824 ordinal=15016
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=709856 index_page_offset=- dictionary_page_offset=705824
+    statistics: min=99b7000000000000 max=80bb000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1659 data_page_offset=711909 index_page_offset=- dictionary_page_offset=711187
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6632 data_page_offset=718147 index_page_offset=- dictionary_page_offset=712846
+    statistics: min=9a97010000000000 max=7d15980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=719900 index_page_offset=- dictionary_page_offset=719478
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[48]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=720840 ordinal=15017
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=724872 index_page_offset=- dictionary_page_offset=720840
+    statistics: min=81bb000000000000 max=68bf000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1655 data_page_offset=726921 index_page_offset=- dictionary_page_offset=726203
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6637 data_page_offset=733164 index_page_offset=- dictionary_page_offset=727858
+    statistics: min=aab2010000000000 max=ba75980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=734917 index_page_offset=- dictionary_page_offset=734495
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[49]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=735857 ordinal=15006
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=739889 index_page_offset=- dictionary_page_offset=735857
+    statistics: min=69bf000000000000 max=50c3000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1655 data_page_offset=741938 index_page_offset=- dictionary_page_offset=741220
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6626 data_page_offset=748170 index_page_offset=- dictionary_page_offset=742875
+    statistics: min=4098010000000000 max=5e81980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=749923 index_page_offset=- dictionary_page_offset=749501
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[50]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=750863 ordinal=15016
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=754895 index_page_offset=- dictionary_page_offset=750863
+    statistics: min=51c3000000000000 max=38c7000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1652 data_page_offset=756941 index_page_offset=- dictionary_page_offset=756226
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6639 data_page_offset=763186 index_page_offset=- dictionary_page_offset=757878
+    statistics: min=4f98010000000000 max=6b96980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=764939 index_page_offset=- dictionary_page_offset=764517
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[51]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=765879 ordinal=15021
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=769911 index_page_offset=- dictionary_page_offset=765879
+    statistics: min=39c7000000000000 max=20cb000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1661 data_page_offset=771966 index_page_offset=- dictionary_page_offset=771242
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6635 data_page_offset=778207 index_page_offset=- dictionary_page_offset=772903
+    statistics: min=e986010000000000 max=c791980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=779960 index_page_offset=- dictionary_page_offset=779538
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[52]: num_rows=1000 total_byte_size=22526 file_offset=- total_compressed_size=780900 ordinal=15033
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=784932 index_page_offset=- dictionary_page_offset=780900
+    statistics: min=21cb000000000000 max=08cf000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1657 data_page_offset=786983 index_page_offset=- dictionary_page_offset=786263
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6655 data_page_offset=793244 index_page_offset=- dictionary_page_offset=787920
+    statistics: min=b4a7010000000000 max=6589980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1348 total_compressed_size=1358 data_page_offset=794993 index_page_offset=- dictionary_page_offset=794575
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[53]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=795933 ordinal=15021
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=799965 index_page_offset=- dictionary_page_offset=795933
+    statistics: min=09cf000000000000 max=f0d2000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1654 data_page_offset=802013 index_page_offset=- dictionary_page_offset=801296
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6642 data_page_offset=808261 index_page_offset=- dictionary_page_offset=802950
+    statistics: min=7c99010000000000 max=8361980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=810014 index_page_offset=- dictionary_page_offset=809592
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[54]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=810954 ordinal=15012
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=814986 index_page_offset=- dictionary_page_offset=810954
+    statistics: min=f1d2000000000000 max=d8d6000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1649 data_page_offset=817029 index_page_offset=- dictionary_page_offset=816317
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6638 data_page_offset=823273 index_page_offset=- dictionary_page_offset=817966
+    statistics: min=8d88010000000000 max=b765980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=825026 index_page_offset=- dictionary_page_offset=824604
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[55]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=825966 ordinal=15024
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=829998 index_page_offset=- dictionary_page_offset=825966
+    statistics: min=d9d6000000000000 max=c0da000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1666 data_page_offset=832058 index_page_offset=- dictionary_page_offset=831329
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6633 data_page_offset=838297 index_page_offset=- dictionary_page_offset=832995
+    statistics: min=6b8a010000000000 max=3f66980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=840050 index_page_offset=- dictionary_page_offset=839628
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[56]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=840990 ordinal=15009
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=845022 index_page_offset=- dictionary_page_offset=840990
+    statistics: min=c1da000000000000 max=a8de000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1656 data_page_offset=847072 index_page_offset=- dictionary_page_offset=846353
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6628 data_page_offset=853306 index_page_offset=- dictionary_page_offset=848009
+    statistics: min=9390010000000000 max=ca84980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=855059 index_page_offset=- dictionary_page_offset=854637
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[57]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=855999 ordinal=15036
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5367 data_page_offset=860035 index_page_offset=- dictionary_page_offset=855999
+    statistics: min=a9de000000000000 max=90e2000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1675 data_page_offset=862104 index_page_offset=- dictionary_page_offset=861366
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6632 data_page_offset=868342 index_page_offset=- dictionary_page_offset=863041
+    statistics: min=f88d010000000000 max=1479980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=870095 index_page_offset=- dictionary_page_offset=869673
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[58]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=871035 ordinal=15026
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=875067 index_page_offset=- dictionary_page_offset=871035
+    statistics: min=91e2000000000000 max=78e6000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1656 data_page_offset=877117 index_page_offset=- dictionary_page_offset=876398
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6645 data_page_offset=883368 index_page_offset=- dictionary_page_offset=878054
+    statistics: min=3ec8010000000000 max=ea62980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=885121 index_page_offset=- dictionary_page_offset=884699
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[59]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=886061 ordinal=15027
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=890093 index_page_offset=- dictionary_page_offset=886061
+    statistics: min=79e6000000000000 max=60ea000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1651 data_page_offset=892138 index_page_offset=- dictionary_page_offset=891424
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6651 data_page_offset=898395 index_page_offset=- dictionary_page_offset=893075
+    statistics: min=e4c5010000000000 max=0a4d980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=900148 index_page_offset=- dictionary_page_offset=899726
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[60]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=901088 ordinal=15028
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=905120 index_page_offset=- dictionary_page_offset=901088
+    statistics: min=61ea000000000000 max=48ee000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1661 data_page_offset=907175 index_page_offset=- dictionary_page_offset=906451
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6642 data_page_offset=913423 index_page_offset=- dictionary_page_offset=908112
+    statistics: min=53a8010000000000 max=bd4b980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=915176 index_page_offset=- dictionary_page_offset=914754
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[61]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=916116 ordinal=15024
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=920148 index_page_offset=- dictionary_page_offset=916116
+    statistics: min=49ee000000000000 max=30f2000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1665 data_page_offset=922207 index_page_offset=- dictionary_page_offset=921479
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6634 data_page_offset=928447 index_page_offset=- dictionary_page_offset=923144
+    statistics: min=31a8010000000000 max=354f980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=930200 index_page_offset=- dictionary_page_offset=929778
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[62]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=931140 ordinal=15034
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=935172 index_page_offset=- dictionary_page_offset=931140
+    statistics: min=31f2000000000000 max=18f6000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1672 data_page_offset=937238 index_page_offset=- dictionary_page_offset=936503
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6637 data_page_offset=943481 index_page_offset=- dictionary_page_offset=938175
+    statistics: min=6a8d010000000000 max=b134980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=945234 index_page_offset=- dictionary_page_offset=944812
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[63]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=946174 ordinal=15027
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=950206 index_page_offset=- dictionary_page_offset=946174
+    statistics: min=19f6000000000000 max=00fa000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1658 data_page_offset=952258 index_page_offset=- dictionary_page_offset=951537
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6644 data_page_offset=958508 index_page_offset=- dictionary_page_offset=953195
+    statistics: min=55a2010000000000 max=7c96980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=960261 index_page_offset=- dictionary_page_offset=959839
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[64]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=961201 ordinal=15015
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5366 data_page_offset=965236 index_page_offset=- dictionary_page_offset=961201
+    statistics: min=01fa000000000000 max=e8fd000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1649 data_page_offset=967279 index_page_offset=- dictionary_page_offset=966567
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6638 data_page_offset=973523 index_page_offset=- dictionary_page_offset=968216
+    statistics: min=04e1010000000000 max=4588980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=975276 index_page_offset=- dictionary_page_offset=974854
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[65]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=976216 ordinal=15038
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5366 data_page_offset=980251 index_page_offset=- dictionary_page_offset=976216
+    statistics: min=e9fd000000000000 max=d001010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1670 data_page_offset=982315 index_page_offset=- dictionary_page_offset=981582
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6640 data_page_offset=988561 index_page_offset=- dictionary_page_offset=983252
+    statistics: min=87bb010000000000 max=6464980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=990314 index_page_offset=- dictionary_page_offset=989892
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[66]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=991254 ordinal=15029
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=995286 index_page_offset=- dictionary_page_offset=991254
+    statistics: min=d101010000000000 max=b805010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1662 data_page_offset=997342 index_page_offset=- dictionary_page_offset=996617
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6642 data_page_offset=1003590 index_page_offset=- dictionary_page_offset=998279
+    statistics: min=989b010000000000 max=ee7e980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1005343 index_page_offset=- dictionary_page_offset=1004921
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[67]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1006283 ordinal=15021
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5364 data_page_offset=1010316 index_page_offset=- dictionary_page_offset=1006283
+    statistics: min=b905010000000000 max=a009010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1664 data_page_offset=1012374 index_page_offset=- dictionary_page_offset=1011647
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6631 data_page_offset=1018611 index_page_offset=- dictionary_page_offset=1013311
+    statistics: min=579a010000000000 max=0e8f980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1020364 index_page_offset=- dictionary_page_offset=1019942
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[68]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1021304 ordinal=15045
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1025336 index_page_offset=- dictionary_page_offset=1021304
+    statistics: min=a109010000000000 max=880d010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1671 data_page_offset=1027401 index_page_offset=- dictionary_page_offset=1026667
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6649 data_page_offset=1033656 index_page_offset=- dictionary_page_offset=1028338
+    statistics: min=07b9010000000000 max=5489980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1035409 index_page_offset=- dictionary_page_offset=1034987
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[69]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1036349 ordinal=15021
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5365 data_page_offset=1040383 index_page_offset=- dictionary_page_offset=1036349
+    statistics: min=890d010000000000 max=7011010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1657 data_page_offset=1042434 index_page_offset=- dictionary_page_offset=1041714
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6637 data_page_offset=1048677 index_page_offset=- dictionary_page_offset=1043371
+    statistics: min=4388010000000000 max=4665980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1050430 index_page_offset=- dictionary_page_offset=1050008
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[70]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1051370 ordinal=15010
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1055402 index_page_offset=- dictionary_page_offset=1051370
+    statistics: min=7111010000000000 max=5815010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1652 data_page_offset=1057448 index_page_offset=- dictionary_page_offset=1056733
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6633 data_page_offset=1063687 index_page_offset=- dictionary_page_offset=1058385
+    statistics: min=8a93010000000000 max=4b6e980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1065440 index_page_offset=- dictionary_page_offset=1065018
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[71]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1066380 ordinal=15006
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1070412 index_page_offset=- dictionary_page_offset=1066380
+    statistics: min=5915010000000000 max=4019010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1655 data_page_offset=1072461 index_page_offset=- dictionary_page_offset=1071743
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6626 data_page_offset=1078693 index_page_offset=- dictionary_page_offset=1073398
+    statistics: min=1b87010000000000 max=2b5f980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1080446 index_page_offset=- dictionary_page_offset=1080024
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[72]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1081386 ordinal=15017
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1085418 index_page_offset=- dictionary_page_offset=1081386
+    statistics: min=4119010000000000 max=281d010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1671 data_page_offset=1087483 index_page_offset=- dictionary_page_offset=1086749
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6621 data_page_offset=1093710 index_page_offset=- dictionary_page_offset=1088420
+    statistics: min=eb9b010000000000 max=163f980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1095463 index_page_offset=- dictionary_page_offset=1095041
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[73]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1096403 ordinal=15023
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1100435 index_page_offset=- dictionary_page_offset=1096403
+    statistics: min=291d010000000000 max=1021010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1662 data_page_offset=1102491 index_page_offset=- dictionary_page_offset=1101766
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6636 data_page_offset=1108733 index_page_offset=- dictionary_page_offset=1103428
+    statistics: min=1bc0010000000000 max=6459980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1110486 index_page_offset=- dictionary_page_offset=1110064
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[74]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1111426 ordinal=15022
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5365 data_page_offset=1115460 index_page_offset=- dictionary_page_offset=1111426
+    statistics: min=1121010000000000 max=f824010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1664 data_page_offset=1117518 index_page_offset=- dictionary_page_offset=1116791
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6631 data_page_offset=1123755 index_page_offset=- dictionary_page_offset=1118455
+    statistics: min=e089010000000000 max=8295980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1125508 index_page_offset=- dictionary_page_offset=1125086
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[75]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1126448 ordinal=15018
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1130480 index_page_offset=- dictionary_page_offset=1126448
+    statistics: min=f924010000000000 max=e028010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1654 data_page_offset=1132528 index_page_offset=- dictionary_page_offset=1131811
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6639 data_page_offset=1138773 index_page_offset=- dictionary_page_offset=1133465
+    statistics: min=e9a0010000000000 max=5e61980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1140526 index_page_offset=- dictionary_page_offset=1140104
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[76]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1141466 ordinal=15026
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5368 data_page_offset=1145503 index_page_offset=- dictionary_page_offset=1141466
+    statistics: min=e128010000000000 max=c82c010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1654 data_page_offset=1147551 index_page_offset=- dictionary_page_offset=1146834
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6642 data_page_offset=1153799 index_page_offset=- dictionary_page_offset=1148488
+    statistics: min=8391010000000000 max=51c4970000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1155552 index_page_offset=- dictionary_page_offset=1155130
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[77]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1156492 ordinal=15047
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5367 data_page_offset=1160528 index_page_offset=- dictionary_page_offset=1156492
+    statistics: min=c92c010000000000 max=b030010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1682 data_page_offset=1162604 index_page_offset=- dictionary_page_offset=1161859
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6636 data_page_offset=1168846 index_page_offset=- dictionary_page_offset=1163541
+    statistics: min=d6a3010000000000 max=6896980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1170599 index_page_offset=- dictionary_page_offset=1170177
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[78]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1171539 ordinal=15012
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5367 data_page_offset=1175575 index_page_offset=- dictionary_page_offset=1171539
+    statistics: min=b130010000000000 max=9834010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1646 data_page_offset=1177615 index_page_offset=- dictionary_page_offset=1176906
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6637 data_page_offset=1183858 index_page_offset=- dictionary_page_offset=1178552
+    statistics: min=10d4010000000000 max=b191980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1185611 index_page_offset=- dictionary_page_offset=1185189
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[79]: num_rows=1000 total_byte_size=22522 file_offset=- total_compressed_size=1186551 ordinal=15013
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5367 data_page_offset=1190587 index_page_offset=- dictionary_page_offset=1186551
+    statistics: min=9934010000000000 max=8038010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1651 data_page_offset=1192632 index_page_offset=- dictionary_page_offset=1191918
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9335 total_compressed_size=6633 data_page_offset=1198871 index_page_offset=- dictionary_page_offset=1193569
+    statistics: min=6fe3010000000000 max=1c50980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1200624 index_page_offset=- dictionary_page_offset=1200202
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[80]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1201564 ordinal=15023
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5367 data_page_offset=1205600 index_page_offset=- dictionary_page_offset=1201564
+    statistics: min=8138010000000000 max=683c010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1648 data_page_offset=1207642 index_page_offset=- dictionary_page_offset=1206931
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6646 data_page_offset=1213894 index_page_offset=- dictionary_page_offset=1208579
+    statistics: min=96b5010000000000 max=9c8d980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1215647 index_page_offset=- dictionary_page_offset=1215225
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[81]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1216587 ordinal=15019
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5364 data_page_offset=1220620 index_page_offset=- dictionary_page_offset=1216587
+    statistics: min=693c010000000000 max=5040010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1672 data_page_offset=1222686 index_page_offset=- dictionary_page_offset=1221951
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6621 data_page_offset=1228913 index_page_offset=- dictionary_page_offset=1223623
+    statistics: min=949c010000000000 max=2126980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1230666 index_page_offset=- dictionary_page_offset=1230244
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[82]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1231606 ordinal=15016
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1235638 index_page_offset=- dictionary_page_offset=1231606
+    statistics: min=5140010000000000 max=3844010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1657 data_page_offset=1237689 index_page_offset=- dictionary_page_offset=1236969
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6634 data_page_offset=1243929 index_page_offset=- dictionary_page_offset=1238626
+    statistics: min=4201020000000000 max=f48d980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1245682 index_page_offset=- dictionary_page_offset=1245260
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[83]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1246622 ordinal=15012
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5367 data_page_offset=1250658 index_page_offset=- dictionary_page_offset=1246622
+    statistics: min=3944010000000000 max=2048010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1655 data_page_offset=1252707 index_page_offset=- dictionary_page_offset=1251989
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6628 data_page_offset=1258941 index_page_offset=- dictionary_page_offset=1253644
+    statistics: min=629f010000000000 max=fe66980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1260694 index_page_offset=- dictionary_page_offset=1260272
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[84]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1261634 ordinal=15042
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1265666 index_page_offset=- dictionary_page_offset=1261634
+    statistics: min=2148010000000000 max=084c010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1664 data_page_offset=1267724 index_page_offset=- dictionary_page_offset=1266997
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6653 data_page_offset=1273983 index_page_offset=- dictionary_page_offset=1268661
+    statistics: min=fa9a010000000000 max=cb78980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1275736 index_page_offset=- dictionary_page_offset=1275314
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[85]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1276676 ordinal=15021
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5367 data_page_offset=1280712 index_page_offset=- dictionary_page_offset=1276676
+    statistics: min=094c010000000000 max=f04f010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1659 data_page_offset=1282765 index_page_offset=- dictionary_page_offset=1282043
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6633 data_page_offset=1289004 index_page_offset=- dictionary_page_offset=1283702
+    statistics: min=dd7b020000000000 max=975a980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1290757 index_page_offset=- dictionary_page_offset=1290335
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[86]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1291697 ordinal=15020
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1295729 index_page_offset=- dictionary_page_offset=1291697
+    statistics: min=f14f010000000000 max=d853010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1656 data_page_offset=1297779 index_page_offset=- dictionary_page_offset=1297060
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6639 data_page_offset=1304024 index_page_offset=- dictionary_page_offset=1298716
+    statistics: min=9df3010000000000 max=c38a980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1305777 index_page_offset=- dictionary_page_offset=1305355
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[87]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1306717 ordinal=14996
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1310749 index_page_offset=- dictionary_page_offset=1306717
+    statistics: min=d953010000000000 max=c057010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1646 data_page_offset=1312789 index_page_offset=- dictionary_page_offset=1312080
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6625 data_page_offset=1319020 index_page_offset=- dictionary_page_offset=1313726
+    statistics: min=a39c010000000000 max=067a980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1320773 index_page_offset=- dictionary_page_offset=1320351
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[88]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1321713 ordinal=15030
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1325745 index_page_offset=- dictionary_page_offset=1321713
+    statistics: min=c157010000000000 max=a85b010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1671 data_page_offset=1327810 index_page_offset=- dictionary_page_offset=1327076
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6634 data_page_offset=1334050 index_page_offset=- dictionary_page_offset=1328747
+    statistics: min=c598010000000000 max=6463980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1335803 index_page_offset=- dictionary_page_offset=1335381
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[89]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1336743 ordinal=15004
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5365 data_page_offset=1340777 index_page_offset=- dictionary_page_offset=1336743
+    statistics: min=a95b010000000000 max=905f010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1660 data_page_offset=1342831 index_page_offset=- dictionary_page_offset=1342108
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6617 data_page_offset=1349054 index_page_offset=- dictionary_page_offset=1343768
+    statistics: min=eb87010000000000 max=4951980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1350807 index_page_offset=- dictionary_page_offset=1350385
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[90]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1351747 ordinal=15028
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1355779 index_page_offset=- dictionary_page_offset=1351747
+    statistics: min=915f010000000000 max=7863010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1652 data_page_offset=1357825 index_page_offset=- dictionary_page_offset=1357110
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6651 data_page_offset=1364082 index_page_offset=- dictionary_page_offset=1358762
+    statistics: min=dd07020000000000 max=c791980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1365835 index_page_offset=- dictionary_page_offset=1365413
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[91]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1366775 ordinal=15007
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1370807 index_page_offset=- dictionary_page_offset=1366775
+    statistics: min=7963010000000000 max=6067010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1652 data_page_offset=1372853 index_page_offset=- dictionary_page_offset=1372138
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6630 data_page_offset=1379089 index_page_offset=- dictionary_page_offset=1373790
+    statistics: min=ffe3010000000000 max=0584980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1380842 index_page_offset=- dictionary_page_offset=1380420
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[92]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1381782 ordinal=15021
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5369 data_page_offset=1385820 index_page_offset=- dictionary_page_offset=1381782
+    statistics: min=6167010000000000 max=486b010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1654 data_page_offset=1387868 index_page_offset=- dictionary_page_offset=1387151
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6636 data_page_offset=1394110 index_page_offset=- dictionary_page_offset=1388805
+    statistics: min=94d0010000000000 max=be63980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1395863 index_page_offset=- dictionary_page_offset=1395441
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[93]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1396803 ordinal=15023
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1400835 index_page_offset=- dictionary_page_offset=1396803
+    statistics: min=496b010000000000 max=306f010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1649 data_page_offset=1402878 index_page_offset=- dictionary_page_offset=1402166
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6649 data_page_offset=1409133 index_page_offset=- dictionary_page_offset=1403815
+    statistics: min=1691010000000000 max=dd6c980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1410886 index_page_offset=- dictionary_page_offset=1410464
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[94]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1411826 ordinal=15017
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5367 data_page_offset=1415862 index_page_offset=- dictionary_page_offset=1411826
+    statistics: min=316f010000000000 max=1873010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1665 data_page_offset=1417921 index_page_offset=- dictionary_page_offset=1417193
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6623 data_page_offset=1424150 index_page_offset=- dictionary_page_offset=1418858
+    statistics: min=ee88010000000000 max=ef7d980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1425903 index_page_offset=- dictionary_page_offset=1425481
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[95]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1426843 ordinal=15004
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1430875 index_page_offset=- dictionary_page_offset=1426843
+    statistics: min=1973010000000000 max=0077010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1647 data_page_offset=1432916 index_page_offset=- dictionary_page_offset=1432206
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6632 data_page_offset=1439154 index_page_offset=- dictionary_page_offset=1433853
+    statistics: min=ee8b010000000000 max=6957980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1440907 index_page_offset=- dictionary_page_offset=1440485
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[96]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1441847 ordinal=15013
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1445879 index_page_offset=- dictionary_page_offset=1441847
+    statistics: min=0177010000000000 max=e87a010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1656 data_page_offset=1447929 index_page_offset=- dictionary_page_offset=1447210
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6632 data_page_offset=1454167 index_page_offset=- dictionary_page_offset=1448866
+    statistics: min=cd93010000000000 max=cb6c980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1455920 index_page_offset=- dictionary_page_offset=1455498
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[97]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1456860 ordinal=15018
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1460892 index_page_offset=- dictionary_page_offset=1456860
+    statistics: min=e97a010000000000 max=d07e010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1650 data_page_offset=1462936 index_page_offset=- dictionary_page_offset=1462223
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6643 data_page_offset=1469185 index_page_offset=- dictionary_page_offset=1463873
+    statistics: min=10d4010000000000 max=cd8b980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1470938 index_page_offset=- dictionary_page_offset=1470516
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[98]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1471878 ordinal=14993
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1475910 index_page_offset=- dictionary_page_offset=1471878
+    statistics: min=d17e010000000000 max=b882010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1638 data_page_offset=1477942 index_page_offset=- dictionary_page_offset=1477241
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6630 data_page_offset=1484178 index_page_offset=- dictionary_page_offset=1478879
+    statistics: min=2096010000000000 max=df66980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1485931 index_page_offset=- dictionary_page_offset=1485509
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-
+row_group[99]: num_rows=1000 total_byte_size=22530 file_offset=- total_compressed_size=1486871 ordinal=15024
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=5363 data_page_offset=1490903 index_page_offset=- dictionary_page_offset=1486871
+    statistics: min=b982010000000000 max=a086010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=1 num_values=1000 total_uncompressed_size=2492 total_compressed_size=1666 data_page_offset=1492963 index_page_offset=- dictionary_page_offset=1492234
+    statistics: min=41646d696e max=537570706f7274205465616d null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["budget"] codec=1 num_values=1000 total_uncompressed_size=9343 total_compressed_size=6633 data_page_offset=1499202 index_page_offset=- dictionary_page_offset=1493900
+    statistics: min=4e9c010000000000 max=7e5c980000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0,3,8] path_in_schema=["location_id"] codec=1 num_values=1000 total_uncompressed_size=1352 total_compressed_size=1362 data_page_offset=1500955 index_page_offset=- dictionary_page_offset=1500533
+    statistics: min=01000000 max=64000000 null_count=0 distinct_count=- num_values=-

@@ -1,0 +1,13 @@
+version=1
+num_rows=100
+created_by="DuckDB version v2.0.0 (build d54cbbe3df)"
+schema[0]: name="duckdb_schema" type=0 type_length=- repetition=0 num_children=2 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[1]: name="s_suppkey" type=2 type_length=- repetition=0 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=64 is_signed=1
+schema[2]: name="s_nationkey" type=1 type_length=- repetition=0 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=32 is_signed=1
+row_group[0]: num_rows=100 total_byte_size=1240 file_offset=- total_compressed_size=4 ordinal=700
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["s_suppkey"] codec=1 num_values=100 total_uncompressed_size=820 total_compressed_size=435 data_page_offset=4 index_page_offset=- dictionary_page_offset=-
+    statistics: min=0100000000000000 max=6400000000000000 null_count=0 distinct_count=- num_values=-
+      page[0]: type=0 uncompressed_page_size=800 compressed_page_size=415 crc=0 num_values=100 encoding=0 definition_level_encoding=3 repetition_level_encoding=3 num_nulls=0 num_rows=0 definition_levels_byte_length=0 repetition_levels_byte_length=0 is_compressed=1 num_dict_values=0 dict_encoding=0
+  column[1]: file_path="" file_offset=0 type=1 encodings=[0] path_in_schema=["s_nationkey"] codec=1 num_values=100 total_uncompressed_size=420 total_compressed_size=265 data_page_offset=439 index_page_offset=- dictionary_page_offset=-
+    statistics: min=00000000 max=18000000 null_count=0 distinct_count=- num_values=-
+      page[0]: type=0 uncompressed_page_size=400 compressed_page_size=245 crc=0 num_values=100 encoding=0 definition_level_encoding=3 repetition_level_encoding=3 num_nulls=0 num_rows=0 definition_levels_byte_length=0 repetition_levels_byte_length=0 is_compressed=1 num_dict_values=0 dict_encoding=0

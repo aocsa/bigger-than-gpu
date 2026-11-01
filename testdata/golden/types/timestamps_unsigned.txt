@@ -1,0 +1,33 @@
+version=1
+num_rows=2
+created_by="DuckDB version v2.0.0 (build d54cbbe3df)"
+schema[0]: name="duckdb_schema" type=0 type_length=- repetition=0 num_children=7 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[1]: name="ts_ms" type=2 type_length=- repetition=1 num_children=0 logical_type=8 precision=- scale=- field_id=- time_unit=0 bit_width=- is_signed=-
+schema[2]: name="ts_us" type=2 type_length=- repetition=1 num_children=0 logical_type=8 precision=- scale=- field_id=- time_unit=1 bit_width=- is_signed=-
+schema[3]: name="ts_ns" type=2 type_length=- repetition=1 num_children=0 logical_type=8 precision=- scale=- field_id=- time_unit=2 bit_width=- is_signed=-
+schema[4]: name="u8" type=1 type_length=- repetition=1 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=8 is_signed=0
+schema[5]: name="u16" type=1 type_length=- repetition=1 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=16 is_signed=0
+schema[6]: name="u32" type=1 type_length=- repetition=1 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=32 is_signed=0
+schema[7]: name="dec32" type=1 type_length=- repetition=1 num_children=0 logical_type=5 precision=9 scale=2 field_id=- time_unit=- bit_width=- is_signed=-
+row_group[0]: num_rows=2 total_byte_size=345 file_offset=- total_compressed_size=4 ordinal=254
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["ts_ms"] codec=1 num_values=2 total_uncompressed_size=62 total_compressed_size=38 data_page_offset=4 index_page_offset=- dictionary_page_offset=-
+    statistics: min=7cda20c88c010000 max=7cda20c88c010000 null_count=1 distinct_count=- num_values=-
+      page[0]: type=0 uncompressed_page_size=45 compressed_page_size=21 crc=0 num_values=2 encoding=0 definition_level_encoding=3 repetition_level_encoding=3 num_nulls=0 num_rows=0 definition_levels_byte_length=0 repetition_levels_byte_length=0 is_compressed=1 num_dict_values=0 dict_encoding=0
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["ts_us"] codec=1 num_values=2 total_uncompressed_size=39 total_compressed_size=41 data_page_offset=42 index_page_offset=- dictionary_page_offset=-
+    statistics: min=ffffffffffffffff max=80b54fc0ed0d0600 null_count=0 distinct_count=- num_values=-
+      page[0]: type=0 uncompressed_page_size=22 compressed_page_size=24 crc=0 num_values=2 encoding=0 definition_level_encoding=3 repetition_level_encoding=3 num_nulls=0 num_rows=0 definition_levels_byte_length=0 repetition_levels_byte_length=0 is_compressed=1 num_dict_values=0 dict_encoding=0
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["ts_ns"] codec=1 num_values=2 total_uncompressed_size=39 total_compressed_size=41 data_page_offset=83 index_page_offset=- dictionary_page_offset=-
+    statistics: min=ffffffffffffffff max=15ff5c37b768a617 null_count=0 distinct_count=- num_values=-
+      page[0]: type=0 uncompressed_page_size=22 compressed_page_size=24 crc=0 num_values=2 encoding=0 definition_level_encoding=3 repetition_level_encoding=3 num_nulls=0 num_rows=0 definition_levels_byte_length=0 repetition_levels_byte_length=0 is_compressed=1 num_dict_values=0 dict_encoding=0
+  column[3]: file_path="" file_offset=0 type=1 encodings=[0] path_in_schema=["u8"] codec=1 num_values=2 total_uncompressed_size=58 total_compressed_size=34 data_page_offset=124 index_page_offset=- dictionary_page_offset=-
+    statistics: min=c8000000 max=c8000000 null_count=1 distinct_count=- num_values=-
+      page[0]: type=0 uncompressed_page_size=41 compressed_page_size=17 crc=0 num_values=2 encoding=0 definition_level_encoding=3 repetition_level_encoding=3 num_nulls=0 num_rows=0 definition_levels_byte_length=0 repetition_levels_byte_length=0 is_compressed=1 num_dict_values=0 dict_encoding=0
+  column[4]: file_path="" file_offset=0 type=1 encodings=[0] path_in_schema=["u16"] codec=1 num_values=2 total_uncompressed_size=58 total_compressed_size=34 data_page_offset=158 index_page_offset=- dictionary_page_offset=-
+    statistics: min=60ea0000 max=60ea0000 null_count=1 distinct_count=- num_values=-
+      page[0]: type=0 uncompressed_page_size=41 compressed_page_size=17 crc=0 num_values=2 encoding=0 definition_level_encoding=3 repetition_level_encoding=3 num_nulls=0 num_rows=0 definition_levels_byte_length=0 repetition_levels_byte_length=0 is_compressed=1 num_dict_values=0 dict_encoding=0
+  column[5]: file_path="" file_offset=0 type=1 encodings=[0] path_in_schema=["u32"] codec=1 num_values=2 total_uncompressed_size=58 total_compressed_size=33 data_page_offset=192 index_page_offset=- dictionary_page_offset=-
+    statistics: min=00286bee max=00286bee null_count=1 distinct_count=- num_values=-
+      page[0]: type=0 uncompressed_page_size=41 compressed_page_size=16 crc=0 num_values=2 encoding=0 definition_level_encoding=3 repetition_level_encoding=3 num_nulls=0 num_rows=0 definition_levels_byte_length=0 repetition_levels_byte_length=0 is_compressed=1 num_dict_values=0 dict_encoding=0
+  column[6]: file_path="" file_offset=0 type=1 encodings=[0] path_in_schema=["dec32"] codec=1 num_values=2 total_uncompressed_size=31 total_compressed_size=33 data_page_offset=225 index_page_offset=- dictionary_page_offset=-
+    statistics: min=f9ffffff max=15cd5b07 null_count=0 distinct_count=- num_values=-
+      page[0]: type=0 uncompressed_page_size=14 compressed_page_size=16 crc=0 num_values=2 encoding=0 definition_level_encoding=3 repetition_level_encoding=3 num_nulls=0 num_rows=0 definition_levels_byte_length=0 repetition_levels_byte_length=0 is_compressed=1 num_dict_values=0 dict_encoding=0

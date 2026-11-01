@@ -1,0 +1,909 @@
+version=2
+num_rows=100000
+created_by="parquet-cpp-arrow version 22.0.0"
+schema[0]: name="schema" type=0 type_length=- repetition=0 num_children=4 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[1]: name="id" type=2 type_length=- repetition=1 num_children=0 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[2]: name="salary" type=2 type_length=- repetition=1 num_children=0 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[3]: name="tax" type=2 type_length=- repetition=1 num_children=0 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[4]: name="name" type=6 type_length=- repetition=1 num_children=0 logical_type=1 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+key_value[0]: key="ARROW:schema" value="/////xABAAAQAAAAAAAKAAwABgAFAAgACgAAAAABBAAMAAAACAAIAAAABAAIAAAABAAAAAQAAACoAAAAZAAAADQAAAAEAAAAeP///wAAAQUQAAAAHAAAAAQAAAAAAAAABAAAAG5hbWUAAAAABAAEAAQAAACk////AAABAhAAAAAUAAAABAAAAAAAAAADAAAAdGF4AJT///8AAAABQAAAAND///8AAAECEAAAABgAAAAEAAAAAAAAAAYAAABzYWxhcnkAAMT///8AAAABQAAAABAAFAAIAAYABwAMAAAAEAAQAAAAAAABAhAAAAAcAAAABAAAAAAAAAACAAAAaWQAAAgADAAIAAcACAAAAAAAAAFAAAAAAAAAAA=="
+row_group[0]: num_rows=1000 total_byte_size=43310 file_offset=- total_compressed_size=4 ordinal=-22226
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=8021 index_page_offset=- dictionary_page_offset=4
+    statistics: min=0100000000000000 max=e803000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=17340 index_page_offset=- dictionary_page_offset=9347
+    statistics: min=8b75000000000000 max=20d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=26659 index_page_offset=- dictionary_page_offset=18666
+    statistics: min=4915000000000000 max=9740010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=42004 index_page_offset=- dictionary_page_offset=27985
+    statistics: min=41617978737572776277 max=5a7a7761626177706b68 null_count=0 distinct_count=- num_values=-
+row_group[1]: num_rows=1000 total_byte_size=43246 file_offset=- total_compressed_size=43314 ordinal=-22290
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=51331 index_page_offset=- dictionary_page_offset=43314
+    statistics: min=e903000000000000 max=d007000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=60650 index_page_offset=- dictionary_page_offset=52657
+    statistics: min=3877000000000000 max=76d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9255 total_compressed_size=9255 data_page_offset=69905 index_page_offset=- dictionary_page_offset=61976
+    statistics: min=b213000000000000 max=ab52010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=85250 index_page_offset=- dictionary_page_offset=71231
+    statistics: min=41627570726c62646978 max=5a7a6465636e72656166 null_count=0 distinct_count=- num_values=-
+row_group[2]: num_rows=1000 total_byte_size=43294 file_offset=- total_compressed_size=86560 ordinal=-22242
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=94577 index_page_offset=- dictionary_page_offset=86560
+    statistics: min=d107000000000000 max=b80b000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=103888 index_page_offset=- dictionary_page_offset=95903
+    statistics: min=6d75000000000000 max=70cd030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=113199 index_page_offset=- dictionary_page_offset=105214
+    statistics: min=7d12000000000000 max=8842010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=128544 index_page_offset=- dictionary_page_offset=114525
+    statistics: min=41617165726b766f6d71 max=5a7a67616f6b6c6e7870 null_count=0 distinct_count=- num_values=-
+row_group[3]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=129854 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=137871 index_page_offset=- dictionary_page_offset=129854
+    statistics: min=b90b000000000000 max=a00f000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=147190 index_page_offset=- dictionary_page_offset=139197
+    statistics: min=4375000000000000 max=2bd0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=156469 index_page_offset=- dictionary_page_offset=148516
+    statistics: min=c611000000000000 max=8f50010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=171814 index_page_offset=- dictionary_page_offset=157795
+    statistics: min=4161657072697763686a max=5a7a78686f7764667176 null_count=0 distinct_count=- num_values=-
+row_group[4]: num_rows=1000 total_byte_size=43262 file_offset=- total_compressed_size=173124 ordinal=-22274
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=181141 index_page_offset=- dictionary_page_offset=173124
+    statistics: min=a10f000000000000 max=8813000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=190452 index_page_offset=- dictionary_page_offset=182467
+    statistics: min=fb76000000000000 max=21d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=199731 index_page_offset=- dictionary_page_offset=191778
+    statistics: min=eb11000000000000 max=db46010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=215076 index_page_offset=- dictionary_page_offset=201057
+    statistics: min=41616d6a676a636d6468 max=5a7a7871797074627465 null_count=0 distinct_count=- num_values=-
+row_group[5]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=216386 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=224403 index_page_offset=- dictionary_page_offset=216386
+    statistics: min=8913000000000000 max=7017000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=233714 index_page_offset=- dictionary_page_offset=225729
+    statistics: min=7476000000000000 max=2ecf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=243001 index_page_offset=- dictionary_page_offset=235040
+    statistics: min=ec14000000000000 max=894a010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=258346 index_page_offset=- dictionary_page_offset=244327
+    statistics: min=416372696e6f70777276 max=5a796d6d6e6b6f667965 null_count=0 distinct_count=- num_values=-
+row_group[6]: num_rows=1000 total_byte_size=43246 file_offset=- total_compressed_size=259656 ordinal=-22290
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=267673 index_page_offset=- dictionary_page_offset=259656
+    statistics: min=7117000000000000 max=581b000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=277000 index_page_offset=- dictionary_page_offset=268999
+    statistics: min=0d76000000000000 max=5fd0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9247 total_compressed_size=9247 data_page_offset=286247 index_page_offset=- dictionary_page_offset=278326
+    statistics: min=0013000000000000 max=344f010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=301592 index_page_offset=- dictionary_page_offset=287573
+    statistics: min=41616d67777869637a79 max=5a7a7a6a737169646c70 null_count=0 distinct_count=- num_values=-
+row_group[7]: num_rows=1000 total_byte_size=43294 file_offset=- total_compressed_size=302902 ordinal=-22242
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=310919 index_page_offset=- dictionary_page_offset=302902
+    statistics: min=591b000000000000 max=401f000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=320238 index_page_offset=- dictionary_page_offset=312245
+    statistics: min=6576000000000000 max=1dd0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=329541 index_page_offset=- dictionary_page_offset=321564
+    statistics: min=1a12000000000000 max=5554010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=344886 index_page_offset=- dictionary_page_offset=330867
+    statistics: min=416174697864716f686c max=5a7a6378637468757561 null_count=0 distinct_count=- num_values=-
+row_group[8]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=346196 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=354213 index_page_offset=- dictionary_page_offset=346196
+    statistics: min=411f000000000000 max=2823000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=363548 index_page_offset=- dictionary_page_offset=355539
+    statistics: min=3775000000000000 max=3dcc030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=372827 index_page_offset=- dictionary_page_offset=364874
+    statistics: min=2d12000000000000 max=0d52010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=388172 index_page_offset=- dictionary_page_offset=374153
+    statistics: min=41616d6677666c71656f max=5a7a7a7774677a787874 null_count=0 distinct_count=- num_values=-
+row_group[9]: num_rows=1000 total_byte_size=43254 file_offset=- total_compressed_size=389482 ordinal=-22282
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=397499 index_page_offset=- dictionary_page_offset=389482
+    statistics: min=2923000000000000 max=1027000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=406826 index_page_offset=- dictionary_page_offset=398825
+    statistics: min=8777000000000000 max=77d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9255 total_compressed_size=9255 data_page_offset=416081 index_page_offset=- dictionary_page_offset=408152
+    statistics: min=c213000000000000 max=4c47010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=431426 index_page_offset=- dictionary_page_offset=417407
+    statistics: min=41616d71706673797961 max=5a7a776276686e677872 null_count=0 distinct_count=- num_values=-
+row_group[10]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=432736 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=440753 index_page_offset=- dictionary_page_offset=432736
+    statistics: min=1127000000000000 max=f82a000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=450072 index_page_offset=- dictionary_page_offset=442079
+    statistics: min=3b76000000000000 max=7bd0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=459351 index_page_offset=- dictionary_page_offset=451398
+    statistics: min=0014000000000000 max=d54f010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=474696 index_page_offset=- dictionary_page_offset=460677
+    statistics: min=416161666776796f6d78 max=5a7a6e74796679707177 null_count=0 distinct_count=- num_values=-
+row_group[11]: num_rows=1000 total_byte_size=43318 file_offset=- total_compressed_size=476006 ordinal=-22218
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=484023 index_page_offset=- dictionary_page_offset=476006
+    statistics: min=f92a000000000000 max=e02e000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=493358 index_page_offset=- dictionary_page_offset=485349
+    statistics: min=2f76000000000000 max=30d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=502669 index_page_offset=- dictionary_page_offset=494684
+    statistics: min=a813000000000000 max=8c52010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=518014 index_page_offset=- dictionary_page_offset=503995
+    statistics: min=4161636f766966797279 max=5a7a77636e64786f6a75 null_count=0 distinct_count=- num_values=-
+row_group[12]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=519324 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=527341 index_page_offset=- dictionary_page_offset=519324
+    statistics: min=e12e000000000000 max=c832000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=536660 index_page_offset=- dictionary_page_offset=528667
+    statistics: min=6778000000000000 max=d0cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=545939 index_page_offset=- dictionary_page_offset=537986
+    statistics: min=1c16000000000000 max=554f010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=561284 index_page_offset=- dictionary_page_offset=547265
+    statistics: min=4162647369737373656d max=5a7a77636d637874766e null_count=0 distinct_count=- num_values=-
+row_group[13]: num_rows=1000 total_byte_size=43262 file_offset=- total_compressed_size=562594 ordinal=-22274
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=570611 index_page_offset=- dictionary_page_offset=562594
+    statistics: min=c932000000000000 max=b036000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=579930 index_page_offset=- dictionary_page_offset=571937
+    statistics: min=ff76000000000000 max=facf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9271 total_compressed_size=9271 data_page_offset=589201 index_page_offset=- dictionary_page_offset=581256
+    statistics: min=f314000000000000 max=fb4c010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=604546 index_page_offset=- dictionary_page_offset=590527
+    statistics: min=41617464626e7271696f max=5a7a7678686d61706470 null_count=0 distinct_count=- num_values=-
+row_group[14]: num_rows=1000 total_byte_size=43246 file_offset=- total_compressed_size=605856 ordinal=-22290
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=613873 index_page_offset=- dictionary_page_offset=605856
+    statistics: min=b136000000000000 max=983a000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=623184 index_page_offset=- dictionary_page_offset=615199
+    statistics: min=3a75000000000000 max=aece030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9263 total_compressed_size=9263 data_page_offset=632447 index_page_offset=- dictionary_page_offset=624510
+    statistics: min=1d13000000000000 max=1352010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=647792 index_page_offset=- dictionary_page_offset=633773
+    statistics: min=41616f73647363697a64 max=5a7a7a6d70636c75717a null_count=0 distinct_count=- num_values=-
+row_group[15]: num_rows=1000 total_byte_size=43262 file_offset=- total_compressed_size=649102 ordinal=-22274
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=657119 index_page_offset=- dictionary_page_offset=649102
+    statistics: min=993a000000000000 max=803e000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=666446 index_page_offset=- dictionary_page_offset=658445
+    statistics: min=5e76000000000000 max=12d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9263 total_compressed_size=9263 data_page_offset=675709 index_page_offset=- dictionary_page_offset=667772
+    statistics: min=ce12000000000000 max=5347010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=691054 index_page_offset=- dictionary_page_offset=677035
+    statistics: min=41627477706474646b69 max=5a7a6b78736468726664 null_count=0 distinct_count=- num_values=-
+row_group[16]: num_rows=1000 total_byte_size=43318 file_offset=- total_compressed_size=692364 ordinal=-22218
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=700381 index_page_offset=- dictionary_page_offset=692364
+    statistics: min=813e000000000000 max=6842000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=709716 index_page_offset=- dictionary_page_offset=701707
+    statistics: min=6c75000000000000 max=31d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=719027 index_page_offset=- dictionary_page_offset=711042
+    statistics: min=ba13000000000000 max=8a46010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=734372 index_page_offset=- dictionary_page_offset=720353
+    statistics: min=41616d76747366697174 max=5a7a787378757373736c null_count=0 distinct_count=- num_values=-
+row_group[17]: num_rows=1000 total_byte_size=43302 file_offset=- total_compressed_size=735682 ordinal=-22234
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=743699 index_page_offset=- dictionary_page_offset=735682
+    statistics: min=6942000000000000 max=5046000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=753018 index_page_offset=- dictionary_page_offset=745025
+    statistics: min=4f75000000000000 max=31cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=762329 index_page_offset=- dictionary_page_offset=754344
+    statistics: min=4416000000000000 max=6743010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=777674 index_page_offset=- dictionary_page_offset=763655
+    statistics: min=41636b77677a64737575 max=5a796473736e77706e6f null_count=0 distinct_count=- num_values=-
+row_group[18]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=778984 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=787001 index_page_offset=- dictionary_page_offset=778984
+    statistics: min=5146000000000000 max=384a000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=796304 index_page_offset=- dictionary_page_offset=788327
+    statistics: min=0d77000000000000 max=bdce030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=805615 index_page_offset=- dictionary_page_offset=797630
+    statistics: min=4214000000000000 max=074a010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=820960 index_page_offset=- dictionary_page_offset=806941
+    statistics: min=41616f6c73796a766469 max=5a7a7a797677696b6671 null_count=0 distinct_count=- num_values=-
+row_group[19]: num_rows=1000 total_byte_size=43310 file_offset=- total_compressed_size=822270 ordinal=-22226
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=830287 index_page_offset=- dictionary_page_offset=822270
+    statistics: min=394a000000000000 max=204e000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=839614 index_page_offset=- dictionary_page_offset=831613
+    statistics: min=7b75000000000000 max=dacf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=848925 index_page_offset=- dictionary_page_offset=840940
+    statistics: min=d613000000000000 max=4f47010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=864270 index_page_offset=- dictionary_page_offset=850251
+    statistics: min=41616a62666f6e766769 max=5a796f68667675726178 null_count=0 distinct_count=- num_values=-
+row_group[20]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=865580 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=873597 index_page_offset=- dictionary_page_offset=865580
+    statistics: min=214e000000000000 max=0852000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=882916 index_page_offset=- dictionary_page_offset=874923
+    statistics: min=8575000000000000 max=fecd030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=892195 index_page_offset=- dictionary_page_offset=884242
+    statistics: min=8d13000000000000 max=714b010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=907540 index_page_offset=- dictionary_page_offset=893521
+    statistics: min=41616c6e637962787979 max=5a7a796b76627a786267 null_count=0 distinct_count=- num_values=-
+row_group[21]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=908850 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=916867 index_page_offset=- dictionary_page_offset=908850
+    statistics: min=0952000000000000 max=f055000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=926178 index_page_offset=- dictionary_page_offset=918193
+    statistics: min=2976000000000000 max=1bd0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=935465 index_page_offset=- dictionary_page_offset=927504
+    statistics: min=9a12000000000000 max=ba45010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=950810 index_page_offset=- dictionary_page_offset=936791
+    statistics: min=4164797a6f7667647967 max=5a7a736e6d776a6e7376 null_count=0 distinct_count=- num_values=-
+row_group[22]: num_rows=1000 total_byte_size=43238 file_offset=- total_compressed_size=952120 ordinal=-22298
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=960137 index_page_offset=- dictionary_page_offset=952120
+    statistics: min=f155000000000000 max=d859000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=969440 index_page_offset=- dictionary_page_offset=961463
+    statistics: min=fc75000000000000 max=d1cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9263 total_compressed_size=9263 data_page_offset=978703 index_page_offset=- dictionary_page_offset=970766
+    statistics: min=c312000000000000 max=f04b010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=994048 index_page_offset=- dictionary_page_offset=980029
+    statistics: min=416175766c7563706165 max=5a7965746e6867796b6c null_count=0 distinct_count=- num_values=-
+row_group[23]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=995358 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1003375 index_page_offset=- dictionary_page_offset=995358
+    statistics: min=d959000000000000 max=c05d000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=1012710 index_page_offset=- dictionary_page_offset=1004701
+    statistics: min=5977000000000000 max=87d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=1021989 index_page_offset=- dictionary_page_offset=1014036
+    statistics: min=2d15000000000000 max=3b4b010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1037334 index_page_offset=- dictionary_page_offset=1023315
+    statistics: min=416165736a7464637674 max=5a79646f616c61736473 null_count=0 distinct_count=- num_values=-
+row_group[24]: num_rows=1000 total_byte_size=43302 file_offset=- total_compressed_size=1038644 ordinal=-22234
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1046661 index_page_offset=- dictionary_page_offset=1038644
+    statistics: min=c15d000000000000 max=a861000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1056004 index_page_offset=- dictionary_page_offset=1047987
+    statistics: min=6675000000000000 max=36ce030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=1065291 index_page_offset=- dictionary_page_offset=1057330
+    statistics: min=9b13000000000000 max=0c52010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1080636 index_page_offset=- dictionary_page_offset=1066617
+    statistics: min=4161797a6e6569636271 max=5a7a69787863777a786c null_count=0 distinct_count=- num_values=-
+row_group[25]: num_rows=1000 total_byte_size=43294 file_offset=- total_compressed_size=1081946 ordinal=-22242
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1089963 index_page_offset=- dictionary_page_offset=1081946
+    statistics: min=a961000000000000 max=9065000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=1099282 index_page_offset=- dictionary_page_offset=1091289
+    statistics: min=8075000000000000 max=b6cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=1108585 index_page_offset=- dictionary_page_offset=1100608
+    statistics: min=5514000000000000 max=e54e010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1123930 index_page_offset=- dictionary_page_offset=1109911
+    statistics: min=41636d69736f65777a6c max=5a7a686d716e766b6e66 null_count=0 distinct_count=- num_values=-
+row_group[26]: num_rows=1000 total_byte_size=43326 file_offset=- total_compressed_size=1125240 ordinal=-22210
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1133257 index_page_offset=- dictionary_page_offset=1125240
+    statistics: min=9165000000000000 max=7869000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1142600 index_page_offset=- dictionary_page_offset=1134583
+    statistics: min=8478000000000000 max=17ce030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=1151911 index_page_offset=- dictionary_page_offset=1143926
+    statistics: min=eb12000000000000 max=ef4a010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1167256 index_page_offset=- dictionary_page_offset=1153237
+    statistics: min=41616371716b6e786465 max=5a7a79676b7769707176 null_count=0 distinct_count=- num_values=-
+row_group[27]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=1168566 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1176583 index_page_offset=- dictionary_page_offset=1168566
+    statistics: min=7969000000000000 max=606d000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=1185902 index_page_offset=- dictionary_page_offset=1177909
+    statistics: min=3375000000000000 max=56cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=1195197 index_page_offset=- dictionary_page_offset=1187228
+    statistics: min=9813000000000000 max=b243010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1210542 index_page_offset=- dictionary_page_offset=1196523
+    statistics: min=41616265676d61776e6d max=5a7a6871636963727772 null_count=0 distinct_count=- num_values=-
+row_group[28]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=1211852 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1219869 index_page_offset=- dictionary_page_offset=1211852
+    statistics: min=616d000000000000 max=4871000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=1229204 index_page_offset=- dictionary_page_offset=1221195
+    statistics: min=e875000000000000 max=13d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9263 total_compressed_size=9263 data_page_offset=1238467 index_page_offset=- dictionary_page_offset=1230530
+    statistics: min=4f16000000000000 max=3553010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1253812 index_page_offset=- dictionary_page_offset=1239793
+    statistics: min=41616663746c71717074 max=5a796e7966667976626a null_count=0 distinct_count=- num_values=-
+row_group[29]: num_rows=1000 total_byte_size=43310 file_offset=- total_compressed_size=1255122 ordinal=-22226
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1263139 index_page_offset=- dictionary_page_offset=1255122
+    statistics: min=4971000000000000 max=3075000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1272482 index_page_offset=- dictionary_page_offset=1264465
+    statistics: min=7e76000000000000 max=e5cd030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=1281777 index_page_offset=- dictionary_page_offset=1273808
+    statistics: min=1414000000000000 max=564a010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1297122 index_page_offset=- dictionary_page_offset=1283103
+    statistics: min=41616c6e6c6e676e7164 max=5a7a74796a716d726e64 null_count=0 distinct_count=- num_values=-
+row_group[30]: num_rows=1000 total_byte_size=43294 file_offset=- total_compressed_size=1298432 ordinal=-22242
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1306449 index_page_offset=- dictionary_page_offset=1298432
+    statistics: min=3175000000000000 max=1879000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=1315768 index_page_offset=- dictionary_page_offset=1307775
+    statistics: min=6475000000000000 max=87d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=1325071 index_page_offset=- dictionary_page_offset=1317094
+    statistics: min=0713000000000000 max=5d4d010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1340416 index_page_offset=- dictionary_page_offset=1326397
+    statistics: min=41616f64786474616c71 max=5a7a72776c78697a7479 null_count=0 distinct_count=- num_values=-
+row_group[31]: num_rows=1000 total_byte_size=43318 file_offset=- total_compressed_size=1341726 ordinal=-22218
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1349743 index_page_offset=- dictionary_page_offset=1341726
+    statistics: min=1979000000000000 max=007d000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1359086 index_page_offset=- dictionary_page_offset=1351069
+    statistics: min=aa75000000000000 max=d9ce030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=1368389 index_page_offset=- dictionary_page_offset=1360412
+    statistics: min=4513000000000000 max=b44f010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1383734 index_page_offset=- dictionary_page_offset=1369715
+    statistics: min=4162637869777a6e6f61 max=5a797868626761747465 null_count=0 distinct_count=- num_values=-
+row_group[32]: num_rows=1000 total_byte_size=43254 file_offset=- total_compressed_size=1385044 ordinal=-22282
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1393061 index_page_offset=- dictionary_page_offset=1385044
+    statistics: min=017d000000000000 max=e880000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1402404 index_page_offset=- dictionary_page_offset=1394387
+    statistics: min=2376000000000000 max=bfcf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9239 total_compressed_size=9239 data_page_offset=1411643 index_page_offset=- dictionary_page_offset=1403730
+    statistics: min=4b14000000000000 max=3541010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1426988 index_page_offset=- dictionary_page_offset=1412969
+    statistics: min=416172796d7062756f69 max=5a7a6c77746b75746565 null_count=0 distinct_count=- num_values=-
+row_group[33]: num_rows=1000 total_byte_size=43318 file_offset=- total_compressed_size=1428298 ordinal=-22218
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1436315 index_page_offset=- dictionary_page_offset=1428298
+    statistics: min=e980000000000000 max=d084000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=1445650 index_page_offset=- dictionary_page_offset=1437641
+    statistics: min=4775000000000000 max=25d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=1454961 index_page_offset=- dictionary_page_offset=1446976
+    statistics: min=3615000000000000 max=f648010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1470306 index_page_offset=- dictionary_page_offset=1456287
+    statistics: min=4162767a68707876726d max=5a797a6d76786872616c null_count=0 distinct_count=- num_values=-
+row_group[34]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=1471616 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1479633 index_page_offset=- dictionary_page_offset=1471616
+    statistics: min=d184000000000000 max=b888000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=1488968 index_page_offset=- dictionary_page_offset=1480959
+    statistics: min=b875000000000000 max=47d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9263 total_compressed_size=9263 data_page_offset=1498231 index_page_offset=- dictionary_page_offset=1490294
+    statistics: min=3913000000000000 max=6e4d010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1513576 index_page_offset=- dictionary_page_offset=1499557
+    statistics: min=4161647371716862787a max=5a7a7073786770756a6b null_count=0 distinct_count=- num_values=-
+row_group[35]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=1514886 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1522903 index_page_offset=- dictionary_page_offset=1514886
+    statistics: min=b988000000000000 max=a08c000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=1532238 index_page_offset=- dictionary_page_offset=1524229
+    statistics: min=be75000000000000 max=e3cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=1541517 index_page_offset=- dictionary_page_offset=1533564
+    statistics: min=3c13000000000000 max=3848010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1556862 index_page_offset=- dictionary_page_offset=1542843
+    statistics: min=41637468657a6a6d7161 max=5a7a6868716372686561 null_count=0 distinct_count=- num_values=-
+row_group[36]: num_rows=1000 total_byte_size=43278 file_offset=- total_compressed_size=1558172 ordinal=-22258
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1566189 index_page_offset=- dictionary_page_offset=1558172
+    statistics: min=a18c000000000000 max=8890000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=1575516 index_page_offset=- dictionary_page_offset=1567515
+    statistics: min=a576000000000000 max=17d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=1584795 index_page_offset=- dictionary_page_offset=1576842
+    statistics: min=b713000000000000 max=d942010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1600140 index_page_offset=- dictionary_page_offset=1586121
+    statistics: min=4162726f746668617a77 max=5a7a776f6274757a6670 null_count=0 distinct_count=- num_values=-
+row_group[37]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=1601450 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1609467 index_page_offset=- dictionary_page_offset=1601450
+    statistics: min=8990000000000000 max=7094000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=1618786 index_page_offset=- dictionary_page_offset=1610793
+    statistics: min=1076000000000000 max=5ed0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=1628065 index_page_offset=- dictionary_page_offset=1620112
+    statistics: min=0b13000000000000 max=6549010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1643410 index_page_offset=- dictionary_page_offset=1629391
+    statistics: min=4162776c756d69796165 max=5a7a756a626174657378 null_count=0 distinct_count=- num_values=-
+row_group[38]: num_rows=1000 total_byte_size=43238 file_offset=- total_compressed_size=1644720 ordinal=-22298
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1652737 index_page_offset=- dictionary_page_offset=1644720
+    statistics: min=7194000000000000 max=5898000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=1662040 index_page_offset=- dictionary_page_offset=1654063
+    statistics: min=8977000000000000 max=6bd0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9263 total_compressed_size=9263 data_page_offset=1671303 index_page_offset=- dictionary_page_offset=1663366
+    statistics: min=4815000000000000 max=fc4a010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1686648 index_page_offset=- dictionary_page_offset=1672629
+    statistics: min=4161756e6d6e64706b6a max=5a7a66726b7974666f63 null_count=0 distinct_count=- num_values=-
+row_group[39]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=1687958 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1695975 index_page_offset=- dictionary_page_offset=1687958
+    statistics: min=5998000000000000 max=409c000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=1705294 index_page_offset=- dictionary_page_offset=1697301
+    statistics: min=6676000000000000 max=04d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=1714589 index_page_offset=- dictionary_page_offset=1706620
+    statistics: min=e911000000000000 max=d54c010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1729934 index_page_offset=- dictionary_page_offset=1715915
+    statistics: min=41647879737a7266616b max=5a7a777575766b6e6a6d null_count=0 distinct_count=- num_values=-
+row_group[40]: num_rows=1000 total_byte_size=43262 file_offset=- total_compressed_size=1731244 ordinal=-22274
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1739261 index_page_offset=- dictionary_page_offset=1731244
+    statistics: min=419c000000000000 max=28a0000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=1748580 index_page_offset=- dictionary_page_offset=1740587
+    statistics: min=f875000000000000 max=34d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9271 total_compressed_size=9271 data_page_offset=1757851 index_page_offset=- dictionary_page_offset=1749906
+    statistics: min=6713000000000000 max=444c010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1773196 index_page_offset=- dictionary_page_offset=1759177
+    statistics: min=4163616f677762677868 max=5a7a6c6e6872666b786a null_count=0 distinct_count=- num_values=-
+row_group[41]: num_rows=1000 total_byte_size=43294 file_offset=- total_compressed_size=1774506 ordinal=-22242
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1782523 index_page_offset=- dictionary_page_offset=1774506
+    statistics: min=29a0000000000000 max=10a4000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=1791850 index_page_offset=- dictionary_page_offset=1783849
+    statistics: min=1676000000000000 max=a2ce030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=1801145 index_page_offset=- dictionary_page_offset=1793176
+    statistics: min=9212000000000000 max=6c48010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1816490 index_page_offset=- dictionary_page_offset=1802471
+    statistics: min=41616b6d6c7975656171 max=5a7a776278646d72776a null_count=0 distinct_count=- num_values=-
+row_group[42]: num_rows=1000 total_byte_size=43302 file_offset=- total_compressed_size=1817800 ordinal=-22234
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1825817 index_page_offset=- dictionary_page_offset=1817800
+    statistics: min=11a4000000000000 max=f8a7000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1835160 index_page_offset=- dictionary_page_offset=1827143
+    statistics: min=5576000000000000 max=76cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=1844447 index_page_offset=- dictionary_page_offset=1836486
+    statistics: min=8815000000000000 max=7b4f010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1859792 index_page_offset=- dictionary_page_offset=1845773
+    statistics: min=41626c7071647674706e max=5a7a777778766d6b6866 null_count=0 distinct_count=- num_values=-
+row_group[43]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=1861102 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1869119 index_page_offset=- dictionary_page_offset=1861102
+    statistics: min=f9a7000000000000 max=e0ab000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=1878438 index_page_offset=- dictionary_page_offset=1870445
+    statistics: min=6075000000000000 max=d2cb030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=1887733 index_page_offset=- dictionary_page_offset=1879764
+    statistics: min=b515000000000000 max=7c51010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1903078 index_page_offset=- dictionary_page_offset=1889059
+    statistics: min=41616b7269726962636e max=5a79716c6466776a7076 null_count=0 distinct_count=- num_values=-
+row_group[44]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=1904388 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1912405 index_page_offset=- dictionary_page_offset=1904388
+    statistics: min=e1ab000000000000 max=c8af000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=1921716 index_page_offset=- dictionary_page_offset=1913731
+    statistics: min=bd75000000000000 max=d3cd030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=1931019 index_page_offset=- dictionary_page_offset=1923042
+    statistics: min=f913000000000000 max=704f010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1946364 index_page_offset=- dictionary_page_offset=1932345
+    statistics: min=4161616b797177637a64 max=5a797378716f7973736c null_count=0 distinct_count=- num_values=-
+row_group[45]: num_rows=1000 total_byte_size=43278 file_offset=- total_compressed_size=1947674 ordinal=-22258
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1955691 index_page_offset=- dictionary_page_offset=1947674
+    statistics: min=c9af000000000000 max=b0b3000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=1965002 index_page_offset=- dictionary_page_offset=1957017
+    statistics: min=8a75000000000000 max=34d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=1974297 index_page_offset=- dictionary_page_offset=1966328
+    statistics: min=6e14000000000000 max=d742010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=1989642 index_page_offset=- dictionary_page_offset=1975623
+    statistics: min=41626d72787463657469 max=5a79777379636e646771 null_count=0 distinct_count=- num_values=-
+row_group[46]: num_rows=1000 total_byte_size=43246 file_offset=- total_compressed_size=1990952 ordinal=-22290
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=1998969 index_page_offset=- dictionary_page_offset=1990952
+    statistics: min=b1b3000000000000 max=98b7000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9271 total_compressed_size=9271 data_page_offset=2008240 index_page_offset=- dictionary_page_offset=2000295
+    statistics: min=8075000000000000 max=fece030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=2017543 index_page_offset=- dictionary_page_offset=2009566
+    statistics: min=5515000000000000 max=674c010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2032888 index_page_offset=- dictionary_page_offset=2018869
+    statistics: min=41616177627665737a69 max=5a7a726c6f677a6e656b null_count=0 distinct_count=- num_values=-
+row_group[47]: num_rows=1000 total_byte_size=43302 file_offset=- total_compressed_size=2034198 ordinal=-22234
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2042215 index_page_offset=- dictionary_page_offset=2034198
+    statistics: min=99b7000000000000 max=80bb000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=2051550 index_page_offset=- dictionary_page_offset=2043541
+    statistics: min=b375000000000000 max=5cd0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=2060845 index_page_offset=- dictionary_page_offset=2052876
+    statistics: min=ad13000000000000 max=9c49010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2076190 index_page_offset=- dictionary_page_offset=2062171
+    statistics: min=416162726c716d6f6f76 max=5a7a7779716d79757967 null_count=0 distinct_count=- num_values=-
+row_group[48]: num_rows=1000 total_byte_size=43302 file_offset=- total_compressed_size=2077500 ordinal=-22234
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2085517 index_page_offset=- dictionary_page_offset=2077500
+    statistics: min=81bb000000000000 max=68bf000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=2094828 index_page_offset=- dictionary_page_offset=2086843
+    statistics: min=1d76000000000000 max=89cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=2104147 index_page_offset=- dictionary_page_offset=2096154
+    statistics: min=7612000000000000 max=fd4b010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2119492 index_page_offset=- dictionary_page_offset=2105473
+    statistics: min=4161726d6970696f6179 max=5a7a6b68706d6f636b63 null_count=0 distinct_count=- num_values=-
+row_group[49]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=2120802 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2128819 index_page_offset=- dictionary_page_offset=2120802
+    statistics: min=69bf000000000000 max=50c3000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=2138146 index_page_offset=- dictionary_page_offset=2130145
+    statistics: min=6475000000000000 max=9ecf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=2147433 index_page_offset=- dictionary_page_offset=2139472
+    statistics: min=2d13000000000000 max=5d51010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2162778 index_page_offset=- dictionary_page_offset=2148759
+    statistics: min=41616a6f7576667a7472 max=5a7a75667870746c7173 null_count=0 distinct_count=- num_values=-
+row_group[50]: num_rows=1000 total_byte_size=43206 file_offset=- total_compressed_size=2164088 ordinal=-22330
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2172105 index_page_offset=- dictionary_page_offset=2164088
+    statistics: min=51c3000000000000 max=38c7000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=2181432 index_page_offset=- dictionary_page_offset=2173431
+    statistics: min=6c75000000000000 max=a4cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9207 total_compressed_size=9207 data_page_offset=2190639 index_page_offset=- dictionary_page_offset=2182758
+    statistics: min=2815000000000000 max=7649010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2205984 index_page_offset=- dictionary_page_offset=2191965
+    statistics: min=416570696c72616b6e76 max=5a7a6a65777765776f66 null_count=0 distinct_count=- num_values=-
+row_group[51]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=2207294 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2215311 index_page_offset=- dictionary_page_offset=2207294
+    statistics: min=39c7000000000000 max=20cb000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=2224646 index_page_offset=- dictionary_page_offset=2216637
+    statistics: min=2c76000000000000 max=23cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=2233925 index_page_offset=- dictionary_page_offset=2225972
+    statistics: min=9b12000000000000 max=c551010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2249270 index_page_offset=- dictionary_page_offset=2235251
+    statistics: min=41616773646f71726777 max=5a787a6478746e646e64 null_count=0 distinct_count=- num_values=-
+row_group[52]: num_rows=1000 total_byte_size=43238 file_offset=- total_compressed_size=2250580 ordinal=-22298
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2258597 index_page_offset=- dictionary_page_offset=2250580
+    statistics: min=21cb000000000000 max=08cf000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=2267932 index_page_offset=- dictionary_page_offset=2259923
+    statistics: min=8875000000000000 max=91cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9231 total_compressed_size=9231 data_page_offset=2277163 index_page_offset=- dictionary_page_offset=2269258
+    statistics: min=b016000000000000 max=1551010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2292508 index_page_offset=- dictionary_page_offset=2278489
+    statistics: min=41626d716d7170776d6d max=5a7a6479746c7765666f null_count=0 distinct_count=- num_values=-
+row_group[53]: num_rows=1000 total_byte_size=43278 file_offset=- total_compressed_size=2293818 ordinal=-22258
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2301835 index_page_offset=- dictionary_page_offset=2293818
+    statistics: min=09cf000000000000 max=f0d2000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=2311154 index_page_offset=- dictionary_page_offset=2303161
+    statistics: min=9879000000000000 max=61cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=2320441 index_page_offset=- dictionary_page_offset=2312480
+    statistics: min=4f14000000000000 max=e24b010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2335786 index_page_offset=- dictionary_page_offset=2321767
+    statistics: min=41617774776d67766362 max=5a7a786e626572657a66 null_count=0 distinct_count=- num_values=-
+row_group[54]: num_rows=1000 total_byte_size=43294 file_offset=- total_compressed_size=2337096 ordinal=-22242
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2345113 index_page_offset=- dictionary_page_offset=2337096
+    statistics: min=f1d2000000000000 max=d8d6000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=2354440 index_page_offset=- dictionary_page_offset=2346439
+    statistics: min=6675000000000000 max=2dce030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=2363735 index_page_offset=- dictionary_page_offset=2355766
+    statistics: min=3d13000000000000 max=3f45010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2379080 index_page_offset=- dictionary_page_offset=2365061
+    statistics: min=4161616276797361657a max=5a786965637672796c6e null_count=0 distinct_count=- num_values=-
+row_group[55]: num_rows=1000 total_byte_size=43238 file_offset=- total_compressed_size=2380390 ordinal=-22298
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2388407 index_page_offset=- dictionary_page_offset=2380390
+    statistics: min=d9d6000000000000 max=c0da000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=2397726 index_page_offset=- dictionary_page_offset=2389733
+    statistics: min=9677000000000000 max=becf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9247 total_compressed_size=9247 data_page_offset=2406973 index_page_offset=- dictionary_page_offset=2399052
+    statistics: min=9215000000000000 max=8441010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2422318 index_page_offset=- dictionary_page_offset=2408299
+    statistics: min=416267687a62656c6d6e max=5a797967626979647878 null_count=0 distinct_count=- num_values=-
+row_group[56]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=2423628 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2431645 index_page_offset=- dictionary_page_offset=2423628
+    statistics: min=c1da000000000000 max=a8de000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=2440980 index_page_offset=- dictionary_page_offset=2432971
+    statistics: min=3075000000000000 max=c0ce030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=2450259 index_page_offset=- dictionary_page_offset=2442306
+    statistics: min=6215000000000000 max=d74c010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2465604 index_page_offset=- dictionary_page_offset=2451585
+    statistics: min=41616370766e726a6b76 max=5a7a7a6b636a626e7762 null_count=0 distinct_count=- num_values=-
+row_group[57]: num_rows=1000 total_byte_size=43262 file_offset=- total_compressed_size=2466914 ordinal=-22274
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2474931 index_page_offset=- dictionary_page_offset=2466914
+    statistics: min=a9de000000000000 max=90e2000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=2484250 index_page_offset=- dictionary_page_offset=2476257
+    statistics: min=5d75000000000000 max=c4cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9271 total_compressed_size=9271 data_page_offset=2493521 index_page_offset=- dictionary_page_offset=2485576
+    statistics: min=9e14000000000000 max=5c4f010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2508866 index_page_offset=- dictionary_page_offset=2494847
+    statistics: min=41616d6d686c74617470 max=5a7a7268757575696561 null_count=0 distinct_count=- num_values=-
+row_group[58]: num_rows=1000 total_byte_size=43294 file_offset=- total_compressed_size=2510176 ordinal=-22242
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2518193 index_page_offset=- dictionary_page_offset=2510176
+    statistics: min=91e2000000000000 max=78e6000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=2527512 index_page_offset=- dictionary_page_offset=2519519
+    statistics: min=c175000000000000 max=2dd0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=2536815 index_page_offset=- dictionary_page_offset=2528838
+    statistics: min=e611000000000000 max=414f010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2552160 index_page_offset=- dictionary_page_offset=2538141
+    statistics: min=416263717a6d6d7a6f6f max=5a7a6a7a666f7a6f647a null_count=0 distinct_count=- num_values=-
+row_group[59]: num_rows=1000 total_byte_size=43318 file_offset=- total_compressed_size=2553470 ordinal=-22218
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2561487 index_page_offset=- dictionary_page_offset=2553470
+    statistics: min=79e6000000000000 max=60ea000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2570830 index_page_offset=- dictionary_page_offset=2562813
+    statistics: min=d375000000000000 max=87d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=2580133 index_page_offset=- dictionary_page_offset=2572156
+    statistics: min=e013000000000000 max=8f45010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2595478 index_page_offset=- dictionary_page_offset=2581459
+    statistics: min=41616a78756b67706975 max=5a7a6f656f677a6c6e65 null_count=0 distinct_count=- num_values=-
+row_group[60]: num_rows=1000 total_byte_size=43190 file_offset=- total_compressed_size=2596788 ordinal=-22346
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2604805 index_page_offset=- dictionary_page_offset=2596788
+    statistics: min=61ea000000000000 max=48ee000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=2614116 index_page_offset=- dictionary_page_offset=2606131
+    statistics: min=4c76000000000000 max=54d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9207 total_compressed_size=9207 data_page_offset=2623323 index_page_offset=- dictionary_page_offset=2615442
+    statistics: min=b214000000000000 max=ed50010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2638668 index_page_offset=- dictionary_page_offset=2624649
+    statistics: min=41626d6e716572796476 max=5a7a7a6f7a6e62757161 null_count=0 distinct_count=- num_values=-
+row_group[61]: num_rows=1000 total_byte_size=43294 file_offset=- total_compressed_size=2639978 ordinal=-22242
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2647995 index_page_offset=- dictionary_page_offset=2639978
+    statistics: min=49ee000000000000 max=30f2000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=2657330 index_page_offset=- dictionary_page_offset=2649321
+    statistics: min=a275000000000000 max=43d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=2666617 index_page_offset=- dictionary_page_offset=2658656
+    statistics: min=8914000000000000 max=dd53010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2681962 index_page_offset=- dictionary_page_offset=2667943
+    statistics: min=41627670766e6c707877 max=5a796c7664776e656466 null_count=0 distinct_count=- num_values=-
+row_group[62]: num_rows=1000 total_byte_size=43278 file_offset=- total_compressed_size=2683272 ordinal=-22258
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2691289 index_page_offset=- dictionary_page_offset=2683272
+    statistics: min=31f2000000000000 max=18f6000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=2700608 index_page_offset=- dictionary_page_offset=2692615
+    statistics: min=4575000000000000 max=53d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=2709895 index_page_offset=- dictionary_page_offset=2701934
+    statistics: min=a112000000000000 max=e44e010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2725240 index_page_offset=- dictionary_page_offset=2711221
+    statistics: min=4161676978697870776c max=5a7a6b71676165666c75 null_count=0 distinct_count=- num_values=-
+row_group[63]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=2726550 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2734567 index_page_offset=- dictionary_page_offset=2726550
+    statistics: min=19f6000000000000 max=00fa000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=2743894 index_page_offset=- dictionary_page_offset=2735893
+    statistics: min=8876000000000000 max=24cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9271 total_compressed_size=9271 data_page_offset=2753165 index_page_offset=- dictionary_page_offset=2745220
+    statistics: min=af16000000000000 max=a950010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2768510 index_page_offset=- dictionary_page_offset=2754491
+    statistics: min=4163656c696f6267656e max=5a7a7478657172776767 null_count=0 distinct_count=- num_values=-
+row_group[64]: num_rows=1000 total_byte_size=43278 file_offset=- total_compressed_size=2769820 ordinal=-22258
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2777837 index_page_offset=- dictionary_page_offset=2769820
+    statistics: min=01fa000000000000 max=e8fd000000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=2787172 index_page_offset=- dictionary_page_offset=2779163
+    statistics: min=ea75000000000000 max=7fcf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9271 total_compressed_size=9271 data_page_offset=2796443 index_page_offset=- dictionary_page_offset=2788498
+    statistics: min=eb13000000000000 max=1e4b010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2811788 index_page_offset=- dictionary_page_offset=2797769
+    statistics: min=416264686f626a697568 max=5a7a766f726570716c70 null_count=0 distinct_count=- num_values=-
+row_group[65]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=2813098 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2821115 index_page_offset=- dictionary_page_offset=2813098
+    statistics: min=e9fd000000000000 max=d001010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=2830450 index_page_offset=- dictionary_page_offset=2822441
+    statistics: min=cc75000000000000 max=64ce030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=2839729 index_page_offset=- dictionary_page_offset=2831776
+    statistics: min=7012000000000000 max=e252010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2855074 index_page_offset=- dictionary_page_offset=2841055
+    statistics: min=41616f66626d73707167 max=5a7a6d6865706278676e null_count=0 distinct_count=- num_values=-
+row_group[66]: num_rows=1000 total_byte_size=43302 file_offset=- total_compressed_size=2856384 ordinal=-22234
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2864401 index_page_offset=- dictionary_page_offset=2856384
+    statistics: min=d101010000000000 max=b805010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2873744 index_page_offset=- dictionary_page_offset=2865727
+    statistics: min=a975000000000000 max=76cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=2883031 index_page_offset=- dictionary_page_offset=2875070
+    statistics: min=2d13000000000000 max=da4b010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2898376 index_page_offset=- dictionary_page_offset=2884357
+    statistics: min=41626e77736779777a70 max=5a7a6874636a6664676a null_count=0 distinct_count=- num_values=-
+row_group[67]: num_rows=1000 total_byte_size=43278 file_offset=- total_compressed_size=2899686 ordinal=-22258
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2907703 index_page_offset=- dictionary_page_offset=2899686
+    statistics: min=b905010000000000 max=a009010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=2917022 index_page_offset=- dictionary_page_offset=2909029
+    statistics: min=5975000000000000 max=d1cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=2926309 index_page_offset=- dictionary_page_offset=2918348
+    statistics: min=6c14000000000000 max=3c4e010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2941654 index_page_offset=- dictionary_page_offset=2927635
+    statistics: min=4161616977777365696f max=5a79666867626370767a null_count=0 distinct_count=- num_values=-
+row_group[68]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=2942964 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2950981 index_page_offset=- dictionary_page_offset=2942964
+    statistics: min=a109010000000000 max=880d010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2960324 index_page_offset=- dictionary_page_offset=2952307
+    statistics: min=4975000000000000 max=61cd030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9271 total_compressed_size=9271 data_page_offset=2969595 index_page_offset=- dictionary_page_offset=2961650
+    statistics: min=4114000000000000 max=6e4f010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=2984940 index_page_offset=- dictionary_page_offset=2970921
+    statistics: min=416165777a7361657663 max=5a7a6878746766726963 null_count=0 distinct_count=- num_values=-
+row_group[69]: num_rows=1000 total_byte_size=43294 file_offset=- total_compressed_size=2986250 ordinal=-22242
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=2994267 index_page_offset=- dictionary_page_offset=2986250
+    statistics: min=890d010000000000 max=7011010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=3003602 index_page_offset=- dictionary_page_offset=2995593
+    statistics: min=c475000000000000 max=88d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=3012889 index_page_offset=- dictionary_page_offset=3004928
+    statistics: min=2513000000000000 max=a444010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3028234 index_page_offset=- dictionary_page_offset=3014215
+    statistics: min=4161686667786475737a max=5a7a71646b6c68626e66 null_count=0 distinct_count=- num_values=-
+row_group[70]: num_rows=1000 total_byte_size=43294 file_offset=- total_compressed_size=3029544 ordinal=-22242
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3037561 index_page_offset=- dictionary_page_offset=3029544
+    statistics: min=7111010000000000 max=5815010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=3046888 index_page_offset=- dictionary_page_offset=3038887
+    statistics: min=9f75000000000000 max=72d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=3056183 index_page_offset=- dictionary_page_offset=3048214
+    statistics: min=7613000000000000 max=1f51010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3071528 index_page_offset=- dictionary_page_offset=3057509
+    statistics: min=41626e7872656f796861 max=5a7a70746369656f6e67 null_count=0 distinct_count=- num_values=-
+row_group[71]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=3072838 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3080855 index_page_offset=- dictionary_page_offset=3072838
+    statistics: min=5915010000000000 max=4019010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=3090182 index_page_offset=- dictionary_page_offset=3082181
+    statistics: min=e076000000000000 max=fece030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9271 total_compressed_size=9271 data_page_offset=3099453 index_page_offset=- dictionary_page_offset=3091508
+    statistics: min=5014000000000000 max=a450010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3114798 index_page_offset=- dictionary_page_offset=3100779
+    statistics: min=4162747361707477766c max=5a797961676b7366666e null_count=0 distinct_count=- num_values=-
+row_group[72]: num_rows=1000 total_byte_size=43310 file_offset=- total_compressed_size=3116108 ordinal=-22226
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3124125 index_page_offset=- dictionary_page_offset=3116108
+    statistics: min=4119010000000000 max=281d010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=3133460 index_page_offset=- dictionary_page_offset=3125451
+    statistics: min=8b77000000000000 max=64d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=3142763 index_page_offset=- dictionary_page_offset=3134786
+    statistics: min=b315000000000000 max=ce4a010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3158108 index_page_offset=- dictionary_page_offset=3144089
+    statistics: min=41626e777a7a6b756362 max=5a79666979676c756c63 null_count=0 distinct_count=- num_values=-
+row_group[73]: num_rows=1000 total_byte_size=43246 file_offset=- total_compressed_size=3159418 ordinal=-22290
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3167435 index_page_offset=- dictionary_page_offset=3159418
+    statistics: min=291d010000000000 max=1021010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=3176754 index_page_offset=- dictionary_page_offset=3168761
+    statistics: min=bf75000000000000 max=0dce030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9255 total_compressed_size=9255 data_page_offset=3186009 index_page_offset=- dictionary_page_offset=3178080
+    statistics: min=9317000000000000 max=2149010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3201354 index_page_offset=- dictionary_page_offset=3187335
+    statistics: min=4164786d706267737672 max=5a7a796572737a757965 null_count=0 distinct_count=- num_values=-
+row_group[74]: num_rows=1000 total_byte_size=43262 file_offset=- total_compressed_size=3202664 ordinal=-22274
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3210681 index_page_offset=- dictionary_page_offset=3202664
+    statistics: min=1121010000000000 max=f824010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=3220016 index_page_offset=- dictionary_page_offset=3212007
+    statistics: min=2a77000000000000 max=87d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9255 total_compressed_size=9255 data_page_offset=3229271 index_page_offset=- dictionary_page_offset=3221342
+    statistics: min=4d13000000000000 max=ac50010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3244616 index_page_offset=- dictionary_page_offset=3230597
+    statistics: min=41616c74716169667a70 max=5a7a6c75696477707a68 null_count=0 distinct_count=- num_values=-
+row_group[75]: num_rows=1000 total_byte_size=43278 file_offset=- total_compressed_size=3245926 ordinal=-22258
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3253943 index_page_offset=- dictionary_page_offset=3245926
+    statistics: min=f924010000000000 max=e028010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=3263254 index_page_offset=- dictionary_page_offset=3255269
+    statistics: min=7275000000000000 max=8fd0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=3272549 index_page_offset=- dictionary_page_offset=3264580
+    statistics: min=3113000000000000 max=774f010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3287894 index_page_offset=- dictionary_page_offset=3273875
+    statistics: min=41616277776a77746d6a max=5a7a756d636f6969626a null_count=0 distinct_count=- num_values=-
+row_group[76]: num_rows=1000 total_byte_size=43278 file_offset=- total_compressed_size=3289204 ordinal=-22258
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3297221 index_page_offset=- dictionary_page_offset=3289204
+    statistics: min=e128010000000000 max=c82c010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=3306540 index_page_offset=- dictionary_page_offset=3298547
+    statistics: min=4976000000000000 max=3dcd030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=3315827 index_page_offset=- dictionary_page_offset=3307866
+    statistics: min=f811000000000000 max=7e48010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3331172 index_page_offset=- dictionary_page_offset=3317153
+    statistics: min=41617471696472656f74 max=5a797473676777796d6a null_count=0 distinct_count=- num_values=-
+row_group[77]: num_rows=1000 total_byte_size=43302 file_offset=- total_compressed_size=3332482 ordinal=-22234
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3340499 index_page_offset=- dictionary_page_offset=3332482
+    statistics: min=c92c010000000000 max=b030010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=3349834 index_page_offset=- dictionary_page_offset=3341825
+    statistics: min=9b75000000000000 max=21d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=3359129 index_page_offset=- dictionary_page_offset=3351160
+    statistics: min=8e13000000000000 max=b04e010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3374474 index_page_offset=- dictionary_page_offset=3360455
+    statistics: min=416169706d6764666261 max=5a7a7a707469767a6a72 null_count=0 distinct_count=- num_values=-
+row_group[78]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=3375784 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3383801 index_page_offset=- dictionary_page_offset=3375784
+    statistics: min=b130010000000000 max=9834010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=3393120 index_page_offset=- dictionary_page_offset=3385127
+    statistics: min=8375000000000000 max=49ce030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=3402399 index_page_offset=- dictionary_page_offset=3394446
+    statistics: min=a812000000000000 max=f049010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3417744 index_page_offset=- dictionary_page_offset=3403725
+    statistics: min=41616272776661797072 max=5a787770716971686c6d null_count=0 distinct_count=- num_values=-
+row_group[79]: num_rows=1000 total_byte_size=43310 file_offset=- total_compressed_size=3419054 ordinal=-22226
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3427071 index_page_offset=- dictionary_page_offset=3419054
+    statistics: min=9934010000000000 max=8038010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=3436406 index_page_offset=- dictionary_page_offset=3428397
+    statistics: min=1676000000000000 max=12d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9303 total_compressed_size=9303 data_page_offset=3445709 index_page_offset=- dictionary_page_offset=3437732
+    statistics: min=fe12000000000000 max=f14b010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3461054 index_page_offset=- dictionary_page_offset=3447035
+    statistics: min=4161646365736e6d7262 max=5a797567717762717162 null_count=0 distinct_count=- num_values=-
+row_group[80]: num_rows=1000 total_byte_size=43254 file_offset=- total_compressed_size=3462364 ordinal=-22282
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3470381 index_page_offset=- dictionary_page_offset=3462364
+    statistics: min=8138010000000000 max=683c010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=3479700 index_page_offset=- dictionary_page_offset=3471707
+    statistics: min=0f77000000000000 max=61cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9263 total_compressed_size=9263 data_page_offset=3488963 index_page_offset=- dictionary_page_offset=3481026
+    statistics: min=2814000000000000 max=e94f010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3504308 index_page_offset=- dictionary_page_offset=3490289
+    statistics: min=4161666b777a72757977 max=5a7a7769676268626567 null_count=0 distinct_count=- num_values=-
+row_group[81]: num_rows=1000 total_byte_size=43294 file_offset=- total_compressed_size=3505618 ordinal=-22242
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3513635 index_page_offset=- dictionary_page_offset=3505618
+    statistics: min=693c010000000000 max=5040010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=3522962 index_page_offset=- dictionary_page_offset=3514961
+    statistics: min=e275000000000000 max=84d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=3532257 index_page_offset=- dictionary_page_offset=3524288
+    statistics: min=0b13000000000000 max=9a48010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3547602 index_page_offset=- dictionary_page_offset=3533583
+    statistics: min=416175656b6268747468 max=5a7a6d707a616368676f null_count=0 distinct_count=- num_values=-
+row_group[82]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=3548912 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3556929 index_page_offset=- dictionary_page_offset=3548912
+    statistics: min=5140010000000000 max=3844010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=3566248 index_page_offset=- dictionary_page_offset=3558255
+    statistics: min=3175000000000000 max=0dd0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=3575527 index_page_offset=- dictionary_page_offset=3567574
+    statistics: min=ca16000000000000 max=574e010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3590872 index_page_offset=- dictionary_page_offset=3576853
+    statistics: min=416177766c78736b7062 max=5a7a7068736970667461 null_count=0 distinct_count=- num_values=-
+row_group[83]: num_rows=1000 total_byte_size=43230 file_offset=- total_compressed_size=3592182 ordinal=-22306
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3600199 index_page_offset=- dictionary_page_offset=3592182
+    statistics: min=3944010000000000 max=2048010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=3609486 index_page_offset=- dictionary_page_offset=3601525
+    statistics: min=4475000000000000 max=33d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9271 total_compressed_size=9271 data_page_offset=3618757 index_page_offset=- dictionary_page_offset=3610812
+    statistics: min=b414000000000000 max=1051010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3634102 index_page_offset=- dictionary_page_offset=3620083
+    statistics: min=416163627a67666b697a max=5a7a767970666c69696d null_count=0 distinct_count=- num_values=-
+row_group[84]: num_rows=1000 total_byte_size=43262 file_offset=- total_compressed_size=3635412 ordinal=-22274
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3643429 index_page_offset=- dictionary_page_offset=3635412
+    statistics: min=2148010000000000 max=084c010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=3652764 index_page_offset=- dictionary_page_offset=3644755
+    statistics: min=6975000000000000 max=0ccf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9255 total_compressed_size=9255 data_page_offset=3662019 index_page_offset=- dictionary_page_offset=3654090
+    statistics: min=ee12000000000000 max=1a53010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3677364 index_page_offset=- dictionary_page_offset=3663345
+    statistics: min=416169656c7a71797163 max=5a7a6d79737171687567 null_count=0 distinct_count=- num_values=-
+row_group[85]: num_rows=1000 total_byte_size=43254 file_offset=- total_compressed_size=3678674 ordinal=-22282
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3686691 index_page_offset=- dictionary_page_offset=3678674
+    statistics: min=094c010000000000 max=f04f010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=3696018 index_page_offset=- dictionary_page_offset=3688017
+    statistics: min=6b77000000000000 max=3fcf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9255 total_compressed_size=9255 data_page_offset=3705273 index_page_offset=- dictionary_page_offset=3697344
+    statistics: min=3b14000000000000 max=0854010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3720618 index_page_offset=- dictionary_page_offset=3706599
+    statistics: min=41626e687a6c71786a63 max=5a7a6e777a6f65616972 null_count=0 distinct_count=- num_values=-
+row_group[86]: num_rows=1000 total_byte_size=43238 file_offset=- total_compressed_size=3721928 ordinal=-22298
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3729945 index_page_offset=- dictionary_page_offset=3721928
+    statistics: min=f14f010000000000 max=d853010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9295 total_compressed_size=9295 data_page_offset=3739240 index_page_offset=- dictionary_page_offset=3731271
+    statistics: min=4976000000000000 max=39d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9271 total_compressed_size=9271 data_page_offset=3748511 index_page_offset=- dictionary_page_offset=3740566
+    statistics: min=e513000000000000 max=4051010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3763856 index_page_offset=- dictionary_page_offset=3749837
+    statistics: min=41626877756477657079 max=5a79636270636a767561 null_count=0 distinct_count=- num_values=-
+row_group[87]: num_rows=1000 total_byte_size=43238 file_offset=- total_compressed_size=3765166 ordinal=-22298
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3773183 index_page_offset=- dictionary_page_offset=3765166
+    statistics: min=d953010000000000 max=c057010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=3782502 index_page_offset=- dictionary_page_offset=3774509
+    statistics: min=6d76000000000000 max=d3cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9247 total_compressed_size=9247 data_page_offset=3791749 index_page_offset=- dictionary_page_offset=3783828
+    statistics: min=9713000000000000 max=c650010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3807094 index_page_offset=- dictionary_page_offset=3793075
+    statistics: min=4162796a6e6e79626763 max=5a7975796d766f776973 null_count=0 distinct_count=- num_values=-
+row_group[88]: num_rows=1000 total_byte_size=43326 file_offset=- total_compressed_size=3808404 ordinal=-22210
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3816421 index_page_offset=- dictionary_page_offset=3808404
+    statistics: min=c157010000000000 max=a85b010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=3825756 index_page_offset=- dictionary_page_offset=3817747
+    statistics: min=5475000000000000 max=32cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=3835075 index_page_offset=- dictionary_page_offset=3827082
+    statistics: min=ed11000000000000 max=de4c010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3850420 index_page_offset=- dictionary_page_offset=3836401
+    statistics: min=41617567666769646273 max=5a7a7361626773767671 null_count=0 distinct_count=- num_values=-
+row_group[89]: num_rows=1000 total_byte_size=43262 file_offset=- total_compressed_size=3851730 ordinal=-22274
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3859747 index_page_offset=- dictionary_page_offset=3851730
+    statistics: min=a95b010000000000 max=905f010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=3869066 index_page_offset=- dictionary_page_offset=3861073
+    statistics: min=6e75000000000000 max=6ed0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9271 total_compressed_size=9271 data_page_offset=3878337 index_page_offset=- dictionary_page_offset=3870392
+    statistics: min=d713000000000000 max=6d46010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3893682 index_page_offset=- dictionary_page_offset=3879663
+    statistics: min=41616368616f65776362 max=5a7970756e746e6d6f78 null_count=0 distinct_count=- num_values=-
+row_group[90]: num_rows=1000 total_byte_size=43262 file_offset=- total_compressed_size=3894992 ordinal=-22274
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3903009 index_page_offset=- dictionary_page_offset=3894992
+    statistics: min=915f010000000000 max=7863010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=3912336 index_page_offset=- dictionary_page_offset=3904335
+    statistics: min=b575000000000000 max=39d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9263 total_compressed_size=9263 data_page_offset=3921599 index_page_offset=- dictionary_page_offset=3913662
+    statistics: min=0615000000000000 max=5747010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3936944 index_page_offset=- dictionary_page_offset=3922925
+    statistics: min=4161627370716f6b7169 max=5a7a6d7661707a69786c null_count=0 distinct_count=- num_values=-
+row_group[91]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=3938254 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3946271 index_page_offset=- dictionary_page_offset=3938254
+    statistics: min=7963010000000000 max=6067010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=3955598 index_page_offset=- dictionary_page_offset=3947597
+    statistics: min=9575000000000000 max=4ccf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=3964885 index_page_offset=- dictionary_page_offset=3956924
+    statistics: min=c312000000000000 max=2b4b010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=3980230 index_page_offset=- dictionary_page_offset=3966211
+    statistics: min=4162717361656c6a676f max=5a79726461707378756f null_count=0 distinct_count=- num_values=-
+row_group[92]: num_rows=1000 total_byte_size=43254 file_offset=- total_compressed_size=3981540 ordinal=-22282
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=3989557 index_page_offset=- dictionary_page_offset=3981540
+    statistics: min=6167010000000000 max=486b010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9311 total_compressed_size=9311 data_page_offset=3998868 index_page_offset=- dictionary_page_offset=3990883
+    statistics: min=9d75000000000000 max=05d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9271 total_compressed_size=9271 data_page_offset=4008139 index_page_offset=- dictionary_page_offset=4000194
+    statistics: min=3c13000000000000 max=0c40010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=4023484 index_page_offset=- dictionary_page_offset=4009465
+    statistics: min=416169736f797361746c max=5a7a687a6c616c627366 null_count=0 distinct_count=- num_values=-
+row_group[93]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=4024794 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=4032811 index_page_offset=- dictionary_page_offset=4024794
+    statistics: min=496b010000000000 max=306f010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=4042130 index_page_offset=- dictionary_page_offset=4034137
+    statistics: min=5c75000000000000 max=48d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9279 total_compressed_size=9279 data_page_offset=4051409 index_page_offset=- dictionary_page_offset=4043456
+    statistics: min=9415000000000000 max=e04f010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=4066754 index_page_offset=- dictionary_page_offset=4052735
+    statistics: min=41616a6a7a79726a6e68 max=5a7879706f786a707878 null_count=0 distinct_count=- num_values=-
+row_group[94]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=4068064 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=4076081 index_page_offset=- dictionary_page_offset=4068064
+    statistics: min=316f010000000000 max=1873010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=4085408 index_page_offset=- dictionary_page_offset=4077407
+    statistics: min=5b78000000000000 max=16cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=4094695 index_page_offset=- dictionary_page_offset=4086734
+    statistics: min=4413000000000000 max=a850010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=4110040 index_page_offset=- dictionary_page_offset=4096021
+    statistics: min=416168636b76646e7176 max=5a7a7a6874786c756362 null_count=0 distinct_count=- num_values=-
+row_group[95]: num_rows=1000 total_byte_size=43294 file_offset=- total_compressed_size=4111350 ordinal=-22242
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=4119367 index_page_offset=- dictionary_page_offset=4111350
+    statistics: min=1973010000000000 max=0077010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=4128702 index_page_offset=- dictionary_page_offset=4120693
+    statistics: min=4b75000000000000 max=72cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=4137989 index_page_offset=- dictionary_page_offset=4130028
+    statistics: min=c615000000000000 max=ae48010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=4153334 index_page_offset=- dictionary_page_offset=4139315
+    statistics: min=41616e706c6a6e777276 max=5a7a687876616b6e7870 null_count=0 distinct_count=- num_values=-
+row_group[96]: num_rows=1000 total_byte_size=43270 file_offset=- total_compressed_size=4154644 ordinal=-22266
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=4162661 index_page_offset=- dictionary_page_offset=4154644
+    statistics: min=0177010000000000 max=e87a010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9335 total_compressed_size=9335 data_page_offset=4171996 index_page_offset=- dictionary_page_offset=4163987
+    statistics: min=6c75000000000000 max=50cd030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9263 total_compressed_size=9263 data_page_offset=4181259 index_page_offset=- dictionary_page_offset=4173322
+    statistics: min=d711000000000000 max=4a4e010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=4196604 index_page_offset=- dictionary_page_offset=4182585
+    statistics: min=41616c626362716a6969 max=5a7978756d6c66656b6e null_count=0 distinct_count=- num_values=-
+row_group[97]: num_rows=1000 total_byte_size=43214 file_offset=- total_compressed_size=4197914 ordinal=-22322
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=4205931 index_page_offset=- dictionary_page_offset=4197914
+    statistics: min=e97a010000000000 max=d07e010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=4215250 index_page_offset=- dictionary_page_offset=4207257
+    statistics: min=ce75000000000000 max=40d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9223 total_compressed_size=9223 data_page_offset=4224473 index_page_offset=- dictionary_page_offset=4216576
+    statistics: min=8a13000000000000 max=4c51010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=4239818 index_page_offset=- dictionary_page_offset=4225799
+    statistics: min=41616c646c7a726b6a78 max=5a797261746c6b6d756b null_count=0 distinct_count=- num_values=-
+row_group[98]: num_rows=1000 total_byte_size=43310 file_offset=- total_compressed_size=4241128 ordinal=-22226
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=4249145 index_page_offset=- dictionary_page_offset=4241128
+    statistics: min=d17e010000000000 max=b882010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=4258464 index_page_offset=- dictionary_page_offset=4250471
+    statistics: min=4d75000000000000 max=54d0030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9319 total_compressed_size=9319 data_page_offset=4267783 index_page_offset=- dictionary_page_offset=4259790
+    statistics: min=ca14000000000000 max=a44d010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=4283128 index_page_offset=- dictionary_page_offset=4269109
+    statistics: min=41616c6d65626270776f max=5a7a636f787575617861 null_count=0 distinct_count=- num_values=-
+row_group[99]: num_rows=1000 total_byte_size=43286 file_offset=- total_compressed_size=4284438 ordinal=-22250
+  column[0]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["id"] codec=0 num_values=1000 total_uncompressed_size=9343 total_compressed_size=9343 data_page_offset=4292455 index_page_offset=- dictionary_page_offset=4284438
+    statistics: min=b982010000000000 max=a086010000000000 null_count=0 distinct_count=- num_values=-
+  column[1]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["salary"] codec=0 num_values=1000 total_uncompressed_size=9327 total_compressed_size=9327 data_page_offset=4301782 index_page_offset=- dictionary_page_offset=4293781
+    statistics: min=f375000000000000 max=54cf030000000000 null_count=0 distinct_count=- num_values=-
+  column[2]: file_path="" file_offset=0 type=2 encodings=[0,3,8] path_in_schema=["tax"] codec=0 num_values=1000 total_uncompressed_size=9287 total_compressed_size=9287 data_page_offset=4311069 index_page_offset=- dictionary_page_offset=4303108
+    statistics: min=cb14000000000000 max=9d50010000000000 null_count=0 distinct_count=- num_values=-
+  column[3]: file_path="" file_offset=0 type=6 encodings=[0,3,8] path_in_schema=["name"] codec=0 num_values=1000 total_uncompressed_size=15329 total_compressed_size=15329 data_page_offset=4326414 index_page_offset=- dictionary_page_offset=4312395
+    statistics: min=4161756a72636d776472 max=5a7a7867706d6178697a null_count=0 distinct_count=- num_values=-

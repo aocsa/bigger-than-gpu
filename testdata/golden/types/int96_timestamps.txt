@@ -1,0 +1,9 @@
+version=1
+num_rows=3
+created_by=-
+schema[0]: name="schema" type=0 type_length=- repetition=0 num_children=1 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+schema[1]: name="ts" type=3 type_length=- repetition=0 num_children=0 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
+row_group[0]: num_rows=3 total_byte_size=53 file_offset=- total_compressed_size=- ordinal=-
+  column[0]: file_path="" file_offset=4 type=3 encodings=[0] path_in_schema=["ts"] codec=0 num_values=3 total_uncompressed_size=53 total_compressed_size=53 data_page_offset=4 index_page_offset=- dictionary_page_offset=-
+    statistics: min=- max=- null_count=- distinct_count=- num_values=-
+      page[0]: type=0 uncompressed_page_size=36 compressed_page_size=36 crc=0 num_values=3 encoding=0 definition_level_encoding=3 repetition_level_encoding=3 num_nulls=0 num_rows=0 definition_levels_byte_length=0 repetition_levels_byte_length=0 is_compressed=1 num_dict_values=0 dict_encoding=0
