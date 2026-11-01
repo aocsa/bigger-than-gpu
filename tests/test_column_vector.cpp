@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "quest/columnar/column_vector.hpp"
+#include "quest/columnar/record_batch.hpp"
 #include "support/test_utils.hpp"
 
 using namespace quest::columnar;
@@ -363,4 +364,51 @@ TEST(ColumnVectorEdgeCaseTest, AllNulls) {
   for (size_t i = 0; i < col.size(); ++i) {
     EXPECT_TRUE(col.IsNull(i));
   }
+}
+
+// =============================================================================
+// Date32 Tests
+// =============================================================================
+
+TEST(Date32Test, ValueToStringIsIsoDate) {
+  EXPECT_EQ(ValueToString(Value{Date32{9538}}), "1996-02-12");
+  EXPECT_EQ(ValueToString(Value{Date32{0}}), "1970-01-01");
+  EXPECT_EQ(ValueToString(Value{Date32{-1}}), "1969-12-31");
+  EXPECT_EQ(ValueToString(Value{Date32{11016}}), "2000-02-29");
+}
+
+TEST(Date32Test, TypeTraits) {
+  EXPECT_EQ(GetTypeName(Date32Type{}), "Date32");
+  EXPECT_EQ(GetTypeByteWidth(Date32Type{}), 4);
+  EXPECT_TRUE(IsFixedWidth(Date32Type{}));
+}
+
+TEST(Date32Test, CreateColumnVectorHoldsDate32Values) {
+  auto col = CreateColumnVector(Date32Type{}, 2);
+  auto* typed = dynamic_cast<TypedColumnVector<Date32>*>(col.get());
+  ASSERT_NE(typed, nullptr);
+  typed->Append(Date32{8766});
+  typed->AppendNull();
+
+  EXPECT_TRUE(std::holds_alternative<Date32Type>(col->GetType()));
+  EXPECT_EQ(col->GetValue(0), Value{Date32{8766}});
+  EXPECT_TRUE(col->IsNull(1));
+}
+
+TEST(Date32Test, ConcatenateKeepsDate32) {
+  Schema schema({Field("d", Date32Type{}, Repetition::kOptional)});
+  auto first = std::make_shared<TypedColumnVector<Date32>>(Date32Type{}, 1);
+  first->Append(Date32{1});
+  auto second = std::make_shared<TypedColumnVector<Date32>>(Date32Type{}, 2);
+  second->AppendNull();
+  second->Append(Date32{2});
+  RecordBatch a(schema, {first});
+  RecordBatch b(schema, {second});
+
+  ASSERT_OK_AND_ASSIGN(auto merged, ConcatenateRecordBatches({&a, &b}));
+  ASSERT_EQ(merged.num_rows(), 3U);
+  EXPECT_TRUE(std::holds_alternative<Date32Type>(merged.column(0).GetType()));
+  EXPECT_EQ(merged.column(0).GetValue(0), Value{Date32{1}});
+  EXPECT_TRUE(merged.column(0).IsNull(1));
+  EXPECT_EQ(merged.column(0).GetValue(2), Value{Date32{2}});
 }

@@ -69,6 +69,8 @@ std::shared_ptr<columnar::ColumnVector> GatherColumn(
           return GatherTyped<float>(col, indices, type_tag);
         } else if constexpr (std::is_same_v<TypeTag, columnar::DoubleType>) {
           return GatherTyped<double>(col, indices, type_tag);
+        } else if constexpr (std::is_same_v<TypeTag, columnar::Date32Type>) {
+          return GatherTyped<columnar::Date32>(col, indices, type_tag);
         } else {
           return GatherTyped<std::string>(col, indices, columnar::StringType{});
         }

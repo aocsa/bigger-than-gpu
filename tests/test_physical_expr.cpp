@@ -6,12 +6,14 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <vector>
 
+#include "quest/builder/expr_builder.hpp"
 #include "quest/columnar/column_vector.hpp"
 #include "quest/columnar/record_batch.hpp"
 #include "quest/execution/kernels/batch_kernels.hpp"
@@ -1063,4 +1065,136 @@ TEST(CaseExprTest, LoweredQ12PriorityFlag) {
   ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(*expr, input));
   ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(MakePriorityBatch()));
   ExpectColumn<int32_t>(*result, {1, 1, 0, 0, 0, 1});
+}
+
+// =============================================================================
+// Date32
+// =============================================================================
+
+namespace {
+
+constexpr Date32 k19940101{8766};
+constexpr Date32 k19941231{9130};
+constexpr Date32 k19950615{9296};
+
+/// a: [1994-01-01, null, 1995-06-15], b: [1994-01-01, 1994-01-01, 1994-12-31], i: int32
+RecordBatch MakeDateBatch() {
+  auto a = std::make_shared<TypedColumnVector<Date32>>(Date32Type{}, 3);
+  a->Append(k19940101);
+  a->AppendNull();
+  a->Append(k19950615);
+  auto b = std::make_shared<TypedColumnVector<Date32>>(Date32Type{}, 3);
+  b->Append(k19940101);
+  b->Append(k19940101);
+  b->Append(k19941231);
+  auto i = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 3);
+  i->Append(8766);
+  i->Append(8766);
+  i->Append(9130);
+  return RecordBatch(Schema({Field("a", Date32Type{}, Repetition::kOptional),
+                             Field("b", Date32Type{}), Field("i", Int32Type{})}),
+                     {a, b, i});
+}
+
+}  // namespace
+
+TEST(Date32ExprTest, ComparisonsFollowCalendarOrderAndNullSemantics) {
+  auto batch = MakeDateBatch();
+  struct Case {
+    BinaryOp op;
+    std::vector<std::optional<bool>> expected;
+  };
+  const Case kCases[] = {
+      {BinaryOp::kEq, {true, std::nullopt, false}},
+      {BinaryOp::kNeq, {false, std::nullopt, true}},
+      {BinaryOp::kLt, {false, std::nullopt, false}},
+      {BinaryOp::kLtEq, {true, std::nullopt, false}},
+      {BinaryOp::kGt, {false, std::nullopt, true}},
+      {BinaryOp::kGtEq, {true, std::nullopt, true}},
+  };
+  for (const auto& c : kCases) {
+    BinaryExpression expr(c.op, Col(0), Col(1));
+    SCOPED_TRACE(expr.ToString());
+    ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
+    ExpectColumn<bool>(*result, c.expected);
+  }
+}
+
+TEST(Date32ExprTest, ComparisonWithNullLiteralIsNull) {
+  auto batch = MakeDateBatch();
+  BinaryExpression expr(BinaryOp::kLt, Col(1), Lit(std::monostate{}));
+  ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
+  ExpectColumn<bool>(*result, std::vector<std::optional<bool>>(3, std::nullopt));
+}
+
+TEST(Date32ExprTest, ComparisonWithNonDateIsTypeError) {
+  auto batch = MakeDateBatch();
+  BinaryExpression date_int(BinaryOp::kEq, Col(1), Col(2));
+  auto r1 = date_int.Evaluate(batch);
+  ASSERT_FALSE(r1.has_value());
+  EXPECT_EQ(r1.error().code(), ErrorCode::TypeError);
+
+  BinaryExpression int_date(BinaryOp::kLt, Lit(Value{8766}), Col(0));
+  EXPECT_FALSE(int_date.Evaluate(batch).has_value());
+
+  BinaryExpression date_string(BinaryOp::kEq, Col(0), Lit(Value{std::string("1994-01-01")}));
+  EXPECT_FALSE(date_string.Evaluate(batch).has_value());
+}
+
+TEST(Date32ExprTest, ArithmeticOnDatesIsTypeError) {
+  auto batch = MakeDateBatch();
+  BinaryExpression date_date(BinaryOp::kSubtract, Col(0), Col(1));
+  auto r1 = date_date.Evaluate(batch);
+  ASSERT_FALSE(r1.has_value());
+  EXPECT_EQ(r1.error().code(), ErrorCode::TypeError);
+
+  BinaryExpression date_int(BinaryOp::kAdd, Col(1), Lit(Value{1}));
+  EXPECT_FALSE(date_int.Evaluate(batch).has_value());
+}
+
+TEST(Date32ExprTest, LogicalTypesMatchPhysicalRules) {
+  SchemaOnlyPlan input(Schema({Field("a", Date32Type{}, Repetition::kOptional),
+                               Field("b", Date32Type{}), Field("i", Int32Type{})}));
+  BinaryExpr cmp(BinaryOp::kLtEq, col("a"), col("b"));
+  ASSERT_OK_AND_ASSIGN(auto cmp_field, cmp.ToField(input));
+  EXPECT_TRUE(std::holds_alternative<BoolType>(cmp_field.data_type));
+
+  BinaryExpr cmp_null(BinaryOp::kEq, col("a"), lit(Value{std::monostate{}}));
+  EXPECT_TRUE(cmp_null.ToField(input).has_value());
+
+  BinaryExpr mixed(BinaryOp::kEq, col("a"), col("i"));
+  EXPECT_FALSE(mixed.ToField(input).has_value());
+
+  BinaryExpr arith(BinaryOp::kSubtract, col("a"), col("b"));
+  EXPECT_FALSE(arith.ToField(input).has_value());
+}
+
+TEST(Date32ExprTest, LitDateIsATypedDate32Literal) {
+  auto built = LitDate(std::chrono::year{1994} / 1 / 1).Build();
+  const auto* literal = dynamic_cast<const Literal*>(built.get());
+  ASSERT_NE(literal, nullptr);
+  EXPECT_EQ(literal->value(), Value{k19940101});
+  EXPECT_EQ(literal->ToString(), "DATE '1994-01-01'");
+
+  SchemaOnlyPlan input(Schema({Field("b", Date32Type{})}));
+  ASSERT_OK_AND_ASSIGN(auto field, literal->ToField(input));
+  EXPECT_TRUE(std::holds_alternative<Date32Type>(field.data_type));
+
+  ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(*literal, input));
+  EXPECT_EQ(phys->ToString(), "DATE '1994-01-01'");
+  ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(MakeDateBatch()));
+  EXPECT_TRUE(std::holds_alternative<Date32Type>(result->GetType()));
+  EXPECT_EQ(result->GetValue(2), Value{k19940101});
+
+  EXPECT_EQ(LitDate(std::chrono::year{2000} / 2 / 29).GetExpr().ToString(), "DATE '2000-02-29'");
+}
+
+TEST(Date32ExprTest, FilterKeepsDate32Columns) {
+  auto batch = MakeDateBatch();
+  BinaryExpression pred(BinaryOp::kGtEq, Col(1), Lit(Value{k19941231}));
+  ASSERT_OK_AND_ASSIGN(auto out, FilterRecordBatch(batch, pred));
+  ASSERT_EQ(out.num_rows(), 1U);
+  EXPECT_TRUE(std::holds_alternative<Date32Type>(out.column(0).GetType()));
+  ExpectColumn<Date32>(out.column(0), {k19950615});
+  ExpectColumn<Date32>(out.column(1), {k19941231});
 }

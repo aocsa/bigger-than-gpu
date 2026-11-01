@@ -185,6 +185,7 @@ Result<DataType> RecordBatchSerializer::ReadDataType(const std::vector<uint8_t>&
       if (!byte_width) return std::unexpected(byte_width.error());
       return FixedLenByteArrayType{*byte_width};
     }
+    case 11: return Date32Type{};
     default:
       return Error::Invalid("Unknown type index");
   }
@@ -249,6 +250,11 @@ Status RecordBatchSerializer::WriteColumnValues(std::vector<uint8_t>& buffer,
     } else if constexpr (std::is_same_v<T, DoubleType>) {
       for (size_t i = 0; i < num_rows; ++i) {
         double val = column.IsNull(i) ? 0.0 : std::get<double>(column.GetValue(i));
+        WriteValue(buffer, val);
+      }
+    } else if constexpr (std::is_same_v<T, Date32Type>) {
+      for (size_t i = 0; i < num_rows; ++i) {
+        int32_t val = column.IsNull(i) ? 0 : std::get<Date32>(column.GetValue(i)).days;
         WriteValue(buffer, val);
       }
     } else if constexpr (std::is_same_v<T, StringType> || std::is_same_v<T, BinaryType>) {
@@ -375,6 +381,17 @@ Status RecordBatchSerializer::ReadColumnValues(const std::vector<uint8_t>& buffe
           typed_col->AppendNull();
         } else {
           typed_col->Append(*val);
+        }
+      }
+    } else if constexpr (std::is_same_v<T, Date32Type>) {
+      auto* typed_col = dynamic_cast<TypedColumnVector<Date32>*>(&column);
+      for (size_t i = 0; i < num_rows; ++i) {
+        auto val = ReadValue<int32_t>(buffer, offset);
+        if (!val) return std::unexpected(val.error());
+        if (is_null(i)) {
+          typed_col->AppendNull();
+        } else {
+          typed_col->Append(Date32{*val});
         }
       }
     } else if constexpr (std::is_same_v<T, StringType> || std::is_same_v<T, BinaryType>) {

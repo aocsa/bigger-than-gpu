@@ -243,6 +243,10 @@ Status ColumnReader::DecodeValues(Encoding encoding,
       return DecodeBooleanValues(encoding, data, num_values, def_levels,
                                  column);
     case PhysicalType::kInt32:
+      if (std::holds_alternative<columnar::Date32Type>(field_.data_type)) {
+        return DecodeFixedWidthValues<columnar::Date32>(encoding, data, num_values, def_levels,
+                                                        column);
+      }
       return DecodeFixedWidthValues<int32_t>(encoding, data, num_values,
                                              def_levels, column);
     case PhysicalType::kInt64:

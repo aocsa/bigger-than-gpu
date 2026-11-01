@@ -301,3 +301,41 @@ TEST(ParquetCorruptFileTest, FileReadPastEndIsAnError) {
   EXPECT_FALSE(file.Read(SIZE_MAX, 1).has_value());
   EXPECT_FALSE(file.Read(0, SIZE_MAX).has_value());
 }
+
+// =============================================================================
+// DATE Columns
+// =============================================================================
+
+TEST(ParquetDateTest, DictionaryEncodedDateLoadsAsDate32) {
+  const auto path = std::filesystem::path(__FILE__).parent_path().parent_path() / "testdata" /
+                    "tpch" / "lineitem.parquet";
+  ASSERT_OK_AND_ASSIGN(auto ds, ParquetDataSource::Open(path.string()));
+  for (const char* name : {"l_commitdate", "l_receiptdate", "l_shipdate"}) {
+    auto idx = ds.schema().GetFieldIndex(name);
+    ASSERT_TRUE(idx.has_value()) << name;
+    EXPECT_TRUE(std::holds_alternative<Date32Type>(ds.schema().field(*idx).data_type)) << name;
+  }
+
+  ASSERT_OK_AND_ASSIGN(auto batch, ds.ReadPartition(0, {"l_commitdate"}));
+  EXPECT_TRUE(std::holds_alternative<Date32Type>(batch.column(0).GetType()));
+  EXPECT_EQ(batch.column(0).GetValue(0), Value{Date32{9538}});
+  EXPECT_EQ(ValueToString(batch.column(0).GetValue(0)), "1996-02-12");
+}
+
+TEST(ParquetDateTest, PlainEncodedDateWithNullLoadsAsDate32) {
+  // PLAIN encoding, converted_type DATE. Generated with DuckDB:
+  //   COPY (SELECT * FROM (VALUES (DATE '1996-02-12'), (NULL), (DATE '1969-12-31'),
+  //   (DATE '2000-02-29')) t(d)) TO 'testdata/date_plain.parquet'
+  //   (FORMAT parquet, DICTIONARY_SIZE_LIMIT 1, COMPRESSION uncompressed);
+  const auto path = std::filesystem::path(__FILE__).parent_path().parent_path() / "testdata" /
+                    "date_plain.parquet";
+  ASSERT_OK_AND_ASSIGN(auto ds, ParquetDataSource::Open(path.string()));
+  ASSERT_OK_AND_ASSIGN(auto batch, ds.ReadPartition(0, {"d"}));
+  const auto& col = batch.column(0);
+  EXPECT_TRUE(std::holds_alternative<Date32Type>(col.GetType()));
+  ASSERT_EQ(col.size(), 4U);
+  EXPECT_EQ(col.GetValue(0), Value{Date32{9538}});
+  EXPECT_TRUE(col.IsNull(1));
+  EXPECT_EQ(ValueToString(col.GetValue(2)), "1969-12-31");
+  EXPECT_EQ(ValueToString(col.GetValue(3)), "2000-02-29");
+}

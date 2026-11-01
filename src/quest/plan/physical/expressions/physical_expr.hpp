@@ -35,7 +35,8 @@ using columnar::Value;
 using ColumnData = std::variant<std::vector<bool>, std::vector<int8_t>,
                                 std::vector<int16_t>, std::vector<int32_t>,
                                 std::vector<int64_t>, std::vector<float>,
-                                std::vector<double>, std::vector<std::string>>;
+                                std::vector<double>, std::vector<std::string>,
+                                std::vector<columnar::Date32>>;
 
 // =============================================================================
 // Materialized Column Vector

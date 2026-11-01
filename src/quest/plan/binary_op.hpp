@@ -58,15 +58,23 @@ inline constexpr std::array<std::string_view, 13> kBinaryOpSymbols = {
 /// Comparisons and AND/OR yield bool. Arithmetic needs numeric operands: any float or
 /// double operand, or `/`, yields double (int / int is real division, as in DuckDB);
 /// otherwise the wider of the two integer types. Callers resolve a NULL literal operand,
-/// which has no type of its own, to the other operand's type.
+/// which has no type of its own, to the other operand's type. A Date32 compares only with
+/// another Date32: there is no implicit cast between dates and numbers or strings.
 /// @param op Operator.
 /// @param left Left operand type.
 /// @param right Right operand type.
-/// @return The result type, or `TypeError` for arithmetic on a non-numeric type.
+/// @return The result type, or `TypeError` for arithmetic on a non-numeric type or a
+/// comparison between a Date32 and a non-date.
 [[nodiscard]] inline Result<columnar::DataType> BinaryResultType(BinaryOp op,
                                                                  const columnar::DataType& left,
                                                                  const columnar::DataType& right) {
   if (!IsArithmetic(op)) {
+    if (std::holds_alternative<columnar::Date32Type>(left) !=
+        std::holds_alternative<columnar::Date32Type>(right)) {
+      return Error::TypeError("'" + std::string(ToString(op)) + "' cannot compare " +
+                              columnar::GetTypeName(left) + " with " +
+                              columnar::GetTypeName(right));
+    }
     return columnar::BoolType{};
   }
   auto is_int = [](const columnar::DataType& t) {

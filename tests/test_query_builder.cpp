@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <filesystem>
 
 #include "quest/builder/query_builder.hpp"
@@ -146,6 +147,35 @@ TEST_F(QueryBuilderParquetTest, ExecuteOnGraph) {
 
   EXPECT_TRUE(batches.has_value());
   EXPECT_GT(batches.value().size(), 0U);
+}
+
+TEST(QueryBuilderDateTest, ReceiptDateRangeMatchesDuckDb) {
+  const auto path = std::filesystem::path(__FILE__).parent_path().parent_path() / "testdata" /
+                    "tpch" / "lineitem.parquet";
+  using std::chrono::year;
+  ASSERT_OK_AND_ASSIGN(auto builder, QueryBuilder::FromParquet(path.string()));
+  ASSERT_OK_AND_ASSIGN(auto batches,
+                       std::move(builder)
+                           .Where(Col("l_receiptdate") >= LitDate(year{1994} / 1 / 1) &&
+                                  Col("l_receiptdate") < LitDate(year{1995} / 1 / 1))
+                           .ExecuteOnGraph());
+
+  // duckdb: select count(*) from 'testdata/tpch/lineitem.parquet'
+  //   where l_receiptdate >= date '1994-01-01' and l_receiptdate < date '1995-01-01'
+  size_t rows = 0;
+  for (const auto& batch : batches) {
+    rows += batch.num_rows();
+    const auto* receipt = batch.GetColumnByName("l_receiptdate");
+    ASSERT_NE(receipt, nullptr);
+    for (size_t i = 0; i < batch.num_rows(); ++i) {
+      const Value v = receipt->GetValue(i);
+      const auto* d = std::get_if<Date32>(&v);
+      ASSERT_NE(d, nullptr);
+      EXPECT_GE(d->days, 8766);
+      EXPECT_LT(d->days, 9131);
+    }
+  }
+  EXPECT_EQ(rows, 9525U);
 }
 
 // =============================================================================

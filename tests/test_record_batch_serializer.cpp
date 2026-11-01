@@ -131,6 +131,26 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeWithNulls) {
   EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(4)), 30);
 }
 
+TEST(RecordBatchSerializerTest, SerializeDeserializeDate32WithNulls) {
+  Schema schema({Field("d", Date32Type{}, Repetition::kOptional)});
+  auto col = std::make_shared<TypedColumnVector<Date32>>(Date32Type{}, 3);
+  col->Append(Date32{9538});
+  col->AppendNull();
+  col->Append(Date32{-1});
+  RecordBatch original(schema, {col});
+
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
+
+  EXPECT_TRUE(std::holds_alternative<Date32Type>(deserialized.schema().field(0).data_type));
+  const auto& out = deserialized.column(0);
+  EXPECT_TRUE(std::holds_alternative<Date32Type>(out.GetType()));
+  ASSERT_EQ(out.size(), 3U);
+  EXPECT_EQ(out.GetValue(0), Value{Date32{9538}});
+  EXPECT_TRUE(out.IsNull(1));
+  EXPECT_EQ(out.GetValue(2), Value{Date32{-1}});
+}
+
 TEST(RecordBatchSerializerTest, SerializeDeserializeStringWithNulls) {
   Schema schema({Field("text", StringType{}, Repetition::kOptional)});
 

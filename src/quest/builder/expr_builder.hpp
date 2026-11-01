@@ -11,6 +11,7 @@
 ///   auto expr = Col("salary") > Lit(50000) && Col("department") == Lit("Engineering");
 /// @endcode
 
+#include <chrono>
 #include <concepts>
 #include <memory>
 #include <string>
@@ -181,5 +182,39 @@ namespace agg {
 }
 
 }  // namespace agg
+
+namespace detail {
+// Deliberately not constexpr: evaluating it in `CalendarDate`'s consteval constructor turns an
+// invalid date into a compile error.
+void InvalidCalendarDate();
+}  // namespace detail
+
+/// @brief A calendar date validated at compile time, so an invalid date never reaches a plan.
+///
+/// Implicitly built from a constant `std::chrono::year_month_day`; `year{1994} / 2 / 30` fails
+/// to compile. A runtime year_month_day is rejected too, since the constructor is consteval.
+class CalendarDate {
+ public:
+  /// @param ymd A constant date with `ymd.ok()`.
+  consteval CalendarDate(std::chrono::year_month_day ymd)  // NOLINT(google-explicit-constructor)
+      : date_{0} {
+    if (!ymd.ok()) {
+      detail::InvalidCalendarDate();
+    }
+    date_.days = std::chrono::sys_days{ymd}.time_since_epoch().count();
+  }
+
+  [[nodiscard]] constexpr columnar::Date32 date() const noexcept { return date_; }
+
+ private:
+  columnar::Date32 date_;
+};
+
+/// @brief Date32 literal, e.g. `LitDate(std::chrono::year{1994} / 1 / 1)`.
+/// @param date A compile-time-checked calendar date.
+/// @return A literal expression of type `Date32Type`.
+[[nodiscard]] inline ExprBuilder LitDate(CalendarDate date) {
+  return ExprBuilder(plan::logical::lit(columnar::Value{date.date()}));
+}
 
 }  // namespace quest

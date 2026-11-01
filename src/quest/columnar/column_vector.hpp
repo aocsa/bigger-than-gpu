@@ -5,8 +5,10 @@
 
 #include <bit>
 #include <cassert>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <format>
 #include <memory>
 #include <optional>
 #include <span>
@@ -20,9 +22,17 @@
 
 namespace quest::columnar {
 
+/// @brief A `Date32Type` value: days since 1970-01-01, the Parquet DATE representation.
+struct Date32 {
+  std::int32_t days;
+  auto operator<=>(const Date32&) const = default;
+};
+// Parquet plain/dictionary decoding memcpy's raw INT32 values into Date32.
+static_assert(sizeof(Date32) == sizeof(std::int32_t) && std::is_trivially_copyable_v<Date32>);
+
 using Value = std::variant<std::monostate,  // null
                            bool, int8_t, int16_t, int32_t, int64_t, float,
-                           double, std::string, std::vector<uint8_t>>;
+                           double, std::string, std::vector<uint8_t>, Date32>;
 
 inline std::string ValueToString(const Value& value) {
   return std::visit(
@@ -36,6 +46,10 @@ inline std::string ValueToString(const Value& value) {
           return v;
         } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
           return std::string(reinterpret_cast<const char*>(v.data()), v.size());
+        } else if constexpr (std::is_same_v<T, Date32>) {
+          const std::chrono::year_month_day ymd{std::chrono::sys_days{std::chrono::days{v.days}}};
+          return std::format("{:04}-{:02}-{:02}", static_cast<int>(ymd.year()),
+                             static_cast<unsigned>(ymd.month()), static_cast<unsigned>(ymd.day()));
         } else {
           return std::to_string(v);
         }
@@ -216,6 +230,8 @@ inline std::unique_ptr<ColumnVector> CreateColumnVector(const DataType& type,
           return std::make_unique<TypedColumnVector<float>>(t, capacity);
         } else if constexpr (std::is_same_v<T, DoubleType>) {
           return std::make_unique<TypedColumnVector<double>>(t, capacity);
+        } else if constexpr (std::is_same_v<T, Date32Type>) {
+          return std::make_unique<TypedColumnVector<Date32>>(t, capacity);
         } else {
           return std::make_unique<StringColumnVector>(t, capacity);
         }
@@ -280,6 +296,12 @@ inline std::unique_ptr<ColumnVector> CreateColumnVector(const DataType& type,
               } else {
                 return Error::Invalid("Concatenate value type mismatch (double)");
               }
+            } else if constexpr (std::is_same_v<TypeTag, Date32Type>) {
+              if (auto* v = std::get_if<Date32>(&val)) {
+                typed->Append(*v);
+              } else {
+                return Error::Invalid("Concatenate value type mismatch (date32)");
+              }
             } else {
               if (auto* v = std::get_if<std::string>(&val)) {
                 typed->Append(*v);
@@ -305,6 +327,8 @@ inline std::unique_ptr<ColumnVector> CreateColumnVector(const DataType& type,
           return append_one(dynamic_cast<TypedColumnVector<float>*>(&dest));
         } else if constexpr (std::is_same_v<TypeTag, DoubleType>) {
           return append_one(dynamic_cast<TypedColumnVector<double>*>(&dest));
+        } else if constexpr (std::is_same_v<TypeTag, Date32Type>) {
+          return append_one(dynamic_cast<TypedColumnVector<Date32>*>(&dest));
         } else {
           return append_one(dynamic_cast<StringColumnVector*>(&dest));
         }

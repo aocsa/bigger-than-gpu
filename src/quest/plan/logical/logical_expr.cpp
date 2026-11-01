@@ -54,6 +54,8 @@ Result<Field> Literal::ToField(const LogicalPlan& /*input*/) const {
           return columnar::DoubleType{};
         } else if constexpr (std::is_same_v<T, bool>) {
           return columnar::BoolType{};
+        } else if constexpr (std::is_same_v<T, columnar::Date32>) {
+          return columnar::Date32Type{};
         } else {
           return columnar::StringType{};
         }
@@ -74,6 +76,8 @@ std::string Literal::ToString() const {
           return "null";
         } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
           return "<binary>";
+        } else if constexpr (std::is_same_v<T, columnar::Date32>) {
+          return "DATE '" + columnar::ValueToString(v) + "'";
         } else {
           return std::to_string(v);
         }

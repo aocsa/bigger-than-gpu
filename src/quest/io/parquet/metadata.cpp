@@ -82,6 +82,9 @@ DataType LeafDataType(const SchemaElement& elem) {
   if (elem.type == PhysicalType::kByteArray && is_text) {
     return columnar::StringType{};
   }
+  if (elem.type == PhysicalType::kInt32 && elem.logical_type == LogicalType::kDate) {
+    return columnar::Date32Type{};
+  }
   return PhysicalTypeToDataType(elem.type, elem.type_length.value_or(0));
 }
 

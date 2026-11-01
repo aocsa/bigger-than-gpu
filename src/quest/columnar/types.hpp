@@ -58,9 +58,15 @@ struct FixedLenByteArrayType {
   static constexpr const char* name = "FixedLenByteArray";
 };
 
+/// @brief Calendar date as days since 1970-01-01; values are `Date32`.
+struct Date32Type {
+  static constexpr const char* name = "Date32";
+};
+
+// The variant index is the spill format's type tag: append new types, never reorder.
 using DataType = std::variant<BoolType, Int8Type, Int16Type, Int32Type, Int64Type,
                               FloatType, DoubleType, StringType, BinaryType,
-                              Int96Type, FixedLenByteArrayType>;
+                              Int96Type, FixedLenByteArrayType, Date32Type>;
 
 inline std::string GetTypeName(const DataType& type) {
   return std::visit(
@@ -97,6 +103,8 @@ inline int32_t GetTypeByteWidth(const DataType& type) {
           return 12;
         } else if constexpr (std::is_same_v<T, FixedLenByteArrayType>) {
           return t.byte_width;
+        } else if constexpr (std::is_same_v<T, Date32Type>) {
+          return 4;
         } else {
           return -1;  // Variable width
         }

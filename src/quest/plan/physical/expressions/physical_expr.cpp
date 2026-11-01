@@ -167,12 +167,17 @@ template <typename T>
   return lit != nullptr && std::holds_alternative<std::monostate>(lit->value());
 }
 
+[[nodiscard]] Result<DataType> OperandResultType(BinaryOp op, const ColumnVector& l,
+                                                 const ColumnVector& r) {
+  return BinaryResultType(op, IsNullLiteral(l) ? r.GetType() : l.GetType(),
+                          IsNullLiteral(r) ? l.GetType() : r.GetType());
+}
+
 [[nodiscard]] Result<std::shared_ptr<ColumnVector>> EvaluateArithmetic(BinaryOp op,
                                                                        const ColumnVector& l,
                                                                        const ColumnVector& r,
                                                                        size_t n) {
-  auto type = BinaryResultType(op, IsNullLiteral(l) ? r.GetType() : l.GetType(),
-                               IsNullLiteral(r) ? l.GetType() : r.GetType());
+  auto type = OperandResultType(op, l, r);
   if (!type) {
     return std::unexpected(type.error());
   }
@@ -358,6 +363,8 @@ Result<std::shared_ptr<ColumnVector>> LiteralExpression::Evaluate(
           return columnar::DoubleType{};
         } else if constexpr (std::is_same_v<T, bool>) {
           return columnar::BoolType{};
+        } else if constexpr (std::is_same_v<T, columnar::Date32>) {
+          return columnar::Date32Type{};
         } else {
           return columnar::StringType{};
         }
@@ -378,6 +385,8 @@ std::string LiteralExpression::ToString() const {
           return "null";
         } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
           return "<binary>";
+        } else if constexpr (std::is_same_v<T, columnar::Date32>) {
+          return "DATE '" + columnar::ValueToString(val) + "'";
         } else {
           return std::to_string(val);
         }
@@ -418,7 +427,10 @@ Result<std::shared_ptr<ColumnVector>> BinaryExpression::Evaluate(
   const auto& r = **right_result;
   const size_t n = input.num_rows();
 
-  auto compare = [&]<typename Op>() {
+  auto compare = [&]<typename Op>() -> Result<std::shared_ptr<ColumnVector>> {
+    if (auto type = OperandResultType(op_, l, r); !type) {
+      return std::unexpected(type.error());
+    }
     return MapRows<bool>(l, r, n, columnar::BoolType{}, CompareValues<Op>);
   };
   switch (op_) {
