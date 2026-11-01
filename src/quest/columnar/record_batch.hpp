@@ -49,9 +49,6 @@ class RecordBatch {
     return columns_[*idx].get();
   }
 
-  // Alias for compatibility with Kotlin API
-  const ColumnVector& field(size_t index) const { return column(index); }
-
   std::string ToCSV() const {
     std::ostringstream oss;
     size_t rows = num_rows();
@@ -66,8 +63,6 @@ class RecordBatch {
     }
     return oss.str();
   }
-
-  std::string ToString() const { return ToCSV(); }
 
  private:
   Schema schema_;

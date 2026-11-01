@@ -55,12 +55,11 @@ FileHandle::~FileHandle() {
   }
 }
 
-Status FileHandle::Read(size_t offset, size_t length,
-                        std::vector<uint8_t>& buffer) const {
+Result<std::vector<uint8_t>> FileHandle::Read(size_t offset, size_t length) const {
   if (offset > file_size_ || length > file_size_ - offset) {
     return Error::OutOfRange("Read past end of file");
   }
-  buffer.resize(length);
+  std::vector<uint8_t> buffer(length);
   size_t done = 0;
   while (done < length) {
     const ssize_t n = ::pread(fd_, buffer.data() + done, length - done,
@@ -72,16 +71,6 @@ Status FileHandle::Read(size_t offset, size_t length,
       return Error::IOError("Failed to read from file: " + path_);
     }
     done += static_cast<size_t>(n);
-  }
-  return {};
-}
-
-Result<std::vector<uint8_t>> FileHandle::Read(size_t offset,
-                                              size_t length) const {
-  std::vector<uint8_t> buffer;
-  auto status = Read(offset, length, buffer);
-  if (!status.has_value()) {
-    return std::unexpected(status.error());
   }
   return buffer;
 }

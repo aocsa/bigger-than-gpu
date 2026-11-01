@@ -9,7 +9,6 @@
 #include <fstream>
 #include <type_traits>
 #include <utility>
-#include <variant>
 
 #include "quest/columnar/column_vector.hpp"
 

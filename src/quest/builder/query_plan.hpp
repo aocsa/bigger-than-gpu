@@ -150,8 +150,6 @@ class QueryPlan {
   [[nodiscard]] columnar::Schema schema() const { return plan_->schema(); }
 
  private:
-  template <typename>
-  friend class QueryBuilderOf;
   friend class QueryBuilder;
 
   explicit QueryPlan(plan::logical::LogicalPlanPtr plan) noexcept : plan_(std::move(plan)) {}

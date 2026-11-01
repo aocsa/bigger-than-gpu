@@ -77,10 +77,6 @@ class PageReader {
 
   [[nodiscard]] Result<std::span<const uint8_t>> GetPageData();
 
-  [[nodiscard]] const PageHeader& current_header() const noexcept {
-    return current_header_;
-  }
-
  private:
   std::span<const uint8_t> data_;
   size_t pos_;

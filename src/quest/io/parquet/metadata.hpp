@@ -53,7 +53,6 @@ struct SchemaElement {
 struct ColumnChunkMetadata {
   std::string file_path;  ///< Optional, for external files.
   int64_t file_offset = 0;
-  std::vector<std::string> column_path;
   PhysicalType type = PhysicalType::kBoolean;
   std::vector<Encoding> encodings;
   std::vector<std::string> path_in_schema;

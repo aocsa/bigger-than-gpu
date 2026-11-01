@@ -6,9 +6,7 @@
 #include <algorithm>
 #include <numeric>
 #include <string>
-#include <type_traits>
 #include <utility>
-#include <variant>
 
 namespace quest::execution {
 
@@ -95,9 +93,6 @@ Result<columnar::RecordBatch> ProjectRecordBatch(
       result = GatherColumn(**result, rows);
     }
     columns.push_back(std::move(*result));
-  }
-  if (columns.size() != expressions.size()) {
-    return Error::ExpressionError("Projection produced fewer columns than expressions");
   }
   return columnar::RecordBatch(schema, std::move(columns));
 }

@@ -194,22 +194,6 @@ TEST(ResultTest, MonadicOrElse) {
 }
 
 // =============================================================================
-// Ok Helper Function Tests
-// =============================================================================
-
-TEST(HelperTest, OkFunction) {
-    Result<int> result = Ok(42);
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result, 42);
-}
-
-TEST(HelperTest, OkFunctionWithString) {
-    Result<std::string> result = Ok(std::string("hello"));
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result, "hello");
-}
-
-// =============================================================================
 // ErrorCode Tests
 // =============================================================================
 

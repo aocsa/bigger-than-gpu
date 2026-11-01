@@ -4,12 +4,10 @@
 #pragma once
 
 #include <algorithm>
-#include <bit>
 #include <cassert>
 #include <chrono>
 #include <concepts>
 #include <cstdint>
-#include <cstring>
 #include <format>
 #include <memory>
 #include <optional>
@@ -21,7 +19,6 @@
 #include <vector>
 
 #include "quest/columnar/types.hpp"
-#include "quest/common/result.hpp"
 
 namespace quest::columnar {
 

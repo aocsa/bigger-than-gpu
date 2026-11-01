@@ -92,14 +92,6 @@ class HostMemoryBlock final : public DataBlock {
     return record_batch_.get();
   }
 
-  [[nodiscard]] columnar::RecordBatch* record_batch() noexcept {
-    return record_batch_.get();
-  }
-
-  [[nodiscard]] columnar::RecordBatch* mutable_record_batch() noexcept {
-    return record_batch_.get();
-  }
-
   void set_disk_resource(
       std::shared_ptr<memory::DiskMemoryResource> disk_resource) {
     disk_resource_ = std::move(disk_resource);

@@ -309,20 +309,6 @@ TEST(RecordBatchTest, ColumnByName) {
   EXPECT_EQ(missing, nullptr);
 }
 
-TEST(RecordBatchTest, FieldAlias) {
-  std::vector<Field> fields = {Field("a", DataType::kInt32)};
-  Schema schema(fields);
-
-  auto col = MakeColumn<int32_t>(DataType::kInt32, {42});
-
-  RecordBatch batch(schema, {col});
-
-  const ColumnVector& via_field = batch.field(0);
-  const ColumnVector& via_column = batch.column(0);
-
-  EXPECT_EQ(&via_field, &via_column);
-}
-
 TEST(RecordBatchTest, Empty) {
   Schema schema(std::vector<Field>{});
   RecordBatch batch(schema, {});

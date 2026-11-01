@@ -125,12 +125,7 @@ template <typename T, typename D>
   auto indices_data = data.subspan(1);
 
   RleBitPackingDecoder index_decoder(bit_width);
-  size_t non_null_count =
-      def_levels.empty()
-          ? num_values
-          : std::count_if(def_levels.begin(), def_levels.end(),
-                          [](int32_t level) { return level == 1; });
-  index_decoder.SetData(indices_data, non_null_count);
+  index_decoder.SetData(indices_data);
 
   return ProcessWithDefLevels(
       num_values, def_levels,
@@ -358,7 +353,7 @@ Result<std::vector<int32_t>> ColumnReader::DecodeDefinitionLevelsRle(
   std::vector<int32_t> levels(num_values);
   int bit_width = ComputeBitWidth(max_level);
   RleBitPackingDecoder decoder(bit_width);
-  decoder.SetData(data, num_values);
+  decoder.SetData(data);
   auto status = decoder.ReadBatch(levels);
   if (!status.has_value()) {
     return std::unexpected(status.error());

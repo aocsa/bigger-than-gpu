@@ -9,10 +9,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <stdexcept>
-#include <concepts>
 #include <source_location>
-#include <type_traits>
 
 
 namespace quest {
@@ -109,12 +106,6 @@ struct Error {
         std::source_location location = std::source_location::current())
       : code_(code), message_(message), loc_(location) {}
 
-  Error(const Error& other) = default;
-  Error(Error&& other) noexcept = default;
-  Error& operator=(const Error& other) = default;
-  Error& operator=(Error&& other) noexcept = default;
-  ~Error() = default;
-
   [[nodiscard]] ErrorCode code() const noexcept { return code_; }
   [[nodiscard]] const std::string& message() const noexcept { return message_; }
   [[nodiscard]] const std::source_location& location() const noexcept { return loc_; }
@@ -129,13 +120,10 @@ struct Error {
   }
 
   [[nodiscard]] explicit operator const char*() const { return message_.c_str(); }
-  [[nodiscard]] explicit operator char*() { return (char*)message_.data(); }
 
   // Comparison is by code only — two errors with the same code are considered equal.
   [[nodiscard]] bool operator==(const Error& other) const noexcept { return code_ == other.code_; }
-  [[nodiscard]] bool operator!=(const Error& other) const noexcept { return code_ != other.code_; }
   [[nodiscard]] bool operator==(ErrorCode code) const noexcept { return code_ == code; }
-  [[nodiscard]] bool operator!=(ErrorCode code) const noexcept { return code_ != code; }
 
   [[nodiscard]] static std::unexpected<Error> Invalid(
       std::string message, std::source_location loc = std::source_location::current()) {
@@ -219,9 +207,7 @@ using Status = std::expected<void, Error>;
 
 /// @brief Result type using std::expected (C++23).
 ///
-/// Result<T> holds either a value of type T on success, or a Status on failure.
-/// Use has_value() to check success, value() to get the result, and error()
-/// to get the Status on failure.
+/// Result<T> holds either a value of type T on success, or an Error on failure.
 ///
 /// @tparam T The success value type.
 template <typename T>
@@ -231,19 +217,10 @@ using Result = std::expected<T, Error>;
 // Helper Functions
 // =============================================================================
 
-template <typename T>
-[[nodiscard]] Result<T> Ok(T value) {
-  return Result<T>{std::in_place, std::move(value)};
-}
-
 [[nodiscard]] inline std::unexpected<Error> Err(
     ErrorCode code, std::string message,
     std::source_location loc = std::source_location::current()) {
   return std::unexpected<Error>{Error{code, std::move(message), loc}};
-}
-
-[[nodiscard]] inline std::unexpected<Error> Err(const Error& error) {
-  return std::unexpected<Error>{error};
 }
 
 }  // namespace quest

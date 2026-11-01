@@ -5,7 +5,6 @@
 
 #include <format>
 #include <utility>
-#include <variant>
 
 #include "quest/columnar/column_vector.hpp"
 #include "quest/columnar/schema.hpp"

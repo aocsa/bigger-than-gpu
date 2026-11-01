@@ -3,13 +3,11 @@
 
 #pragma once
 
-#include <memory>
 #include <string>
 #include <vector>
 
 #include "quest/columnar/column_vector.hpp"
 #include "quest/columnar/record_batch.hpp"
-#include "quest/columnar/schema.hpp"
 #include "quest/columnar/types.hpp"
 #include "quest/common/result.hpp"
 

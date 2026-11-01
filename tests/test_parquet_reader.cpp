@@ -251,7 +251,7 @@ TEST(ParquetBytesTest, RleDecoderRejectsTruncatedBitPackedRun) {
   // Header 0x03: one bit-packed group of 8 values at bit width 8 needs 8 bytes; 2 are present.
   const std::vector<uint8_t> buf{0x03, 0x01, 0x02};
   RleBitPackingDecoder decoder(8);
-  decoder.SetData(buf, 8);
+  decoder.SetData(buf);
   ASSERT_OK_AND_ASSIGN(auto first, decoder.ReadValue());
   EXPECT_EQ(first, 1);
   ASSERT_OK_AND_ASSIGN(auto second, decoder.ReadValue());
@@ -262,7 +262,7 @@ TEST(ParquetBytesTest, RleDecoderRejectsTruncatedBitPackedRun) {
 TEST(ParquetBytesTest, RleDecoderRejectsInvalidBitWidth) {
   const std::vector<uint8_t> buf{0x02, 0x01};
   RleBitPackingDecoder decoder(40);
-  decoder.SetData(buf, 1);
+  decoder.SetData(buf);
   EXPECT_FALSE(decoder.ReadValue().has_value());
 }
 
