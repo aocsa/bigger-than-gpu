@@ -13,181 +13,32 @@ namespace quest::plan::physical {
 
 namespace {
 
-/// @brief An integer or Decimal `Value` alternative: exact arithmetic applies.
-template <typename V>
-constexpr bool kIsExact =
-    (std::is_integral_v<V> && !std::is_same_v<V, bool>) || std::is_same_v<V, columnar::DecimalValue>;
-
-/// @brief An exact or floating `Value` alternative.
-template <typename V>
-constexpr bool kIsNumber = kIsExact<V> || std::is_floating_point_v<V>;
-
-/// @brief Compares two values; null if either is null. A Decimal compares exactly with an
-/// integer or Decimal of any scale; other mixed numeric types compare as double; other
-/// mismatched types compare false.
-template <typename Op>
-std::optional<bool> CompareValues(const Value& left, const Value& right) {
-  return std::visit(
-      [](const auto& lhs, const auto& rhs) -> std::optional<bool> {
-        using LT = std::decay_t<decltype(lhs)>;
-        using RT = std::decay_t<decltype(rhs)>;
-
-        if constexpr (std::is_same_v<LT, std::monostate> ||
-                      std::is_same_v<RT, std::monostate>) {
-          return std::nullopt;
-        } else if constexpr (std::is_same_v<LT, columnar::DecimalValue> ||
-                             std::is_same_v<RT, columnar::DecimalValue>) {
-          if constexpr (kIsExact<LT> && kIsExact<RT>) {
-            // Both at the larger scale, in 128 bits so the rescale cannot overflow.
-            const auto [l, ls] = columnar::UnscaledAndScale(lhs);
-            const auto [r, rs] = columnar::UnscaledAndScale(rhs);
-            const int scale = std::max(ls, rs);
-            return Op{}(columnar::Int128{l} * columnar::PowerOfTen(scale - ls),
-                        columnar::Int128{r} * columnar::PowerOfTen(scale - rs));
-          } else if constexpr (kIsNumber<LT> && kIsNumber<RT>) {
-            return Op{}(columnar::ToDoubleValue(lhs), columnar::ToDoubleValue(rhs));
-          } else {
-            return false;
-          }
-        } else if constexpr (std::is_same_v<LT, RT>) {
-          return Op{}(lhs, rhs);
-        } else if constexpr (std::is_arithmetic_v<LT> &&
-                             std::is_arithmetic_v<RT>) {
-          return Op{}(static_cast<double>(lhs), static_cast<double>(rhs));
-        } else {
-          return false;
-        }
-      },
-      left, right);
-}
+using columnar::ColumnBuilder;
+using columnar::ColumnView;
+using columnar::Decimal64;
+using columnar::Int128;
+using columnar::PowerOfTen;
 
 /// @brief A one-row column holding @p value.
 template <typename T>
 [[nodiscard]] ColumnVectorPtr OneRow(DataType type, T value) {
-  columnar::ColumnBuilder<T> builder(type, 1);
+  ColumnBuilder<T> builder(type, 1);
   builder.Append(value);
   return std::move(builder).Finish();
-}
-
-/// @brief Applies @p fn to each row pair; a `std::nullopt` row result is stored as null.
-template <typename T, typename Fn>
-[[nodiscard]] Result<ColumnVectorPtr> MapRows(const ColumnVector& left, const ColumnVector& right,
-                                              size_t num_rows, DataType type, Fn fn) {
-  columnar::ColumnBuilder<T> builder(type, num_rows);
-  for (size_t i = 0; i < num_rows; ++i) {
-    Result<std::optional<T>> row = fn(left.GetValue(i), right.GetValue(i));
-    if (!row) {
-      return std::unexpected(row.error());
-    }
-    *row ? builder.Append(**row) : builder.AppendNull();
-  }
-  return std::move(builder).Finish();
-}
-
-[[nodiscard]] Result<std::optional<bool>> ToBool(const Value& v, BinaryOp op) {
-  if (std::holds_alternative<std::monostate>(v)) {
-    return std::nullopt;
-  }
-  if (const auto* b = std::get_if<bool>(&v)) {
-    return *b;
-  }
-  return Error::TypeError("'" + std::string(plan::ToString(op)) + "' needs bool operands");
-}
-
-/// @brief Three-valued AND/OR: the dominant value (false for AND, true for OR) wins over
-/// null; otherwise any null makes the result null.
-[[nodiscard]] Result<std::optional<bool>> AndOr(BinaryOp op, const Value& a, const Value& b) {
-  auto lhs = ToBool(a, op);
-  if (!lhs) {
-    return lhs;
-  }
-  auto rhs = ToBool(b, op);
-  if (!rhs) {
-    return rhs;
-  }
-  const bool dominant = op == BinaryOp::kOr;
-  if (*lhs == dominant || *rhs == dominant) {
-    return dominant;
-  }
-  if (!lhs->has_value() || !rhs->has_value()) {
-    return std::nullopt;
-  }
-  return !dominant;
-}
-
-template <typename T>
-[[nodiscard]] T NumericAs(const Value& v) {
-  return std::visit(
-      [](const auto& x) -> T {
-        using V = std::decay_t<decltype(x)>;
-        if constexpr (std::is_arithmetic_v<V> && !std::is_same_v<V, bool>) {
-          return static_cast<T>(x);
-        } else if constexpr (std::is_same_v<V, columnar::DecimalValue>) {
-          return static_cast<T>(columnar::ToDoubleValue(x));  // a Decimal reaches only Double
-        } else {
-          // BinaryResultType admitted only numeric column types.
-          std::unreachable();
-        }
-      },
-      v);
-}
-
-/// @brief One row of `a op b` computed in the result type @p T.
-template <typename T>
-[[nodiscard]] Result<std::optional<T>> Arithmetic(BinaryOp op, const Value& a, const Value& b) {
-  if (std::holds_alternative<std::monostate>(a) || std::holds_alternative<std::monostate>(b)) {
-    return std::nullopt;
-  }
-  const T x = NumericAs<T>(a);
-  const T y = NumericAs<T>(b);
-  if constexpr (std::is_integral_v<T>) {
-    T out{};
-    bool overflow = false;
-    switch (op) {
-      case BinaryOp::kAdd:
-        overflow = __builtin_add_overflow(x, y, &out);
-        break;
-      case BinaryOp::kSubtract:
-        overflow = __builtin_sub_overflow(x, y, &out);
-        break;
-      case BinaryOp::kMultiply:
-        overflow = __builtin_mul_overflow(x, y, &out);
-        break;
-      case BinaryOp::kModulo:
-        if (y == 0) {
-          return std::nullopt;
-        }
-        // min % -1 overflows in C++; the mathematical result is 0.
-        out = y == -1 ? T{0} : static_cast<T>(x % y);
-        break;
-      default:
-        std::unreachable();  // integer `/` yields double
-    }
-    if (overflow) {
-      return Error::OutOfRange("Integer overflow in '" + std::string(plan::ToString(op)) + "'");
-    }
-    return out;
-  } else {
-    switch (op) {
-      case BinaryOp::kAdd:
-        return x + y;
-      case BinaryOp::kSubtract:
-        return x - y;
-      case BinaryOp::kMultiply:
-        return x * y;
-      case BinaryOp::kDivide:
-        return y == 0 ? std::optional<T>{} : x / y;
-      case BinaryOp::kModulo:
-        return y == 0 ? std::optional<T>{} : std::fmod(x, y);
-      default:
-        std::unreachable();
-    }
-  }
 }
 
 /// @brief True for a NULL literal: only literals are constant columns.
 [[nodiscard]] bool IsNullLiteral(const ColumnVector& col) {
   return col.is_constant() && col.IsNull(0);
+}
+
+/// @brief @p n nulls of @p type, as one constant row.
+[[nodiscard]] ColumnVectorPtr AllNull(DataType type, size_t n) {
+  return columnar::VisitType(type, [&]<typename Tag>(Tag) {
+    ColumnBuilder<typename Tag::CType> builder(type, 1);
+    builder.AppendNull();
+    return ColumnVector::Constant(*std::move(builder).Finish(), n);
+  });
 }
 
 [[nodiscard]] Result<DataType> OperandResultType(BinaryOp op, const ColumnVector& l,
@@ -196,119 +47,75 @@ template <typename T>
                           IsNullLiteral(r) ? l.GetType() : r.GetType());
 }
 
-/// @brief One row of `a op b` as a Decimal of @p scale; BinaryResultType chose @p scale, so
-/// `+` and `-` rescale up and `*` multiplies the unscaled values.
-[[nodiscard]] Result<std::optional<columnar::Decimal64>> DecimalArithmetic(BinaryOp op,
-                                                                           const Value& a,
-                                                                           const Value& b,
-                                                                           int scale) {
-  if (std::holds_alternative<std::monostate>(a) || std::holds_alternative<std::monostate>(b)) {
-    return std::nullopt;
-  }
-  auto unscaled = [](const Value& v) {
-    return std::visit(
-        [](const auto& x) -> std::pair<std::int64_t, int> {
-          if constexpr (kIsExact<std::decay_t<decltype(x)>>) {
-            return columnar::UnscaledAndScale(x);
-          } else {
-            std::unreachable();  // BinaryResultType gives Decimal only for exact operands
-          }
-        },
-        v);
-  };
-  auto [x, xs] = unscaled(a);
-  auto [y, ys] = unscaled(b);
-  const auto overflow = [op] {
-    return Error::OutOfRange("Decimal overflow in '" + std::string(plan::ToString(op)) + "'");
-  };
-  std::int64_t out = 0;
-  if (op == BinaryOp::kMultiply) {
-    if (__builtin_mul_overflow(x, y, &out)) {
-      return overflow();
+// =============================================================================
+// Cast
+// =============================================================================
+
+/// @brief A numeric C++ type a Cast reads or writes: an integer, a float or a Decimal.
+template <typename T>
+constexpr bool kIsNumber = (std::is_arithmetic_v<T> && !std::same_as<T, bool>) ||
+                           std::same_as<T, Decimal64>;
+
+/// @brief One value of @p from (a Decimal at @p from_scale) as @p To (a Decimal at @p to_scale).
+template <typename To, typename From>
+[[nodiscard]] Result<To> CastOne(From from, int from_scale, int to_scale) {
+  if constexpr (std::same_as<To, Decimal64>) {
+    std::optional<std::int64_t> unscaled;
+    if constexpr (std::same_as<From, Decimal64>) {
+      unscaled = to_scale >= from_scale ? columnar::Rescale(from.unscaled, from_scale, to_scale)
+                                        : std::nullopt;
+    } else if constexpr (std::is_integral_v<From>) {
+      unscaled = columnar::Rescale(static_cast<std::int64_t>(from), 0, to_scale);
     }
-    return columnar::Decimal64{out};
+    if (!unscaled) {
+      return Error::OutOfRange("Value out of range in a cast to Decimal of scale " +
+                               std::to_string(to_scale));
+    }
+    return Decimal64{*unscaled};
+  } else if constexpr (std::same_as<From, Decimal64>) {
+    return static_cast<To>(static_cast<double>(from.unscaled) /
+                           static_cast<double>(PowerOfTen(from_scale)));
+  } else {
+    return static_cast<To>(from);
   }
-  const auto xr = columnar::Rescale(x, xs, scale);
-  const auto yr = columnar::Rescale(y, ys, scale);
-  if (!xr || !yr) {
-    return overflow();
-  }
-  const bool overflowed = op == BinaryOp::kAdd ? __builtin_add_overflow(*xr, *yr, &out)
-                                               : __builtin_sub_overflow(*xr, *yr, &out);
-  if (overflowed) {
-    return overflow();
-  }
-  return columnar::Decimal64{out};
 }
 
-[[nodiscard]] Result<ColumnVectorPtr> EvaluateArithmetic(BinaryOp op,
-                                                                       const ColumnVector& l,
-                                                                       const ColumnVector& r,
-                                                                       size_t n) {
-  auto type = OperandResultType(op, l, r);
-  if (!type) {
-    return std::unexpected(type.error());
-  }
-  return columnar::VisitType(*type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
-    using T = typename Tag::CType;
-    if constexpr (std::same_as<T, columnar::Decimal64>) {
-      return MapRows<T>(l, r, n, *type, [op, scale = type->scale](const Value& a, const Value& b) {
-        return DecimalArithmetic(op, a, b, scale);
-      });
-    } else if constexpr (std::is_arithmetic_v<T> && !std::same_as<T, bool>) {
-      return MapRows<T>(l, r, n, *type,
-                        [op](const Value& a, const Value& b) { return Arithmetic<T>(op, a, b); });
-    } else {
-      std::unreachable();  // BinaryResultType yields only numeric types for arithmetic
-    }
-  });
-}
-
-/// @brief @p col as @p type: a numeric value widens and a Decimal rescales. An equal type or
-/// a NULL literal comes back as it is; a constant column stays constant.
-[[nodiscard]] Result<ColumnVectorPtr> CastColumn(const ColumnVectorPtr& col, DataType type) {
-  if (col->GetType() == type || IsNullLiteral(*col)) {
+/// @brief @p col as @p type: a number widens, a Decimal rescales up, a float becomes no
+/// Decimal. An equal type comes back as it is; a constant column stays constant.
+[[nodiscard]] Result<ColumnVectorPtr> Cast(const ColumnVectorPtr& col, DataType type) {
+  if (col->GetType() == type) {
     return col;
   }
+  if (IsNullLiteral(*col)) {
+    return AllNull(type, col->size());
+  }
+  const DataType from_type = col->GetType();
   const size_t rows = col->is_constant() ? 1 : col->size();
-  auto cast = columnar::VisitType(type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
-    using T = typename Tag::CType;
-    columnar::ColumnBuilder<T> builder(type, rows);
-    for (size_t i = 0; i < rows; ++i) {
-      const Value v = col->GetValue(i);
-      if (std::holds_alternative<std::monostate>(v)) {
-        builder.AppendNull();
-        continue;
+  auto cast = columnar::VisitType(from_type, [&]<typename FromTag>(FromTag) {
+    return columnar::VisitType(type, [&]<typename ToTag>(ToTag) -> Result<ColumnVectorPtr> {
+      using From = typename FromTag::CType;
+      using To = typename ToTag::CType;
+      if constexpr ((kIsNumber<From> || std::same_as<From, bool>) && kIsNumber<To> &&
+                    !(std::is_floating_point_v<From> && std::same_as<To, Decimal64>)) {
+        const auto in = col->View<From>();
+        ColumnBuilder<To> out(type, rows);
+        for (size_t i = 0; i < rows; ++i) {
+          if (in.IsNull(i)) {
+            out.AppendNull();
+            continue;
+          }
+          auto value = CastOne<To>(in[i], from_type.scale, type.scale);
+          if (!value) {
+            return std::unexpected(std::move(value).error());
+          }
+          out.Append(*value);
+        }
+        return std::move(out).Finish();
+      } else {
+        return Error::TypeError("Cannot cast " + columnar::GetTypeName(from_type) + " to " +
+                                columnar::GetTypeName(type));
       }
-      Result<T> value = std::visit(
-          [&](const auto& x) -> Result<T> {
-            using V = std::decay_t<decltype(x)>;
-            if constexpr (std::same_as<T, columnar::Decimal64> && kIsExact<V>) {
-              const auto [unscaled, scale] = columnar::UnscaledAndScale(x);
-              const auto rescaled = columnar::Rescale(unscaled, scale, type.scale);
-              if (!rescaled) {
-                return Error::OutOfRange("Decimal overflow in a cast to " +
-                                         columnar::GetTypeName(type));
-              }
-              return T{*rescaled};
-            } else if constexpr (std::is_arithmetic_v<T> && !std::same_as<T, bool> &&
-                                 std::is_arithmetic_v<V> && !std::same_as<V, bool>) {
-              return static_cast<T>(x);
-            } else if constexpr (std::is_floating_point_v<T> &&
-                                 std::same_as<V, columnar::DecimalValue>) {
-              return static_cast<T>(columnar::ToDoubleValue(x));
-            } else {
-              return Error::TypeError("Cannot cast " + columnar::GetTypeName(col->GetType()) +
-                                      " to " + columnar::GetTypeName(type));
-            }
-          },
-          v);
-      if (!value) {
-        return std::unexpected(value.error());
-      }
-      builder.Append(*value);
-    }
-    return std::move(builder).Finish();
+    });
   });
   if (!cast || !col->is_constant()) {
     return cast;
@@ -316,91 +123,250 @@ template <typename T>
   return ColumnVector::Constant(**cast, col->size());
 }
 
-/// @brief @p x as @p T; the caller has checked that the types are equal or both numeric.
-template <typename T, typename S>
-[[nodiscard]] T ConvertTo(const S& x) {
-  if constexpr (std::is_same_v<S, T>) {
-    return x;
-  } else if constexpr (std::is_arithmetic_v<S> && !std::is_same_v<S, bool> &&
-                       std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
-    return static_cast<T>(x);
+// =============================================================================
+// Comparison and AND/OR
+// =============================================================================
+
+/// @brief `l op r` for each row; null where either side is null.
+template <typename Op, typename T>
+[[nodiscard]] ColumnVectorPtr CompareViews(ColumnView<T> l, ColumnView<T> r, size_t n) {
+  ColumnBuilder<bool> out(columnar::DataType::kBool, n);
+  if (!l.has_nulls() && !r.has_nulls()) {
+    for (size_t i = 0; i < n; ++i) {
+      out.Append(Op{}(l[i], r[i]));
+    }
   } else {
-    std::unreachable();
-  }
-}
-
-/// @brief A CASE operand converted to type @p T in plain vectors, so rows are picked without
-/// virtual calls. A broadcast lane holds a single row that stands for every row.
-template <typename T>
-struct Lane {
-  std::vector<T> values;
-  std::vector<bool> validity;  // empty: no row is null
-  bool broadcast = false;
-
-  [[nodiscard]] size_t Row(size_t i) const { return broadcast ? 0 : i; }
-  [[nodiscard]] bool Valid(size_t i) const { return validity.empty() || validity[Row(i)]; }
-};
-
-/// @brief Converts @p col to a `Lane<T>`; a literal becomes a one-row broadcast lane.
-template <typename T>
-[[nodiscard]] Lane<T> ToLane(const ColumnVector& col, size_t num_rows) {
-  Lane<T> lane;
-  lane.broadcast = col.is_constant();
-  const size_t rows = lane.broadcast ? 1 : num_rows;
-  lane.values.resize(rows);
-  lane.validity.assign(rows, true);
-  bool has_null = false;
-  for (size_t i = 0; i < rows; ++i) {
-    const Value v = col.GetValue(i);
-    if (std::holds_alternative<std::monostate>(v)) {
-      lane.validity[i] = false;
-      has_null = true;
-    } else {
-      lane.values[i] = std::visit([](const auto& x) { return ConvertTo<T>(x); }, v);
+    for (size_t i = 0; i < n; ++i) {
+      l.IsNull(i) || r.IsNull(i) ? out.AppendNull() : out.Append(Op{}(l[i], r[i]));
     }
   }
-  if (!has_null) {
-    lane.validity.clear();
-  }
-  return lane;
+  return std::move(out).Finish();
 }
 
-/// @brief Per row, copies `results[b]` for the first `whens[b]` that is true, else
-/// `results.back()` (the ELSE).
-/// @tparam T The result's CType.
-template <typename T>
-[[nodiscard]] ColumnVectorPtr SelectRows(const std::vector<ColumnVectorPtr>& whens,
-                                         const std::vector<ColumnVectorPtr>& results,
-                                         size_t num_rows, DataType type) {
-  std::vector<Lane<bool>> conditions;
-  conditions.reserve(whens.size());
-  for (const auto& when : whens) {
-    conditions.push_back(ToLane<bool>(*when, num_rows));
+/// @brief `l op r` for Decimals of scales @p ls and @p rs: both at the larger scale, in 128
+/// bits so the rescale cannot overflow.
+template <typename Op>
+[[nodiscard]] ColumnVectorPtr CompareDecimals(ColumnView<Decimal64> l, int ls,
+                                              ColumnView<Decimal64> r, int rs, size_t n) {
+  const int scale = std::max(ls, rs);
+  const Int128 lf = PowerOfTen(scale - ls);
+  const Int128 rf = PowerOfTen(scale - rs);
+  ColumnBuilder<bool> out(columnar::DataType::kBool, n);
+  for (size_t i = 0; i < n; ++i) {
+    if (l.IsNull(i) || r.IsNull(i)) {
+      out.AppendNull();
+    } else {
+      out.Append(Op{}(Int128{l[i].unscaled} * lf, Int128{r[i].unscaled} * rf));
+    }
   }
-  std::vector<Lane<columnar::ValueOf<T>>> lanes;
-  lanes.reserve(results.size());
-  for (const auto& result : results) {
-    lanes.push_back(ToLane<columnar::ValueOf<T>>(*result, num_rows));
-  }
+  return std::move(out).Finish();
+}
 
-  columnar::ColumnBuilder<T> builder(type, num_rows);
-  for (size_t i = 0; i < num_rows; ++i) {
-    size_t pick = conditions.size();
-    for (size_t b = 0; b < conditions.size(); ++b) {
-      const Lane<bool>& c = conditions[b];
-      if (c.Valid(i) && c.values[c.Row(i)]) {
-        pick = b;
-        break;
+/// @brief SQL comparison: null if either side is null. Numbers compare in one type (exactly
+/// for integers and Decimals); other mismatched types compare false.
+template <typename Op>
+[[nodiscard]] Result<ColumnVectorPtr> Compare(ColumnVectorPtr l, ColumnVectorPtr r, size_t n) {
+  const DataType bool_type = columnar::DataType::kBool;
+  if (IsNullLiteral(*l) || IsNullLiteral(*r)) {
+    return AllNull(bool_type, n);
+  }
+  DataType lt = l->GetType();
+  DataType rt = r->GetType();
+  if (lt.id != rt.id || (lt != rt && !columnar::IsDecimal(lt))) {
+    // A Bool meets an integer as an integer (true = 1), as in DuckDB.
+    auto integer_like = [](DataType t) {
+      return columnar::IsInteger(t) || t == DataType::kBool;
+    };
+    if (integer_like(lt) && integer_like(rt)) {
+      auto lcast = Cast(l, DataType::kInt64);
+      auto rcast = Cast(r, DataType::kInt64);
+      if (!lcast || !rcast) {
+        return std::unexpected(!lcast ? lcast.error() : rcast.error());
       }
+      return CompareViews<Op, std::int64_t>((*lcast)->View<std::int64_t>(),
+                                            (*rcast)->View<std::int64_t>(), n);
     }
-    const auto& lane = lanes[pick];
-    if (lane.Valid(i)) {
-      builder.Append(columnar::FromValueOf<T>(lane.values[lane.Row(i)]));
-    } else {
-      builder.AppendNull();
+    if (!columnar::IsNumeric(lt) || !columnar::IsNumeric(rt)) {
+      ColumnBuilder<bool> out(bool_type, n);
+      for (size_t i = 0; i < n; ++i) {
+        l->IsNull(i) || r->IsNull(i) ? out.AppendNull() : out.Append(false);
+      }
+      return std::move(out).Finish();
+    }
+    const bool exact = !(lt.id == columnar::TypeId::kFloat || lt.id == columnar::TypeId::kDouble ||
+                         rt.id == columnar::TypeId::kFloat || rt.id == columnar::TypeId::kDouble);
+    const bool decimal = columnar::IsDecimal(lt) || columnar::IsDecimal(rt);
+    // An integer meets a Decimal as Decimal(digits, 0); other mixes meet as Int64 or Double.
+    const DataType lc = !exact ? DataType::kDouble : decimal ? AsDecimal(lt) : DataType::kInt64;
+    const DataType rc = !exact ? DataType::kDouble : decimal ? AsDecimal(rt) : DataType::kInt64;
+    auto lcast = Cast(l, lc);
+    auto rcast = Cast(r, rc);
+    if (!lcast || !rcast) {
+      return std::unexpected(!lcast ? lcast.error() : rcast.error());
+    }
+    l = std::move(*lcast);
+    r = std::move(*rcast);
+    lt = lc;
+    rt = rc;
+  }
+  if (columnar::IsDecimal(lt)) {
+    return CompareDecimals<Op>(l->View<Decimal64>(), lt.scale, r->View<Decimal64>(), rt.scale, n);
+  }
+  return columnar::VisitType(lt, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
+    using T = typename Tag::CType;
+    return CompareViews<Op, T>(l->View<T>(), r->View<T>(), n);
+  });
+}
+
+/// @brief Three-valued AND/OR: the dominant value (false for AND, true for OR) wins over
+/// null; otherwise any null makes the result null.
+[[nodiscard]] Result<ColumnVectorPtr> AndOr(BinaryOp op, ColumnVectorPtr l, ColumnVectorPtr r,
+                                            size_t n) {
+  for (ColumnVectorPtr* side : {&l, &r}) {
+    if (IsNullLiteral(**side)) {
+      *side = AllNull(columnar::DataType::kBool, n);
+    } else if ((*side)->GetType() != columnar::DataType::kBool) {
+      return Error::TypeError("'" + std::string(plan::ToString(op)) + "' needs bool operands");
     }
   }
-  return std::move(builder).Finish();
+  const bool dominant = op == BinaryOp::kOr;
+  const auto a = l->View<bool>();
+  const auto b = r->View<bool>();
+  ColumnBuilder<bool> out(columnar::DataType::kBool, n);
+  for (size_t i = 0; i < n; ++i) {
+    const bool a_null = a.IsNull(i);
+    const bool b_null = b.IsNull(i);
+    if ((!a_null && a[i] == dominant) || (!b_null && b[i] == dominant)) {
+      out.Append(dominant);
+    } else if (a_null || b_null) {
+      out.AppendNull();
+    } else {
+      out.Append(!dominant);
+    }
+  }
+  return std::move(out).Finish();
+}
+
+// =============================================================================
+// Arithmetic
+// =============================================================================
+
+/// @brief `fn(l[i], r[i])` for each row; null where either side is null or fn gives nullopt.
+template <typename Out, typename T, typename Fn>
+[[nodiscard]] Result<ColumnVectorPtr> MapViews(DataType type, ColumnView<T> l, ColumnView<T> r,
+                                               size_t n, Fn fn) {
+  ColumnBuilder<Out> out(type, n);
+  for (size_t i = 0; i < n; ++i) {
+    if (l.IsNull(i) || r.IsNull(i)) {
+      out.AppendNull();
+      continue;
+    }
+    Result<std::optional<Out>> value = fn(l[i], r[i]);
+    if (!value) {
+      return std::unexpected(std::move(value).error());
+    }
+    *value ? out.Append(**value) : out.AppendNull();
+  }
+  return std::move(out).Finish();
+}
+
+[[nodiscard]] std::unexpected<Error> Overflow(BinaryOp op, std::string_view what) {
+  return Error::OutOfRange(std::string(what) + " overflow in '" + std::string(plan::ToString(op)) +
+                           "'");
+}
+
+/// @brief One row of `x op y` for an integer type: overflow is an error, `%` by zero is null.
+template <typename T>
+[[nodiscard]] Result<std::optional<T>> IntegerOp(BinaryOp op, T x, T y) {
+  T out{};
+  bool overflow = false;
+  switch (op) {
+    case BinaryOp::kAdd:
+      overflow = __builtin_add_overflow(x, y, &out);
+      break;
+    case BinaryOp::kSubtract:
+      overflow = __builtin_sub_overflow(x, y, &out);
+      break;
+    case BinaryOp::kMultiply:
+      overflow = __builtin_mul_overflow(x, y, &out);
+      break;
+    case BinaryOp::kModulo:
+      if (y == 0) {
+        return std::nullopt;
+      }
+      // min % -1 overflows in C++; the mathematical result is 0.
+      out = y == -1 ? T{0} : static_cast<T>(x % y);
+      break;
+    default:
+      std::unreachable();  // integer `/` yields double
+  }
+  if (overflow) {
+    return Overflow(op, "Integer");
+  }
+  return out;
+}
+
+/// @brief One row of `x op y` for a float type: `/` and `%` by zero are null.
+template <typename T>
+[[nodiscard]] std::optional<T> FloatingOp(BinaryOp op, T x, T y) {
+  switch (op) {
+    case BinaryOp::kAdd:
+      return x + y;
+    case BinaryOp::kSubtract:
+      return x - y;
+    case BinaryOp::kMultiply:
+      return x * y;
+    case BinaryOp::kDivide:
+      return y == 0 ? std::optional<T>{} : x / y;
+    case BinaryOp::kModulo:
+      return y == 0 ? std::optional<T>{} : std::fmod(x, y);
+    default:
+      std::unreachable();
+  }
+}
+
+/// @brief `l op r` in the result type of BinaryResultType: both operands are cast to it (for
+/// `*` of Decimals, each keeps its scale and the unscaled values multiply), then one loop.
+[[nodiscard]] Result<ColumnVectorPtr> Arithmetic(BinaryOp op, ColumnVectorPtr l,
+                                                 ColumnVectorPtr r, size_t n) {
+  auto type = OperandResultType(op, *l, *r);
+  if (!type) {
+    return std::unexpected(type.error());
+  }
+  if (IsNullLiteral(*l) || IsNullLiteral(*r)) {
+    return AllNull(*type, n);
+  }
+  const bool decimal_product = columnar::IsDecimal(*type) && op == BinaryOp::kMultiply;
+  auto lcast = Cast(l, decimal_product ? AsDecimal(l->GetType()) : *type);
+  auto rcast = Cast(r, decimal_product ? AsDecimal(r->GetType()) : *type);
+  if (!lcast || !rcast) {
+    return std::unexpected(!lcast ? lcast.error() : rcast.error());
+  }
+  return columnar::VisitType(*type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
+    using T = typename Tag::CType;
+    const auto a = (*lcast)->View<T>();
+    const auto b = (*rcast)->View<T>();
+    if constexpr (std::same_as<T, Decimal64>) {
+      return MapViews<T>(*type, a, b, n, [op](T x, T y) -> Result<std::optional<T>> {
+        std::int64_t out = 0;
+        const bool overflow =
+            op == BinaryOp::kAdd        ? __builtin_add_overflow(x.unscaled, y.unscaled, &out)
+            : op == BinaryOp::kSubtract ? __builtin_sub_overflow(x.unscaled, y.unscaled, &out)
+                                        : __builtin_mul_overflow(x.unscaled, y.unscaled, &out);
+        if (overflow) {
+          return Overflow(op, "Decimal");
+        }
+        return T{out};
+      });
+    } else if constexpr (std::is_integral_v<T> && !std::same_as<T, bool>) {
+      return MapViews<T>(*type, a, b, n, [op](T x, T y) { return IntegerOp(op, x, y); });
+    } else if constexpr (std::is_floating_point_v<T>) {
+      return MapViews<T>(*type, a, b, n,
+                         [op](T x, T y) -> Result<std::optional<T>> { return FloatingOp(op, x, y); });
+    } else {
+      std::unreachable();  // BinaryResultType yields only numeric types for arithmetic
+    }
+  });
 }
 
 }  // namespace
@@ -498,15 +464,15 @@ Result<ColumnVectorPtr> BinaryExpression::Evaluate(
     return std::unexpected(right_result.error());
   }
 
-  const auto& l = **left_result;
-  const auto& r = **right_result;
+  ColumnVectorPtr l = std::move(*left_result);
+  ColumnVectorPtr r = std::move(*right_result);
   const size_t n = input.num_rows();
 
   auto compare = [&]<typename Op>() -> Result<ColumnVectorPtr> {
-    if (auto type = OperandResultType(op_, l, r); !type) {
+    if (auto type = OperandResultType(op_, *l, *r); !type) {
       return std::unexpected(type.error());
     }
-    return MapRows<bool>(l, r, n, columnar::DataType::kBool, CompareValues<Op>);
+    return Compare<Op>(l, r, n);
   };
   switch (op_) {
     case BinaryOp::kEq:
@@ -523,14 +489,13 @@ Result<ColumnVectorPtr> BinaryExpression::Evaluate(
       return compare.template operator()<std::greater_equal<>>();
     case BinaryOp::kAnd:
     case BinaryOp::kOr:
-      return MapRows<bool>(l, r, n, columnar::DataType::kBool,
-                           [op = op_](const Value& a, const Value& b) { return AndOr(op, a, b); });
+      return AndOr(op_, l, r, n);
     case BinaryOp::kAdd:
     case BinaryOp::kSubtract:
     case BinaryOp::kMultiply:
     case BinaryOp::kDivide:
     case BinaryOp::kModulo:
-      return EvaluateArithmetic(op_, l, r, n);
+      return Arithmetic(op_, l, r, n);
   }
   std::unreachable();
 }
@@ -594,16 +559,40 @@ Result<ColumnVectorPtr> CaseExpression::Evaluate(const RecordBatch& input) const
   }
 
   for (auto& result : results) {
-    auto cast = CastColumn(result, *type);
+    auto cast = Cast(result, *type);
     if (!cast) {
       return std::unexpected(cast.error());
     }
     result = std::move(*cast);
   }
 
+  // A NULL-literal condition is never true.
+  std::vector<std::optional<ColumnView<bool>>> conditions;
+  conditions.reserve(whens.size());
+  for (const auto& when : whens) {
+    conditions.push_back(IsNullLiteral(*when) ? std::nullopt
+                                              : std::optional(when->View<bool>()));
+  }
   const size_t n = input.num_rows();
   return columnar::VisitType(*type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
-    return SelectRows<typename Tag::CType>(whens, results, n, *type);
+    using T = typename Tag::CType;
+    std::vector<ColumnView<T>> values;
+    values.reserve(results.size());
+    for (const auto& result : results) {
+      values.push_back(result->View<T>());
+    }
+    ColumnBuilder<T> out(*type, n);
+    for (size_t i = 0; i < n; ++i) {
+      size_t pick = conditions.size();  // the ELSE
+      for (size_t b = 0; b < conditions.size(); ++b) {
+        if (conditions[b] && !conditions[b]->IsNull(i) && (*conditions[b])[i]) {
+          pick = b;
+          break;
+        }
+      }
+      values[pick].IsNull(i) ? out.AppendNull() : out.Append(values[pick][i]);
+    }
+    return std::move(out).Finish();
   });
 }
 

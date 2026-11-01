@@ -1313,3 +1313,11 @@ TEST(DecimalExprTest, LiteralIsTypedLikeDuckDb) {
   EXPECT_EQ(lit.ToString(), "0.05");
   EXPECT_EQ(DecimalValueType(DecimalValue{123456, 2}), DataType::Decimal(6, 2));
 }
+
+TEST(SqlNullTest, BoolComparesWithIntegerAsInteger) {
+  RecordBatch batch(Schema({Field("b", DataType::kBool)}),
+                    {MakeColumn<bool>(DataType::kBool, {true, false, std::nullopt})});
+  BinaryExpression eq_one(BinaryOp::kEq, Col(0), Lit(Value{1}));
+  ASSERT_OK_AND_ASSIGN(auto result, eq_one.Evaluate(batch));
+  ExpectColumn<bool>(*result, {true, false, std::nullopt});
+}
