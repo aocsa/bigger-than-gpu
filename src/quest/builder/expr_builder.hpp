@@ -149,6 +149,16 @@ template <LiteralValue T>
   return ExprBuilder(plan::logical::lit(std::move(value)));
 }
 
+/// @brief `CASE WHEN when THEN then ELSE otherwise END`.
+/// @param when Bool condition; null counts as not true.
+/// @param then Value for rows where @p when is true.
+/// @param otherwise Value for the other rows.
+/// @return The CASE expression.
+[[nodiscard]] inline ExprBuilder Case(const ExprBuilder& when, const ExprBuilder& then,
+                                      const ExprBuilder& otherwise) {
+  return ExprBuilder(plan::logical::case_when(when.Build(), then.Build(), otherwise.Build()));
+}
+
 /// @brief Aggregate functions for `GroupBy(...).Aggregate(...)`. A namespace,
 ///        because the logical plan already has classes named Sum, Count, ...
 namespace agg {

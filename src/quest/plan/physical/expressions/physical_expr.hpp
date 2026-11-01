@@ -62,6 +62,9 @@ class MaterializedColumnVector : public ColumnVector {
 
   [[nodiscard]] const ColumnData& data() const { return data_; }
 
+  /// @brief Per-row valid flag; empty means no row is null.
+  [[nodiscard]] const std::vector<bool>& validity() const noexcept { return validity_; }
+
  private:
   ColumnData data_;
   DataType type_;
@@ -171,6 +174,37 @@ class BinaryExpression : public Expression {
   BinaryOp op_;
   ExpressionPtr left_;
   ExpressionPtr right_;
+};
+
+// =============================================================================
+// CASE Expression
+// =============================================================================
+
+/// @brief Searched CASE: per row, the THEN of the first WHEN that is true, else `otherwise`.
+///
+/// A null WHEN counts as not true, as in SQL. Every operand is evaluated once per batch and
+/// rows are then picked from the results; the result type is the `CommonType` of the THENs
+/// and `otherwise` (NULL literals ignored) and a null in the picked operand stays null.
+class CaseExpression : public Expression {
+ public:
+  /// @brief (WHEN, THEN) pairs in evaluation order.
+  using Branches = std::vector<std::pair<ExpressionPtr, ExpressionPtr>>;
+
+  /// @param branches (WHEN, THEN) pairs; at least one.
+  /// @param otherwise The ELSE expression.
+  CaseExpression(Branches branches, ExpressionPtr otherwise)
+      : branches_(std::move(branches)), otherwise_(std::move(otherwise)) {}
+
+  /// @return The selected values, or `TypeError` for a non-bool WHEN or incompatible results.
+  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
+      const RecordBatch& input) const override;
+
+  /// @brief `CASE WHEN <c> THEN <a> ... ELSE <b> END`.
+  [[nodiscard]] std::string ToString() const override;
+
+ private:
+  Branches branches_;
+  ExpressionPtr otherwise_;
 };
 
 // =============================================================================

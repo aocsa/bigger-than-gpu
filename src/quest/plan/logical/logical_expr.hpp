@@ -9,6 +9,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "quest/columnar/column_vector.hpp"
 #include "quest/columnar/schema.hpp"
@@ -133,6 +134,39 @@ class BinaryExpr : public LogicalExpr {
   BinaryOp op_;
   LogicalExprPtr left_;
   LogicalExprPtr right_;
+};
+
+// =============================================================================
+// CASE Expression
+// =============================================================================
+
+/// @brief Searched CASE: the THEN of the first WHEN that is true, else `otherwise`.
+///
+/// Every WHEN must be bool (a null WHEN counts as not true). The result type is the
+/// `CommonType` of the THENs and `otherwise`, ignoring NULL literals.
+class CaseExpr : public LogicalExpr {
+ public:
+  /// @brief (WHEN, THEN) pairs in evaluation order.
+  using Branches = std::vector<std::pair<LogicalExprPtr, LogicalExprPtr>>;
+
+  /// @param branches (WHEN, THEN) pairs; at least one.
+  /// @param otherwise The ELSE expression.
+  CaseExpr(Branches branches, LogicalExprPtr otherwise)
+      : branches_(std::move(branches)), otherwise_(std::move(otherwise)) {}
+
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override;
+
+  /// @brief `CASE WHEN <c> THEN <a> ... ELSE <b> END`.
+  [[nodiscard]] std::string ToString() const override;
+
+  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override;
+
+  [[nodiscard]] const Branches& branches() const noexcept { return branches_; }
+  [[nodiscard]] const LogicalExpr& otherwise() const { return *otherwise_; }
+
+ private:
+  Branches branches_;
+  LogicalExprPtr otherwise_;
 };
 
 // =============================================================================
@@ -322,6 +356,14 @@ inline LogicalExprPtr divide(LogicalExprPtr left, LogicalExprPtr right) {
 
 inline LogicalExprPtr modulo(LogicalExprPtr left, LogicalExprPtr right) {
   return std::make_unique<BinaryExpr>(BinaryOp::kModulo, std::move(left), std::move(right));
+}
+
+/// @brief `CASE WHEN when THEN then ELSE otherwise END`.
+inline LogicalExprPtr case_when(LogicalExprPtr when, LogicalExprPtr then,
+                                LogicalExprPtr otherwise) {
+  CaseExpr::Branches branches;
+  branches.emplace_back(std::move(when), std::move(then));
+  return std::make_unique<CaseExpr>(std::move(branches), std::move(otherwise));
 }
 
 // =============================================================================

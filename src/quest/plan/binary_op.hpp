@@ -91,4 +91,25 @@ inline constexpr std::array<std::string_view, 13> kBinaryOpSymbols = {
   return left.index() >= right.index() ? left : right;
 }
 
+/// @brief Type that both @p left and @p right convert to, e.g. the result type of the
+/// branches of a CASE; shared by `CaseExpr::ToField` and `CaseExpression::Evaluate`.
+///
+/// Equal types yield that type; two numeric types widen as `BinaryResultType` does for `+`.
+/// Callers resolve a NULL literal, which has no type of its own, to the other type.
+/// @param left First type.
+/// @param right Second type.
+/// @return The common type, or `TypeError` if the types are incompatible.
+[[nodiscard]] inline Result<columnar::DataType> CommonType(const columnar::DataType& left,
+                                                           const columnar::DataType& right) {
+  if (left.index() == right.index()) {
+    return left;
+  }
+  auto widened = BinaryResultType(BinaryOp::kAdd, left, right);
+  if (!widened) {
+    return Error::TypeError("No common type for " + columnar::GetTypeName(left) + " and " +
+                            columnar::GetTypeName(right));
+  }
+  return widened;
+}
+
 }  // namespace quest::plan

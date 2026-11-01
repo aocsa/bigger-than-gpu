@@ -827,3 +827,240 @@ TEST(SqlNullTest, LogicalResultTypeMatchesPhysical) {
   BinaryExpr bad(BinaryOp::kAdd, col("a"), col("c"));
   EXPECT_FALSE(bad.ToField(input).has_value());
 }
+
+// =============================================================================
+// CASE expression
+// =============================================================================
+
+namespace {
+
+ExpressionPtr Case(ExpressionPtr when, ExpressionPtr then, ExpressionPtr otherwise) {
+  std::vector<std::pair<ExpressionPtr, ExpressionPtr>> branches;
+  branches.emplace_back(std::move(when), std::move(then));
+  return std::make_unique<CaseExpression>(std::move(branches), std::move(otherwise));
+}
+
+ExpressionPtr Gt(ExpressionPtr l, ExpressionPtr r) {
+  return std::make_unique<BinaryExpression>(BinaryOp::kGt, std::move(l), std::move(r));
+}
+
+/// o_orderpriority: ["1-URGENT", "2-HIGH", "3-MEDIUM", null, "5-LOW", "2-HIGH"].
+RecordBatch MakePriorityBatch() {
+  auto p = std::make_shared<StringColumnVector>(StringType{}, 6);
+  p->Append("1-URGENT");
+  p->Append("2-HIGH");
+  p->Append("3-MEDIUM");
+  p->AppendNull();
+  p->Append("5-LOW");
+  p->Append("2-HIGH");
+  return RecordBatch(Schema({Field("o_orderpriority", StringType{}, Repetition::kOptional)}), {p});
+}
+
+}  // namespace
+
+TEST(CaseExpressionTest, NullWhenTakesElse) {
+  auto batch = MakeTruthTableBatch();  // l: [t, t, t, f, f, f, null, null, null]
+  auto expr = Case(Col(0), Lit(Value{1}), Lit(Value{0}));
+  ASSERT_OK_AND_ASSIGN(auto result, expr->Evaluate(batch));
+  EXPECT_TRUE(std::holds_alternative<Int32Type>(result->GetType()));
+  ExpectColumn<int32_t>(*result, {1, 1, 1, 0, 0, 0, 0, 0, 0});
+}
+
+TEST(CaseExpressionTest, NullLiteralWhenTakesElse) {
+  auto batch = MakeTestBatch();
+  auto expr = Case(Lit(std::monostate{}), Lit(Value{1}), Lit(Value{0}));
+  ASSERT_OK_AND_ASSIGN(auto result, expr->Evaluate(batch));
+  ExpectColumn<int32_t>(*result, {0, 0, 0, 0, 0});
+}
+
+TEST(CaseExpressionTest, NullsInChosenBranchArePreserved) {
+  auto batch = MakeNullableBatch();  // a: [10, null, 30, null, 50]
+  auto then_a = Case(Gt(Col(0), Lit(Value{20})), Col(0), Lit(std::monostate{}));
+  ASSERT_OK_AND_ASSIGN(auto r1, then_a->Evaluate(batch));
+  EXPECT_TRUE(std::holds_alternative<Int32Type>(r1->GetType()));
+  ExpectColumn<int32_t>(*r1, {std::nullopt, std::nullopt, 30, std::nullopt, 50});
+
+  auto else_a = Case(Gt(Col(0), Lit(Value{20})), Lit(std::monostate{}), Col(0));
+  ASSERT_OK_AND_ASSIGN(auto r2, else_a->Evaluate(batch));
+  EXPECT_TRUE(std::holds_alternative<Int32Type>(r2->GetType()));
+  ExpectColumn<int32_t>(*r2, {10, std::nullopt, std::nullopt, std::nullopt, std::nullopt});
+
+  // A null in the branch that is not chosen does not leak into the result.
+  auto expr = Case(Gt(Col(0), Lit(Value{20})), Lit(Value{1}), Col(0));
+  ASSERT_OK_AND_ASSIGN(auto r3, expr->Evaluate(batch));
+  ExpectColumn<int32_t>(*r3, {10, std::nullopt, 1, std::nullopt, 1});
+}
+
+TEST(CaseExpressionTest, BranchesWidenToCommonType) {
+  auto batch = MakeTestBatch();  // a: int32 [10..50], b: double [1..5], c: [t, f, t, f, t]
+  auto same = Case(Col(2), Col(0), Col(0));
+  ASSERT_OK_AND_ASSIGN(auto r1, same->Evaluate(batch));
+  EXPECT_TRUE(std::holds_alternative<Int32Type>(r1->GetType()));
+  ExpectColumn<int32_t>(*r1, {10, 20, 30, 40, 50});
+
+  auto int64 = Case(Col(2), Col(0), Lit(Value{int64_t{7}}));
+  ASSERT_OK_AND_ASSIGN(auto r2, int64->Evaluate(batch));
+  EXPECT_TRUE(std::holds_alternative<Int64Type>(r2->GetType()));
+  ExpectColumn<int64_t>(*r2, {10, 7, 30, 7, 50});
+
+  auto dbl = Case(Col(2), Col(0), Col(1));
+  ASSERT_OK_AND_ASSIGN(auto r3, dbl->Evaluate(batch));
+  EXPECT_TRUE(std::holds_alternative<DoubleType>(r3->GetType()));
+  ExpectColumn<double>(*r3, {10.0, 2.0, 30.0, 4.0, 50.0});
+
+  auto strings = Case(Col(2), Lit(Value{std::string("y")}), Lit(Value{std::string("n")}));
+  ASSERT_OK_AND_ASSIGN(auto r4, strings->Evaluate(batch));
+  EXPECT_TRUE(std::holds_alternative<StringType>(r4->GetType()));
+  ExpectColumn<std::string>(*r4, {"y", "n", "y", "n", "y"});
+
+  auto bools = Case(Col(2), Lit(Value{false}), Col(2));
+  ASSERT_OK_AND_ASSIGN(auto r5, bools->Evaluate(batch));
+  EXPECT_TRUE(std::holds_alternative<BoolType>(r5->GetType()));
+  ExpectColumn<bool>(*r5, {false, false, false, false, false});
+}
+
+TEST(CaseExpressionTest, TypeErrors) {
+  auto batch = MakeTestBatch();
+  auto non_bool_when = Case(Col(0), Lit(Value{1}), Lit(Value{0}));
+  auto r1 = non_bool_when->Evaluate(batch);
+  ASSERT_FALSE(r1.has_value());
+  EXPECT_EQ(r1.error().code(), ErrorCode::TypeError);
+
+  auto int_vs_string = Case(Col(2), Col(0), Lit(Value{std::string("x")}));
+  auto r2 = int_vs_string->Evaluate(batch);
+  ASSERT_FALSE(r2.has_value());
+  EXPECT_EQ(r2.error().code(), ErrorCode::TypeError);
+
+  auto bool_vs_int = Case(Col(2), Col(2), Col(0));
+  auto r3 = bool_vs_int->Evaluate(batch);
+  ASSERT_FALSE(r3.has_value());
+  EXPECT_EQ(r3.error().code(), ErrorCode::TypeError);
+}
+
+TEST(CaseExpressionTest, ToString) {
+  auto expr = Case(Col(2), Lit(Value{1}), Lit(Value{0}));
+  EXPECT_EQ(expr->ToString(), "CASE WHEN #2 THEN 1 ELSE 0 END");
+}
+
+TEST(CaseExpressionTest, EmptyBatch) {
+  RecordBatch empty(Schema({Field("c", BoolType{})}),
+                    {std::make_shared<TypedColumnVector<bool>>(BoolType{}, 0)});
+  auto expr = Case(Col(0), Lit(Value{1}), Col(0));
+  ASSERT_FALSE(expr->Evaluate(empty).has_value());  // int32 vs bool is still a type error
+  auto ok = Case(Col(0), Lit(Value{1}), Lit(Value{0}));
+  ASSERT_OK_AND_ASSIGN(auto result, ok->Evaluate(empty));
+  EXPECT_EQ(result->size(), 0U);
+}
+
+TEST(CaseExpressionTest, Q12PriorityFlag) {
+  // CASE WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END
+  auto batch = MakePriorityBatch();
+  auto is = [](const char* s) {
+    return std::make_unique<BinaryExpression>(BinaryOp::kEq, Col(0), Lit(Value{std::string(s)}));
+  };
+  auto isnt = [](const char* s) {
+    return std::make_unique<BinaryExpression>(BinaryOp::kNeq, Col(0), Lit(Value{std::string(s)}));
+  };
+  auto high = Case(std::make_unique<BinaryExpression>(BinaryOp::kOr, is("1-URGENT"), is("2-HIGH")),
+                   Lit(Value{1}), Lit(Value{0}));
+  ASSERT_OK_AND_ASSIGN(auto high_result, high->Evaluate(batch));
+  EXPECT_TRUE(std::holds_alternative<Int32Type>(high_result->GetType()));
+  ExpectColumn<int32_t>(*high_result, {1, 1, 0, 0, 0, 1});
+
+  auto low =
+      Case(std::make_unique<BinaryExpression>(BinaryOp::kAnd, isnt("1-URGENT"), isnt("2-HIGH")),
+           Lit(Value{1}), Lit(Value{0}));
+  ASSERT_OK_AND_ASSIGN(auto low_result, low->Evaluate(batch));
+  ExpectColumn<int32_t>(*low_result, {0, 0, 1, 0, 1, 0});
+}
+
+TEST(CaseExprTest, ToString) {
+  auto expr = case_when(eq(col("p"), lit(std::string("1-URGENT"))), lit(1), lit(0));
+  EXPECT_EQ(expr->ToString(), "CASE WHEN (#p == \"1-URGENT\") THEN 1 ELSE 0 END");
+  EXPECT_EQ(expr->Clone()->ToString(), expr->ToString());
+}
+
+TEST(CaseExprTest, ResultTypeIsCommonTypeOfBranches) {
+  SchemaOnlyPlan input(Schema({Field("a", Int32Type{}), Field("b", DoubleType{}),
+                               Field("c", BoolType{}), Field("s", StringType{})}));
+  struct Want {
+    LogicalExprPtr then;
+    LogicalExprPtr otherwise;
+    DataType type;
+  };
+  Want cases[] = {
+      {col("a"), col("a"), Int32Type{}},
+      {col("a"), lit(int64_t{7}), Int64Type{}},
+      {lit(int8_t{1}), lit(int16_t{2}), Int16Type{}},
+      {col("a"), col("b"), DoubleType{}},
+      {lit(1.5F), col("a"), DoubleType{}},
+      {lit(1.5F), lit(2.5F), FloatType{}},
+      {col("a"), lit(Value{std::monostate{}}), Int32Type{}},
+      {lit(Value{std::monostate{}}), col("b"), DoubleType{}},
+      {col("s"), lit(std::string("x")), StringType{}},
+      {col("c"), lit(false), BoolType{}},
+  };
+  for (auto& c : cases) {
+    std::vector<std::pair<LogicalExprPtr, LogicalExprPtr>> branches;
+    branches.emplace_back(col("c"), std::move(c.then));
+    CaseExpr expr(std::move(branches), std::move(c.otherwise));
+    SCOPED_TRACE(expr.ToString());
+    ASSERT_OK_AND_ASSIGN(auto field, expr.ToField(input));
+    EXPECT_EQ(field.data_type.index(), c.type.index());
+    EXPECT_EQ(field.name, expr.ToString());
+  }
+}
+
+TEST(CaseExprTest, TypeErrors) {
+  SchemaOnlyPlan input(
+      Schema({Field("a", Int32Type{}), Field("c", BoolType{}), Field("s", StringType{})}));
+  auto expect_type_error = [&](const LogicalExprPtr& expr) {
+    SCOPED_TRACE(expr->ToString());
+    auto field = expr->ToField(input);
+    ASSERT_FALSE(field.has_value());
+    EXPECT_EQ(field.error().code(), ErrorCode::TypeError);
+  };
+  expect_type_error(case_when(col("a"), lit(1), lit(0)));
+  expect_type_error(case_when(col("s"), lit(1), lit(0)));
+  expect_type_error(case_when(col("c"), col("a"), col("s")));
+  expect_type_error(case_when(col("c"), col("c"), col("a")));
+
+  auto missing = case_when(col("c"), col("nope"), lit(0))->ToField(input);
+  ASSERT_FALSE(missing.has_value());
+  EXPECT_EQ(missing.error().code(), ErrorCode::SchemaError);
+}
+
+TEST(CaseExprTest, LogicalTypeMatchesPhysical) {
+  SchemaOnlyPlan input(
+      Schema({Field("a", Int32Type{}), Field("b", DoubleType{}), Field("c", BoolType{})}));
+  auto batch = MakeTestBatch();
+  auto branches = [] {
+    std::vector<std::pair<LogicalExprPtr, LogicalExprPtr>> v;
+    v.emplace_back(col("a"), col("a"));
+    v.emplace_back(col("a"), lit(int64_t{7}));
+    v.emplace_back(col("b"), col("a"));
+    v.emplace_back(lit(Value{std::monostate{}}), col("a"));
+    v.emplace_back(col("c"), lit(true));
+    return v;
+  };
+  for (auto& [then, otherwise] : branches()) {
+    auto expr = case_when(gt(col("a"), lit(20)), std::move(then), std::move(otherwise));
+    SCOPED_TRACE(expr->ToString());
+    ASSERT_OK_AND_ASSIGN(auto field, expr->ToField(input));
+    ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(*expr, input));
+    ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
+    EXPECT_EQ(field.data_type.index(), result->GetType().index());
+  }
+}
+
+TEST(CaseExprTest, LoweredQ12PriorityFlag) {
+  SchemaOnlyPlan input(Schema({Field("o_orderpriority", StringType{}, Repetition::kOptional)}));
+  auto expr = case_when(or_expr(eq(col("o_orderpriority"), lit(std::string("1-URGENT"))),
+                                eq(col("o_orderpriority"), lit(std::string("2-HIGH")))),
+                        lit(1), lit(0));
+  ASSERT_OK_AND_ASSIGN(auto field, expr->ToField(input));
+  EXPECT_TRUE(std::holds_alternative<Int32Type>(field.data_type));
+  ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(*expr, input));
+  ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(MakePriorityBatch()));
+  ExpectColumn<int32_t>(*result, {1, 1, 0, 0, 0, 1});
+}

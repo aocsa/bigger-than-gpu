@@ -200,6 +200,121 @@ template <typename T>
       *type);
 }
 
+/// @brief @p x as @p T; the caller has checked that the types are equal or both numeric.
+template <typename T, typename S>
+[[nodiscard]] T ConvertTo(const S& x) {
+  if constexpr (std::is_same_v<S, T>) {
+    return x;
+  } else if constexpr (std::is_arithmetic_v<S> && !std::is_same_v<S, bool> &&
+                       std::is_arithmetic_v<T> && !std::is_same_v<T, bool>) {
+    return static_cast<T>(x);
+  } else {
+    std::unreachable();
+  }
+}
+
+/// @brief A CASE operand converted to type @p T in plain vectors, so rows are picked without
+/// virtual calls. A broadcast lane holds a single row that stands for every row.
+template <typename T>
+struct Lane {
+  std::vector<T> values;
+  std::vector<bool> validity;  // empty: no row is null
+  bool broadcast = false;
+
+  [[nodiscard]] size_t Row(size_t i) const { return broadcast ? 0 : i; }
+  [[nodiscard]] bool Valid(size_t i) const { return validity.empty() || validity[Row(i)]; }
+};
+
+/// @brief Converts @p col to a `Lane<T>`. Literals and expression results are converted in
+/// bulk; other columns (e.g. scanned ones) go through `GetValue`.
+template <typename T>
+[[nodiscard]] Lane<T> ToLane(const ColumnVector& col, size_t num_rows) {
+  Lane<T> lane;
+  if (const auto* lit = dynamic_cast<const LiteralColumnVector*>(&col)) {
+    lane.broadcast = true;
+    if (std::holds_alternative<std::monostate>(lit->value())) {
+      lane.values.emplace_back();
+      lane.validity.push_back(false);
+    } else {
+      lane.values.push_back(
+          std::visit([](const auto& x) { return ConvertTo<T>(x); }, lit->value()));
+    }
+    return lane;
+  }
+  if (const auto* mat = dynamic_cast<const MaterializedColumnVector*>(&col)) {
+    std::visit(
+        [&lane](const auto& src) {
+          // Explicit source type: vector<bool> iterates proxies, not bools.
+          using S = typename std::decay_t<decltype(src)>::value_type;
+          lane.values.reserve(src.size());
+          for (const auto& x : src) {
+            lane.values.push_back(ConvertTo<T, S>(x));
+          }
+        },
+        mat->data());
+    lane.validity = mat->validity();
+    return lane;
+  }
+  lane.values.resize(num_rows);
+  lane.validity.assign(num_rows, true);
+  bool has_null = false;
+  for (size_t i = 0; i < num_rows; ++i) {
+    const Value v = col.GetValue(i);
+    if (std::holds_alternative<std::monostate>(v)) {
+      lane.validity[i] = false;
+      has_null = true;
+    } else {
+      lane.values[i] = std::visit([](const auto& x) { return ConvertTo<T>(x); }, v);
+    }
+  }
+  if (!has_null) {
+    lane.validity.clear();
+  }
+  return lane;
+}
+
+/// @brief Per row, copies `results[b]` for the first `whens[b]` that is true, else
+/// `results.back()` (the ELSE).
+template <typename T>
+[[nodiscard]] std::shared_ptr<ColumnVector> SelectRows(
+    const std::vector<std::shared_ptr<ColumnVector>>& whens,
+    const std::vector<std::shared_ptr<ColumnVector>>& results, size_t num_rows, DataType type) {
+  std::vector<Lane<bool>> conditions;
+  conditions.reserve(whens.size());
+  for (const auto& when : whens) {
+    conditions.push_back(ToLane<bool>(*when, num_rows));
+  }
+  std::vector<Lane<T>> lanes;
+  lanes.reserve(results.size());
+  for (const auto& result : results) {
+    lanes.push_back(ToLane<T>(*result, num_rows));
+  }
+
+  std::vector<T> values(num_rows);
+  std::vector<bool> validity(num_rows, true);
+  bool has_null = false;
+  for (size_t i = 0; i < num_rows; ++i) {
+    size_t pick = conditions.size();
+    for (size_t b = 0; b < conditions.size(); ++b) {
+      const Lane<bool>& c = conditions[b];
+      if (c.Valid(i) && c.values[c.Row(i)]) {
+        pick = b;
+        break;
+      }
+    }
+    const Lane<T>& lane = lanes[pick];
+    if (lane.Valid(i)) {
+      values[i] = lane.values[lane.Row(i)];
+    } else {
+      validity[i] = false;
+      has_null = true;
+    }
+  }
+  return std::make_shared<MaterializedColumnVector>(
+      ColumnData{std::move(values)}, std::move(type),
+      has_null ? std::move(validity) : std::vector<bool>{});
+}
+
 }  // namespace
 
 // =============================================================================
@@ -337,6 +452,94 @@ std::string BinaryExpression::ToString() const {
   std::string s =
       left_->ToString() + " " + std::string(plan::ToString(op_)) + " " + right_->ToString();
   return IsArithmetic(op_) ? "(" + s + ")" : s;
+}
+
+// =============================================================================
+// CASE Expression
+// =============================================================================
+
+Result<std::shared_ptr<ColumnVector>> CaseExpression::Evaluate(const RecordBatch& input) const {
+  std::vector<std::shared_ptr<ColumnVector>> whens;
+  std::vector<std::shared_ptr<ColumnVector>> results;
+  whens.reserve(branches_.size());
+  results.reserve(branches_.size() + 1);
+  for (const auto& [when, then] : branches_) {
+    auto condition = when->Evaluate(input);
+    if (!condition) {
+      return std::unexpected(condition.error());
+    }
+    const DataType condition_type = (*condition)->GetType();
+    if (!IsNullLiteral(**condition) &&
+        !std::holds_alternative<columnar::BoolType>(condition_type)) {
+      return Error::TypeError("CASE WHEN needs a bool condition, got " +
+                              columnar::GetTypeName(condition_type));
+    }
+    whens.push_back(std::move(*condition));
+    auto result = then->Evaluate(input);
+    if (!result) {
+      return std::unexpected(result.error());
+    }
+    results.push_back(std::move(*result));
+  }
+  auto otherwise = otherwise_->Evaluate(input);
+  if (!otherwise) {
+    return std::unexpected(otherwise.error());
+  }
+  results.push_back(std::move(*otherwise));
+
+  std::optional<DataType> type;
+  for (const auto& result : results) {
+    if (IsNullLiteral(*result)) {
+      continue;
+    }
+    if (!type) {
+      type = result->GetType();
+      continue;
+    }
+    auto common = CommonType(*type, result->GetType());
+    if (!common) {
+      return std::unexpected(common.error());
+    }
+    type = std::move(*common);
+  }
+  if (!type) {
+    type = results.back()->GetType();  // every result is a NULL literal
+  }
+
+  const size_t n = input.num_rows();
+  return std::visit(
+      [&](const auto& tag) -> Result<std::shared_ptr<ColumnVector>> {
+        using Tag = std::decay_t<decltype(tag)>;
+        if constexpr (std::is_same_v<Tag, columnar::BoolType>) {
+          return SelectRows<bool>(whens, results, n, *type);
+        } else if constexpr (std::is_same_v<Tag, columnar::Int8Type>) {
+          return SelectRows<int8_t>(whens, results, n, *type);
+        } else if constexpr (std::is_same_v<Tag, columnar::Int16Type>) {
+          return SelectRows<int16_t>(whens, results, n, *type);
+        } else if constexpr (std::is_same_v<Tag, columnar::Int32Type>) {
+          return SelectRows<int32_t>(whens, results, n, *type);
+        } else if constexpr (std::is_same_v<Tag, columnar::Int64Type>) {
+          return SelectRows<int64_t>(whens, results, n, *type);
+        } else if constexpr (std::is_same_v<Tag, columnar::FloatType>) {
+          return SelectRows<float>(whens, results, n, *type);
+        } else if constexpr (std::is_same_v<Tag, columnar::DoubleType>) {
+          return SelectRows<double>(whens, results, n, *type);
+        } else if constexpr (std::is_same_v<Tag, columnar::StringType>) {
+          return SelectRows<std::string>(whens, results, n, *type);
+        } else {
+          return Error::TypeError("CASE cannot produce " + columnar::GetTypeName(*type) +
+                                  " values");
+        }
+      },
+      *type);
+}
+
+std::string CaseExpression::ToString() const {
+  std::string s = "CASE";
+  for (const auto& [when, then] : branches_) {
+    s += " WHEN " + when->ToString() + " THEN " + then->ToString();
+  }
+  return s + " ELSE " + otherwise_->ToString() + " END";
 }
 
 // =============================================================================

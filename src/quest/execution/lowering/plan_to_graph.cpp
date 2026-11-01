@@ -48,6 +48,28 @@ Result<plan::physical::ExpressionPtr> CreatePhysicalExpr(
         binary->op(), std::move(*left_result), std::move(*right_result));
   }
 
+  if (const auto* case_expr = dynamic_cast<const plan::logical::CaseExpr*>(&expr)) {
+    plan::physical::CaseExpression::Branches branches;
+    branches.reserve(case_expr->branches().size());
+    for (const auto& [when, then] : case_expr->branches()) {
+      auto when_result = CreatePhysicalExpr(*when, input);
+      if (!when_result) {
+        return std::unexpected(when_result.error());
+      }
+      auto then_result = CreatePhysicalExpr(*then, input);
+      if (!then_result) {
+        return std::unexpected(then_result.error());
+      }
+      branches.emplace_back(std::move(*when_result), std::move(*then_result));
+    }
+    auto otherwise_result = CreatePhysicalExpr(case_expr->otherwise(), input);
+    if (!otherwise_result) {
+      return std::unexpected(otherwise_result.error());
+    }
+    return std::make_unique<plan::physical::CaseExpression>(std::move(branches),
+                                                            std::move(*otherwise_result));
+  }
+
   return std::unexpected(
       Error::PhysicalPlanError("Cannot create physical expression from: " + expr.ToString()));
 }

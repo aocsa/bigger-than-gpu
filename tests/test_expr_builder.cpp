@@ -6,12 +6,15 @@
 
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <functional>
 #include <vector>
 
 #include "quest/builder/expr_builder.hpp"
+#include "quest/builder/query_builder.hpp"
 #include "quest/builder/query_plan.hpp"
 #include "quest/columnar/record_batch.hpp"
+#include "support/test_utils.hpp"
 
 using namespace quest;
 using namespace quest::columnar;
@@ -192,6 +195,46 @@ TEST(ExprBuilderRuleOfFive, MoveAssignment) {
 TEST(ExprBuilderRuleOfFive, BoolConversion) {
   auto valid = Col("id");
   EXPECT_TRUE(static_cast<bool>(valid));
+}
+
+// =============================================================================
+// CASE Tests
+// =============================================================================
+
+TEST(ExprBuilderCase, BuildsSearchedCase) {
+  auto expr = Case(Col("dept") == Lit(std::string("HR")) || Col("dept") == Lit(std::string("IT")),
+                   Lit(1), Lit(0));
+  EXPECT_EQ(expr.Build()->ToString(),
+            "CASE WHEN ((#dept == \"HR\") OR (#dept == \"IT\")) THEN 1 ELSE 0 END");
+}
+
+TEST(ExprBuilderCase, FilterOnCaseMatchesPlainPredicate) {
+  const auto path = std::filesystem::path(__FILE__).parent_path().parent_path() / "examples" /
+                    "employees_uncompressed.parquet";
+  if (!std::filesystem::exists(path)) {
+    GTEST_SKIP() << "missing " << path;
+  }
+  auto count_rows = [&](ExprBuilder predicate) -> Result<size_t> {
+    auto builder = QueryBuilder::FromParquet(path.string());
+    if (!builder) {
+      return std::unexpected(builder.error());
+    }
+    auto batches = std::move(*builder).Where(std::move(predicate)).ExecuteOnGraph();
+    if (!batches) {
+      return std::unexpected(batches.error());
+    }
+    size_t rows = 0;
+    for (const auto& batch : *batches) {
+      rows += batch.num_rows();
+    }
+    return rows;
+  };
+  // salary is int64.
+  ASSERT_OK_AND_ASSIGN(auto plain, count_rows(Col("salary") > Lit(int64_t{60000})));
+  ASSERT_OK_AND_ASSIGN(
+      auto via_case, count_rows(Case(Col("salary") > Lit(int64_t{60000}), Lit(true), Lit(false))));
+  EXPECT_EQ(plain, 86290U);
+  EXPECT_EQ(via_case, 86290U);
 }
 
 // =============================================================================

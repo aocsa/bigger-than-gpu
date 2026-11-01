@@ -3,6 +3,8 @@
 
 #include "quest/plan/logical/logical_expr.hpp"
 
+#include <optional>
+
 #include "quest/plan/logical/logical_plan.hpp"
 
 namespace quest::plan::logical {
@@ -103,6 +105,67 @@ Result<Field> BinaryExpr::ToField(const LogicalPlan& input) const {
 std::string BinaryExpr::ToString() const {
   return "(" + left_->ToString() + " " + std::string(plan::ToString(op_)) + " " +
          right_->ToString() + ")";
+}
+
+Result<Field> CaseExpr::ToField(const LogicalPlan& input) const {
+  std::optional<DataType> type;
+  auto unify = [&](const LogicalExpr& result) -> Status {
+    auto field = result.ToField(input);
+    if (!field) {
+      return std::unexpected(field.error());
+    }
+    if (IsNullLiteral(result)) {
+      return {};
+    }
+    if (!type) {
+      type = field->data_type;
+      return {};
+    }
+    auto common = CommonType(*type, field->data_type);
+    if (!common) {
+      return std::unexpected(common.error());
+    }
+    type = std::move(*common);
+    return {};
+  };
+  for (const auto& [when, then] : branches_) {
+    auto condition = when->ToField(input);
+    if (!condition) {
+      return condition;
+    }
+    if (!IsNullLiteral(*when) &&
+        !std::holds_alternative<columnar::BoolType>(condition->data_type)) {
+      return Error::TypeError("CASE WHEN needs a bool condition, got " +
+                              columnar::GetTypeName(condition->data_type));
+    }
+    if (auto status = unify(*then); !status) {
+      return std::unexpected(status.error());
+    }
+  }
+  if (auto status = unify(*otherwise_); !status) {
+    return std::unexpected(status.error());
+  }
+  if (!type) {
+    type = otherwise_->ToField(input)->data_type;  // every result is a NULL literal
+  }
+  return Field{ToString(), std::move(*type)};
+}
+
+std::string CaseExpr::ToString() const {
+  std::string s = "CASE";
+  for (const auto& [when, then] : branches_) {
+    s += " WHEN " + when->ToString() + " THEN " + then->ToString();
+  }
+  return s + " ELSE " + otherwise_->ToString() + " END";
+}
+
+std::unique_ptr<LogicalExpr> CaseExpr::Clone() const {
+  Branches branches;
+  branches.reserve(branches_.size());
+  for (const auto& [when, then] : branches_) {
+    branches.emplace_back(when->Clone(), then->Clone());
+  }
+  return std::make_unique<CaseExpr>(std::move(branches), otherwise_->Clone());
 }
 
 Result<Field> Sum::ToField(const LogicalPlan& input) const {
