@@ -140,6 +140,15 @@ gtest_discover_tests(test_blazing_parity DISCOVERY_TIMEOUT 60)
 add_executable(test_bloom_filter test_bloom_filter.cpp)
 target_link_libraries(test_bloom_filter PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_bloom_filter DISCOVERY_TIMEOUT 60)
+
+add_executable(test_hash_aggregate test_hash_aggregate.cpp)
+target_link_libraries(test_hash_aggregate PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_hash_aggregate DISCOVERY_TIMEOUT 60)
+
+add_executable(test_sort test_sort.cpp)
+target_link_libraries(test_sort PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_sort DISCOVERY_TIMEOUT 60)
+
 if(TARGET bloom_join_demo)
     add_test(NAME BloomJoin.Demo COMMAND bloom_join_demo)
 endif()

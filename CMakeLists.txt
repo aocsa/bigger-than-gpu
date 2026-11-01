@@ -71,6 +71,8 @@ set(QUEST_SOURCES
     src/quest/taskflow/pipeline.cpp
     src/quest/taskflow/meta_pipeline.cpp
     src/quest/taskflow/pipeline_executor.cpp
+    src/quest/taskflow/operators/hash_aggregate_operator.cpp
+    src/quest/taskflow/operators/sort_operator.cpp
 )
 
 # Create library
