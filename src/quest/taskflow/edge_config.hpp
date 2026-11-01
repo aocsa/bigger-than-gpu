@@ -10,10 +10,12 @@
 /// on edge configuration types without pulling in the legacy KPair DSL.
 /// kpair.hpp and its DSL (>>, link(), Graph::operator+=) were removed in D4.
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <string_view>
+#include <utility>
 
 #include "quest/cache/batch_holder.hpp"
 
@@ -41,14 +43,11 @@ enum class BarrierType : std::uint8_t {
   Full
 };
 
+inline constexpr std::array<std::string_view, 2> kBarrierTypeNames = {"Pipeline", "Full"};
+static_assert(kBarrierTypeNames.size() == std::to_underlying(BarrierType::Full) + 1);
+
 [[nodiscard]] constexpr std::string_view to_string(BarrierType type) noexcept {
-  switch (type) {
-    case BarrierType::Pipeline:
-      return "Pipeline";
-    case BarrierType::Full:
-      return "Full";
-  }
-  return "Unknown";
+  return kBarrierTypeNames[std::to_underlying(type)];
 }
 
 // =============================================================================

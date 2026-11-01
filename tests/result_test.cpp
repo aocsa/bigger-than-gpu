@@ -219,7 +219,7 @@ TEST(ErrorCodeTest, AllCodes) {
     EXPECT_NE(ErrorCode::IOError, ErrorCode::OutOfMemory);
     EXPECT_NE(ErrorCode::OutOfMemory, ErrorCode::NotFound);
 
-    EXPECT_EQ(static_cast<int>(ErrorCode::None), 0);
+    EXPECT_EQ(std::to_underlying(ErrorCode::None), 0);
 }
 
 // =============================================================================

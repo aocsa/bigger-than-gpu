@@ -3,8 +3,10 @@
 /// @file operator_type.hpp
 /// @brief Operator type enum and classification predicates for the execution graph.
 
+#include <array>
 #include <cstdint>
 #include <string_view>
+#include <utility>
 
 namespace quest::taskflow {
 
@@ -45,29 +47,14 @@ enum class OperatorType : std::uint8_t {
     Unknown
 };
 
+inline constexpr std::array<std::string_view, 19> kOperatorTypeNames = {
+    "TableScan", "BindableTableScan", "Generate", "Project", "Filter", "Union", "ComputeAggregate",
+    "DistributeAggregate", "MergeAggregate", "SortAndSample", "Partition", "PartitionSingleNode",
+    "MergeStream", "PartwiseJoin", "JoinPartition", "Limit", "Output", "Print", "Unknown"};
+static_assert(kOperatorTypeNames.size() == std::to_underlying(OperatorType::Unknown) + 1);
+
 [[nodiscard]] constexpr std::string_view to_string(OperatorType type) noexcept {
-    switch (type) {
-        case OperatorType::TableScan:           return "TableScan";
-        case OperatorType::BindableTableScan:   return "BindableTableScan";
-        case OperatorType::Generate:            return "Generate";
-        case OperatorType::Project:             return "Project";
-        case OperatorType::Filter:              return "Filter";
-        case OperatorType::Union:               return "Union";
-        case OperatorType::ComputeAggregate:    return "ComputeAggregate";
-        case OperatorType::DistributeAggregate: return "DistributeAggregate";
-        case OperatorType::MergeAggregate:      return "MergeAggregate";
-        case OperatorType::SortAndSample:       return "SortAndSample";
-        case OperatorType::Partition:           return "Partition";
-        case OperatorType::PartitionSingleNode: return "PartitionSingleNode";
-        case OperatorType::MergeStream:         return "MergeStream";
-        case OperatorType::PartwiseJoin:        return "PartwiseJoin";
-        case OperatorType::JoinPartition:       return "JoinPartition";
-        case OperatorType::Limit:               return "Limit";
-        case OperatorType::Output:              return "Output";
-        case OperatorType::Print:               return "Print";
-        case OperatorType::Unknown:             return "Unknown";
-    }
-    return "Unknown";
+    return kOperatorTypeNames[std::to_underlying(type)];
 }
 
 /// @brief Check if operator is a data source (has no required inputs)

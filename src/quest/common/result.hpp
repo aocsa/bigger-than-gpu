@@ -3,6 +3,7 @@
 /// @file result.hpp
 /// @brief Result<T> and Status error-handling types built on std::expected.
 
+#include <array>
 #include <expected>
 #include <format>
 #include <string>
@@ -79,48 +80,15 @@ enum class ErrorCode : uint8_t {
   SchemaError
 };
 
+inline constexpr std::array<std::string_view, 19> kErrorCodeNames = {
+    "None", "Invalid", "IOError", "OutOfMemory", "NotFound", "AlreadyExists", "Cancelled",
+    "Unknown", "ParquetFormatError", "UnsupportedEncoding", "ThriftDecodeError", "PageDecodeError",
+    "ColumnDecodeError", "TypeError", "OutOfRange", "LogicalPlanError", "PhysicalPlanError",
+    "ExpressionError", "SchemaError"};
+static_assert(kErrorCodeNames.size() == std::to_underlying(ErrorCode::SchemaError) + 1);
+
 [[nodiscard]] constexpr std::string_view ErrorCodeName(ErrorCode code) noexcept {
-  switch (code) {
-    case ErrorCode::None:
-      return "None";
-    case ErrorCode::Invalid:
-      return "Invalid";
-    case ErrorCode::IOError:
-      return "IOError";
-    case ErrorCode::OutOfMemory:
-      return "OutOfMemory";
-    case ErrorCode::NotFound:
-      return "NotFound";
-    case ErrorCode::AlreadyExists:
-      return "AlreadyExists";
-    case ErrorCode::Cancelled:
-      return "Cancelled";
-    case ErrorCode::Unknown:
-      return "Unknown";
-    case ErrorCode::ParquetFormatError:
-      return "ParquetFormatError";
-    case ErrorCode::UnsupportedEncoding:
-      return "UnsupportedEncoding";
-    case ErrorCode::ThriftDecodeError:
-      return "ThriftDecodeError";
-    case ErrorCode::PageDecodeError:
-      return "PageDecodeError";
-    case ErrorCode::ColumnDecodeError:
-      return "ColumnDecodeError";
-    case ErrorCode::TypeError:
-      return "TypeError";
-    case ErrorCode::OutOfRange:
-      return "OutOfRange";
-    case ErrorCode::LogicalPlanError:
-      return "LogicalPlanError";
-    case ErrorCode::PhysicalPlanError:
-      return "PhysicalPlanError";
-    case ErrorCode::ExpressionError:
-      return "ExpressionError";
-    case ErrorCode::SchemaError:
-      return "SchemaError";
-  }
-  return "Unknown";
+  return kErrorCodeNames[std::to_underlying(code)];
 }
 
 // source_location captures call-site automatically — no manual __FILE__/__LINE__ needed.

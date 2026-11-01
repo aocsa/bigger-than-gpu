@@ -3,6 +3,7 @@
 /// @file memory_resource.hpp
 /// @brief Two-tier (CPU RAM / Disk) memory resource interfaces.
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -11,6 +12,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "quest/common/result.hpp"
 
@@ -25,14 +27,11 @@ enum class MemoryTier : std::uint8_t {
   Disk = 1  ///< Secondary tier: Disk storage
 };
 
+inline constexpr std::array<std::string_view, 2> kMemoryTierNames = {"CPU", "Disk"};
+static_assert(kMemoryTierNames.size() == std::to_underlying(MemoryTier::Disk) + 1);
+
 [[nodiscard]] constexpr std::string_view to_string(MemoryTier tier) noexcept {
-  switch (tier) {
-    case MemoryTier::CPU:
-      return "CPU";
-    case MemoryTier::Disk:
-      return "Disk";
-  }
-  return "Unknown";
+  return kMemoryTierNames[std::to_underlying(tier)];
 }
 
 // =============================================================================

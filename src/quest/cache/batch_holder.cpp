@@ -338,8 +338,7 @@ std::shared_ptr<IBatchHolder> MakeBatchHolder(
     case BatchHolderType::kNonWaiting:
       return std::make_shared<NonWaitingBatchHolder>(id, config, std::move(memory_manager));
   }
-
-  return std::make_shared<BatchHolder>(id, config, std::move(memory_manager));
+  std::unreachable();
 }
 
 }  // namespace quest::cache

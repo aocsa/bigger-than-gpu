@@ -5,7 +5,6 @@
 
 #include <algorithm>
 #include <format>
-#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -206,8 +205,7 @@ Status CheckAcyclic(const std::deque<GraphBuilder::EdgeSpec>& specs) {
   std::map<Operator*, Color> color;
   for (const auto& [oper, ignored] : adj) { color[oper] = Color::White; }
 
-  // DFS closure using std::function for recursion.
-  std::function<Status(Operator*)> dfs = [&](Operator* node) -> Status {
+  auto dfs = [&](this auto& self, Operator* node) -> Status {
     color[node] = Color::Gray;
     for (Operator* next : adj[node]) {
       if (color[next] == Color::Gray) {
@@ -217,7 +215,7 @@ Status CheckAcyclic(const std::deque<GraphBuilder::EdgeSpec>& specs) {
             next->expression()));
       }
       if (color[next] == Color::White) {
-        auto status = dfs(next);
+        auto status = self(next);
         if (!status.has_value()) { return status; }
       }
     }
