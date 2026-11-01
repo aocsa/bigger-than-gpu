@@ -50,11 +50,10 @@ std::size_t HostMemoryBlock::size_in_bytes() const noexcept {
   if (!record_batch_) {
     return 0;
   }
-  // Approximation: 8 bytes per value; actual serialized size may differ.
+  // Buffers that two batches share count in both; that over-counts, which is safe for spill.
   std::size_t size = 0;
   for (std::size_t i = 0; i < record_batch_->num_columns(); ++i) {
-    const auto& column = record_batch_->column(i);
-    size += column.size() * 8;
+    size += record_batch_->column(i).size_in_bytes();
   }
   return size;
 }

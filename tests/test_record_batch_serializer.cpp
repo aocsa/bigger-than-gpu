@@ -162,6 +162,23 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeDecimalKeepsPrecisionAndScal
   EXPECT_TRUE(deserialized.column(0).IsNull(1));
 }
 
+TEST(RecordBatchSerializerTest, TruncatedOrCorruptBuffersAreInvalid) {
+  Schema schema({Field("s", DataType::kString, Repetition::kOptional)});
+  RecordBatch original(schema, {MakeColumn<std::string_view>(DataType::kString,
+                                                             {"alpha", std::nullopt, "beta"})});
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+
+  for (size_t cut : {data.size() - 1, data.size() - 9, data.size() / 2}) {
+    std::vector<uint8_t> truncated(data.begin(), data.begin() + static_cast<std::ptrdiff_t>(cut));
+    EXPECT_FALSE(RecordBatchSerializer::Deserialize(truncated).has_value()) << "cut at " << cut;
+  }
+
+  // The last offset (8 bytes at the end) must equal the chars length.
+  std::vector<uint8_t> bad_offsets = data;
+  bad_offsets[bad_offsets.size() - 8] ^= 0x40;
+  EXPECT_FALSE(RecordBatchSerializer::Deserialize(bad_offsets).has_value());
+}
+
 TEST(RecordBatchSerializerTest, SerializeDeserializeStringWithNulls) {
   Schema schema({Field("text", DataType::kString, Repetition::kOptional)});
 

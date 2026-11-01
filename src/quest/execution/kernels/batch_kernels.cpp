@@ -32,16 +32,19 @@ Result<columnar::RecordBatch> FilterRecordBatch(
     return std::unexpected(mask_result.error());
   }
 
-  auto& mask_col = **mask_result;
+  const auto& mask = **mask_result;
   std::vector<size_t> indices;
-  indices.reserve(batch.num_rows());
-  for (size_t i = 0; i < batch.num_rows(); ++i) {
-    auto val = mask_col.GetValue(i);
-    if (auto* bool_val = std::get_if<bool>(&val)) {
-      if (*bool_val) {
+  if (mask.GetType() == columnar::DataType::kBool) {
+    indices.reserve(batch.num_rows());
+    const auto view = mask.View<bool>();
+    for (size_t i = 0; i < batch.num_rows(); ++i) {
+      if (!view.IsNull(i) && view[i]) {
         indices.push_back(i);
       }
     }
+  } else if (mask.null_count() != mask.size()) {  // a NULL literal keeps no row
+    return Error::TypeError("Filter needs a Bool predicate, got " +
+                            columnar::GetTypeName(mask.GetType()));
   }
 
   if (indices.empty()) {

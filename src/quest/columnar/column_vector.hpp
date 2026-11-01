@@ -212,6 +212,7 @@ class ColumnView {
 
 template <typename T>
 class ColumnBuilder;
+class RecordBatchSerializer;
 
 // =============================================================================
 // ColumnVector
@@ -315,6 +316,7 @@ class ColumnVector final {
  private:
   template <typename T>
   friend class ColumnBuilder;
+  friend class RecordBatchSerializer;  // spill writes and reads the buffers as they are
 
   DataType type_;
   std::size_t size_ = 0;
@@ -360,6 +362,38 @@ class ColumnBuilder {
       values_.emplace_back();
     }
     AppendValidity(false);
+  }
+
+  /// @brief Appends every row of @p column, which has this builder's type: one copy of each
+  /// buffer instead of one call for each row.
+  void AppendColumn(const ColumnVector& column) {
+    const std::size_t n = column.size_;
+    if (column.constant_) {
+      const auto view = column.View<T>();
+      for (std::size_t i = 0; i < n; ++i) {
+        view.IsNull(i) ? AppendNull() : Append(view[i]);
+      }
+      return;
+    }
+    if constexpr (std::same_as<T, std::string_view>) {
+      const auto* offsets = column.offsets_.template As<std::int64_t>();
+      const std::int64_t shift = static_cast<std::int64_t>(chars_.size()) - offsets[0];
+      chars_.append(column.values_.template As<char>() + offsets[0],
+                    static_cast<std::size_t>(offsets[n] - offsets[0]));
+      for (std::size_t i = 1; i <= n; ++i) {
+        offsets_.push_back(offsets[i] + shift);
+      }
+    } else {
+      const auto* values = column.values_.template As<StorageOf<T>>();
+      values_.insert(values_.end(), values, values + n);
+    }
+    if (column.validity_.bytes.empty() && null_count_ == 0) {
+      size_ += n;  // no bitmap on either side
+      return;
+    }
+    for (std::size_t i = 0; i < n; ++i) {
+      AppendValidity(!column.IsNull(i));
+    }
   }
 
   [[nodiscard]] std::size_t size() const noexcept { return size_; }

@@ -25,13 +25,12 @@ namespace quest::columnar {
 //   - For each field:
 //     - Name length (uint32_t)
 //     - Name (variable length string)
-//     - Type tag (uint8_t) - the DataType enum value
+//     - Type: TypeId, precision, scale (uint8_t each)
 //     - Repetition (uint8_t)
-// - Column data section:
-//   - For each column:
-//     - Null bitmap size (uint32_t)
-//     - Null bitmap (variable length)
-//     - Data (format depends on type)
+// - Column data section (version 2):
+//   - For each column: null count (uint64_t), then three buffers, each a byte length
+//     (uint64_t) and the bytes as the column holds them: validity bitmap (empty when no
+//     row is null), values (String: the chars), offsets (String only: rows + 1 int64).
 
 class RecordBatchSerializer {
  public:
@@ -51,7 +50,6 @@ class RecordBatchSerializer {
 
   static Status WriteColumn(std::vector<uint8_t>& buffer, const ColumnVector& column, size_t num_rows);
 
-  static Status WriteColumnValues(std::vector<uint8_t>& buffer, const ColumnVector& column, size_t num_rows);
 
   static Result<ColumnVectorPtr> ReadColumn(const std::vector<uint8_t>& buffer, size_t& offset,
                                             DataType type, size_t num_rows);

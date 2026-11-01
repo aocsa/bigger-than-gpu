@@ -761,6 +761,18 @@ TEST(SqlNullTest, FilterDropsNullPredicateRows) {
   ExpectColumn<int32_t>(out2.column(0), {30, 50});
 }
 
+TEST(SqlNullTest, FilterOnNullLiteralKeepsNoRowAndOnNonBoolIsTypeError) {
+  auto batch = MakeNullableBatch();
+  LiteralExpression null_predicate(std::monostate{});
+  ASSERT_OK_AND_ASSIGN(auto none, FilterRecordBatch(batch, null_predicate));
+  EXPECT_EQ(none.num_rows(), 0U);
+
+  ColumnExpression int_predicate(0);
+  auto bad = FilterRecordBatch(batch, int_predicate);
+  ASSERT_FALSE(bad.has_value());
+  EXPECT_EQ(bad.error().code(), ErrorCode::TypeError);
+}
+
 TEST(SqlNullTest, FilterPreservesNullsInSelectedRows) {
   auto batch = MakeNullableBatch();  // a: [10, null, 30, null, 50]
   LiteralExpression keep_all(Value{true});

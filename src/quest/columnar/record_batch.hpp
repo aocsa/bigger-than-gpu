@@ -109,10 +109,7 @@ class RecordBatch {
         if (src.GetType() != type) {
           return Error::Invalid("Concatenate column type mismatch");
         }
-        const auto view = src.View<T>();
-        for (size_t i = 0; i < src.size(); ++i) {
-          view.IsNull(i) ? builder.AppendNull() : builder.Append(view[i]);
-        }
+        builder.AppendColumn(src);
       }
       return std::move(builder).Finish();
     });

@@ -264,6 +264,26 @@ TEST(Date32Test, ConcatenateKeepsDate32) {
   EXPECT_EQ(merged.column(0).GetValue(2), Value{Date32{2}});
 }
 
+TEST(ConcatenateTest, MixesBatchesWithAndWithoutNulls) {
+  Schema schema({Field("b", DataType::kBool, Repetition::kOptional)});
+  // 9 rows without a bitmap, then a batch with nulls: the bitmap starts mid-byte.
+  RecordBatch a(schema, {MakeColumn<bool>(DataType::kBool, {true, false, true, true, false,
+                                                            true, false, true, false})});
+  RecordBatch b(schema, {MakeColumn<bool>(DataType::kBool, {std::nullopt, true})});
+  RecordBatch c(schema, {MakeColumn<bool>(DataType::kBool, {false})});
+
+  ASSERT_OK_AND_ASSIGN(auto merged, ConcatenateRecordBatches({&a, &b, &c}));
+  const auto view = merged.column(0).View<bool>();
+  ASSERT_EQ(view.size(), 12U);
+  EXPECT_EQ(merged.column(0).null_count(), 1U);
+  EXPECT_TRUE(view[0]);
+  EXPECT_FALSE(view[8]);
+  EXPECT_TRUE(view.IsNull(9));
+  EXPECT_TRUE(view[10]);
+  EXPECT_FALSE(view.IsNull(11));
+  EXPECT_FALSE(view[11]);
+}
+
 TEST(ConcatenateTest, StringsAcrossBatchesKeepOffsets) {
   Schema schema({Field("s", DataType::kString, Repetition::kOptional)});
   RecordBatch a(schema, {MakeColumn<std::string_view>(DataType::kString, {"ab", std::nullopt})});

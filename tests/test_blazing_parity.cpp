@@ -170,10 +170,10 @@ TEST(BlazingParityTest, NonWaitingEdgeEndToEndWithPreFill) {
 // =============================================================================
 
 TEST(BlazingParityTest, ConcatenatingUpToServesChunksUnderCap) {
-  // MakeTestRecordBatch(10) -> one int32 column, 10 rows -> 80 bytes by the
-  // current size estimate. Cap = 160 bytes -> two blocks per chunk.
+  // MakeTestRecordBatch(10) -> one int32 column, 10 rows -> 40 bytes of values.
+  // Cap = 80 bytes -> two blocks per chunk.
   BatchHolderConfig config{};
-  config.concat_bytes_threshold = 160;
+  config.concat_bytes_threshold = 80;
   ConcatenatingBatchHolder holder{1, config};
 
   for (int i = 0; i < 4; ++i) {
@@ -242,12 +242,12 @@ TEST(BlazingParityTest, PolicySizesConcatCapFromStats) {
     return cfg;
   });
 
-  QueryStats stats{.estimated_bytes = 640};
+  QueryStats stats{.estimated_bytes = 320};
   ASSERT_OK_AND_ASSIGN(auto query, graph->Prepare(stats, HardwareInfo{}));
 
   auto edges = query.Edges();
   ASSERT_EQ(edges.size(), 1U);
-  EXPECT_EQ(edges[0].config.concat_bytes_threshold, 160U);
+  EXPECT_EQ(edges[0].config.concat_bytes_threshold, 80U);
 
   // And the materialized holder actually chunks at the policy-chosen cap.
   auto holders = query.holders();
@@ -258,7 +258,7 @@ TEST(BlazingParityTest, PolicySizesConcatCapFromStats) {
   holders[0]->Finish();
   ASSERT_OK_AND_ASSIGN(auto chunk, holders[0]->Pull());
   ASSERT_TRUE(chunk.has_value());
-  EXPECT_EQ((*chunk)->num_rows(), 20U);  // 2 blocks per 160-byte chunk
+  EXPECT_EQ((*chunk)->num_rows(), 20U);  // 2 blocks of 40 bytes per 80-byte chunk
 }
 
 // =============================================================================

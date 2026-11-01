@@ -3,7 +3,9 @@
 
 #include "quest/columnar/record_batch_serializer.hpp"
 
+#include <algorithm>
 #include <cstring>
+#include <optional>
 #include <fstream>
 #include <type_traits>
 #include <utility>
@@ -40,7 +42,7 @@ Result<std::vector<uint8_t>> RecordBatchSerializer::Serialize(const RecordBatch&
   const char magic[4] = {'Q', 'R', 'B', 'T'};
   buffer.insert(buffer.end(), magic, magic + 4);
 
-  uint32_t version = 1;
+  uint32_t version = 2;
   WriteValue(buffer, version);
 
   uint64_t num_rows = batch.num_rows();
@@ -84,7 +86,7 @@ Result<RecordBatch> RecordBatchSerializer::Deserialize(const std::vector<uint8_t
 
   auto version = ReadValue<uint32_t>(buffer, offset);
   if (!version) return std::unexpected(version.error());
-  if (*version != 1) {
+  if (*version != 2) {
     return Error::Invalid("Unsupported version");
   }
 
@@ -177,72 +179,83 @@ Result<DataType> RecordBatchSerializer::ReadDataType(const std::vector<uint8_t>&
 
 Status RecordBatchSerializer::WriteColumn(std::vector<uint8_t>& buffer, const ColumnVector& column,
                                           size_t num_rows) {
-  size_t bitmap_bytes = (num_rows + 7) / 8;
-  uint32_t bitmap_size = static_cast<uint32_t>(bitmap_bytes);
-  WriteValue(buffer, bitmap_size);
-
-  std::vector<uint8_t> null_bitmap(bitmap_bytes, 0);
-  for (size_t i = 0; i < num_rows; ++i) {
-    if (!column.IsNull(i)) {
-      size_t byte_idx = i / 8;
-      size_t bit_idx = i % 8;
-      null_bitmap[byte_idx] |= (1 << bit_idx);
-    }
+  if (column.is_constant() || column.size() != num_rows) {
+    return Error::Invalid("Spill writes only plain columns of the batch's row count");
   }
-  buffer.insert(buffer.end(), null_bitmap.begin(), null_bitmap.end());
-
-  return WriteColumnValues(buffer, column, num_rows);
+  WriteValue(buffer, static_cast<uint64_t>(column.null_count_));
+  for (const Buffer* part : {&column.validity_, &column.values_, &column.offsets_}) {
+    WriteValue(buffer, static_cast<uint64_t>(part->bytes.size()));
+    const auto* bytes = reinterpret_cast<const uint8_t*>(part->bytes.data());
+    buffer.insert(buffer.end(), bytes, bytes + part->bytes.size());
+  }
+  return {};
 }
 
-Status RecordBatchSerializer::WriteColumnValues(std::vector<uint8_t>& buffer,
-                                                const ColumnVector& column, size_t num_rows) {
-  return VisitType(column.GetType(), [&]<typename Tag>(Tag) -> Status {
-    using T = typename Tag::CType;
-    const auto view = column.View<T>();
-    for (size_t i = 0; i < num_rows; ++i) {
-      const T val = view.IsNull(i) ? T{} : view[i];
-      if constexpr (std::same_as<T, std::string_view>) {
-        WriteValue(buffer, static_cast<uint32_t>(val.size()));
-        buffer.insert(buffer.end(), val.begin(), val.end());
-      } else {
-        WriteValue(buffer, val);
-      }
-    }
-    return {};
-  });
+namespace {
+
+/// @brief The next length-prefixed buffer, copied into a container of the column's element
+/// type so typed reads see real objects.
+/// @param expected_bytes The size the column needs; nullopt accepts any size (String chars).
+/// @param may_be_empty An empty buffer is also valid (validity of a column with no nulls).
+template <typename Container>
+[[nodiscard]] Result<Container> ReadPart(const std::vector<uint8_t>& buffer, size_t& offset,
+                                         std::optional<size_t> expected_bytes,
+                                         bool may_be_empty = false) {
+  auto length = ReadValue<uint64_t>(buffer, offset);
+  if (!length) return std::unexpected(length.error());
+  const bool size_ok =
+      !expected_bytes || *length == *expected_bytes || (may_be_empty && *length == 0);
+  if (*length > buffer.size() - offset || !size_ok) {
+    return Error::Invalid("Spilled column buffer has the wrong size");
+  }
+  using Element = typename Container::value_type;
+  Container part(*length / sizeof(Element), Element{});
+  std::memcpy(part.data(), buffer.data() + offset, *length);
+  offset += *length;
+  return part;
 }
+
+}  // namespace
 
 Result<ColumnVectorPtr> RecordBatchSerializer::ReadColumn(const std::vector<uint8_t>& buffer,
                                                           size_t& offset, DataType type,
                                                           size_t num_rows) {
-  auto bitmap_size = ReadValue<uint32_t>(buffer, offset);
-  if (!bitmap_size) return std::unexpected(bitmap_size.error());
-  std::vector<uint8_t> null_bitmap(buffer.begin() + offset,
-                                   buffer.begin() + offset + *bitmap_size);
-  offset += *bitmap_size;
+  auto null_count = ReadValue<uint64_t>(buffer, offset);
+  if (!null_count) return std::unexpected(null_count.error());
+  auto validity =
+      ReadPart<std::vector<uint8_t>>(buffer, offset, (num_rows + 7) / 8, /*may_be_empty=*/true);
+  if (!validity) return std::unexpected(validity.error());
+  if ((*null_count == 0) != validity->empty()) {
+    return Error::Invalid("Spilled column has a null count but no bitmap, or the reverse");
+  }
 
   return VisitType(type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
     using T = typename Tag::CType;
-    ColumnBuilder<T> builder(type, num_rows);
-    for (size_t i = 0; i < num_rows; ++i) {
-      T val{};
-      if constexpr (std::same_as<T, std::string_view>) {
-        auto len = ReadValue<uint32_t>(buffer, offset);
-        if (!len) return std::unexpected(len.error());
-        val = std::string_view(reinterpret_cast<const char*>(buffer.data()) + offset, *len);
-        offset += *len;
-      } else {
-        auto read = ReadValue<T>(buffer, offset);
-        if (!read) return std::unexpected(read.error());
-        val = *read;
+    Buffer values;
+    Buffer offsets;
+    if constexpr (std::same_as<T, std::string_view>) {
+      auto chars = ReadPart<std::string>(buffer, offset, std::nullopt);
+      if (!chars) return std::unexpected(chars.error());
+      auto ends = ReadPart<std::vector<int64_t>>(buffer, offset, (num_rows + 1) * sizeof(int64_t));
+      if (!ends) return std::unexpected(ends.error());
+      if (ends->front() != 0 || ends->back() != static_cast<int64_t>(chars->size()) ||
+          !std::ranges::is_sorted(*ends)) {
+        return Error::Invalid("Spilled string offsets do not fit their chars");
       }
-      if ((null_bitmap[i / 8] & (1 << (i % 8))) == 0) {
-        builder.AppendNull();
-      } else {
-        builder.Append(val);
-      }
+      values = Buffer::From(std::move(*chars));
+      offsets = Buffer::From(std::move(*ends));
+    } else {
+      auto part =
+          ReadPart<std::vector<StorageOf<T>>>(buffer, offset, num_rows * sizeof(StorageOf<T>));
+      if (!part) return std::unexpected(part.error());
+      values = Buffer::From(std::move(*part));
+      auto no_offsets = ReadPart<std::vector<int64_t>>(buffer, offset, 0);
+      if (!no_offsets) return std::unexpected(no_offsets.error());
     }
-    return std::move(builder).Finish();
+    return std::make_shared<const ColumnVector>(
+        ColumnVector::Key{}, type, num_rows, *null_count, false,
+        validity->empty() ? Buffer{} : Buffer::From(std::move(*validity)), std::move(values),
+        std::move(offsets));
   });
 }
 
