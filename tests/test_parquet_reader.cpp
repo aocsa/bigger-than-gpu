@@ -279,6 +279,34 @@ TEST(ParquetCorruptFileTest, FooterLengthPastFileStartIsAnError) {
   std::filesystem::remove(path);
 }
 
+TEST(ParquetCorruptFileTest, RowGroupWithTooFewColumnChunksIsAnError) {
+  // Compact-thrift FileMetadata: version 1; schema = root + one required INT32 leaf "a";
+  // num_rows 0; one row group with an empty columns list.
+  const std::vector<uint8_t> footer{
+      0x15, 0x02,                                      // 1: version = 1
+      0x19, 0x2C,                                      // 2: schema, list of 2 structs
+      0x48, 0x04, 'r', 'o', 'o', 't', 0x15, 0x02, 0x00,  //   root: name, num_children = 1
+      0x15, 0x02, 0x25, 0x00, 0x18, 0x01, 'a', 0x00,   //   leaf: INT32, REQUIRED, name "a"
+      0x16, 0x00,                                      // 3: num_rows = 0
+      0x19, 0x1C,                                      // 4: row_groups, list of 1 struct
+      0x19, 0x0C, 0x16, 0x00, 0x16, 0x00, 0x00,        //   columns = [], sizes 0
+      0x00};
+  const auto path = std::filesystem::temp_directory_path() / "quest_missing_chunks.parquet";
+  {
+    std::ofstream out(path, std::ios::binary);
+    const auto length = static_cast<uint32_t>(footer.size());
+    out.write("PAR1", 4);
+    out.write(reinterpret_cast<const char*>(footer.data()), static_cast<std::streamsize>(length));
+    out.write(reinterpret_cast<const char*>(&length), sizeof(length));
+    out.write("PAR1", 4);
+  }
+  ASSERT_OK_AND_ASSIGN(auto reader, ParquetFileReader::Open(path.string()));
+  auto batch = reader.ReadRowGroup(0, {});
+  ASSERT_FALSE(batch.has_value());
+  EXPECT_EQ(batch.error().code(), quest::ErrorCode::ParquetFormatError);
+  std::filesystem::remove(path);
+}
+
 TEST(ParquetCorruptFileTest, NegativeCompressedPageSizeIsAnError) {
   // Compact-thrift PageHeader: type=DATA_PAGE, uncompressed_page_size=10,
   // compressed_page_size=-1 (zigzag 0x01), stop.

@@ -146,6 +146,9 @@ Result<RecordBatch> ParquetFileReader::ReadRowGroup(
   column_vectors.reserve(column_indices.size());
 
   for (size_t col_idx : column_indices) {
+    if (col_idx >= row_group.columns.size()) {
+      return Error::ParquetFormatError("Row group has fewer column chunks than schema columns");
+    }
     const auto& column_meta = row_group.columns[col_idx];
 
     auto column_data_result = ReadColumnChunk(column_meta);
