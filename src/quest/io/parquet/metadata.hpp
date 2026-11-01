@@ -14,19 +14,15 @@
 
 #include "quest/columnar/schema.hpp"
 #include "quest/columnar/types.hpp"
+#include "quest/io/parquet/format.hpp"
 #include "quest/io/parquet/thrift_decoder.hpp"
 #include "quest/common/result.hpp"
 
 namespace quest::io::parquet {
 
 using columnar::ColumnStatistics;
-using columnar::CompressionType;
 using columnar::DataType;
-using columnar::Encoding;
 using columnar::Field;
-using columnar::LogicalType;
-using columnar::PhysicalType;
-using columnar::PhysicalTypeToDataType;
 using columnar::Repetition;
 using columnar::Schema;
 

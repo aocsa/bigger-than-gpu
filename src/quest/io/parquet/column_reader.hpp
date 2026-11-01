@@ -12,6 +12,7 @@
 #include "quest/columnar/column_vector.hpp"
 #include "quest/columnar/schema.hpp"
 #include "quest/columnar/types.hpp"
+#include "quest/io/parquet/format.hpp"
 #include "quest/common/result.hpp"
 #include "quest/io/parquet/compression.hpp"
 #include "quest/io/parquet/encoding.hpp"
@@ -21,12 +22,8 @@
 namespace quest::io::parquet {
 
 using columnar::ColumnVector;
-using columnar::CompressionType;
 using columnar::CreateColumnVector;
-using columnar::Encoding;
 using columnar::Field;
-using columnar::PageType;
-using columnar::PhysicalType;
 using columnar::StringColumnVector;
 using columnar::TypedColumnVector;
 

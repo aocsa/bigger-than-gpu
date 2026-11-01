@@ -14,11 +14,11 @@
 #include <snappy.h>
 
 #include "quest/columnar/types.hpp"
+#include "quest/io/parquet/format.hpp"
 #include "quest/common/result.hpp"
 
 namespace quest::io::parquet {
 
-using columnar::CompressionType;
 
 class CompressionCodec {
  public:

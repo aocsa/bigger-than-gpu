@@ -10,14 +10,13 @@
 #include <vector>
 
 #include "quest/columnar/types.hpp"
+#include "quest/io/parquet/format.hpp"
 #include "quest/common/result.hpp"
 #include "quest/io/parquet/encoding.hpp"
 #include "quest/io/parquet/thrift_decoder.hpp"
 
 namespace quest::io::parquet {
 
-using columnar::Encoding;
-using columnar::PageType;
 
 // =============================================================================
 // Page Header Structure

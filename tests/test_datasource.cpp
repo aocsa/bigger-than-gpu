@@ -10,9 +10,11 @@
 #include "quest/columnar/record_batch.hpp"
 #include "quest/columnar/schema.hpp"
 #include "quest/columnar/types.hpp"
+#include "quest/io/parquet/format.hpp"
 #include "support/test_utils.hpp"
 
 using namespace quest::columnar;
+using namespace quest::io::parquet;
 
 // =============================================================================
 // Types Tests

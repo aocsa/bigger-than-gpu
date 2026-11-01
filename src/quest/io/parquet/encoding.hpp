@@ -18,6 +18,7 @@
 
 #include "quest/columnar/column_vector.hpp"
 #include "quest/columnar/types.hpp"
+#include "quest/io/parquet/format.hpp"
 #include "quest/common/result.hpp"
 #include "quest/io/parquet/bytes.hpp"
 
