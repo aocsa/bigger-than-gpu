@@ -209,7 +209,7 @@ class Avg : public AggregateExpr {
 
   [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
     // AVG always returns double
-    return Field{"AVG(" + input_->ToString() + ")", columnar::DoubleType{}};
+    return Field{"AVG(" + input_->ToString() + ")", columnar::DataType::kDouble};
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -228,7 +228,7 @@ class Count : public AggregateExpr {
 
   [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
     // COUNT always returns Int64
-    return Field{"COUNT(" + input_->ToString() + ")", columnar::Int64Type{}};
+    return Field{"COUNT(" + input_->ToString() + ")", columnar::DataType::kInt64};
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -245,7 +245,7 @@ class CountStar : public LogicalExpr {
   CountStar() = default;
 
   [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
-    return Field{"COUNT(*)", columnar::Int64Type{}};
+    return Field{"COUNT(*)", columnar::DataType::kInt64};
   }
 
   [[nodiscard]] std::string ToString() const override {

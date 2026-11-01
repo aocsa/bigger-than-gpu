@@ -20,13 +20,13 @@ using namespace quest::columnar;
 // =============================================================================
 
 TEST(TypedColumnVectorInt32Test, Construction) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 10);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
   EXPECT_EQ(col.size(), 0U);
-  EXPECT_TRUE(std::holds_alternative<Int32Type>(col.GetType()));
+  EXPECT_EQ(col.GetType(), DataType::kInt32);
 }
 
 TEST(TypedColumnVectorInt32Test, AppendAndGet) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 10);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
 
   col.Append(42);
   col.Append(100);
@@ -39,7 +39,7 @@ TEST(TypedColumnVectorInt32Test, AppendAndGet) {
 }
 
 TEST(TypedColumnVectorInt32Test, GetValueVariant) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 5);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 5);
   col.Append(123);
 
   Value val = col.GetValue(0);
@@ -48,7 +48,7 @@ TEST(TypedColumnVectorInt32Test, GetValueVariant) {
 }
 
 TEST(TypedColumnVectorInt32Test, NullHandling) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 10);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
 
   col.Append(10);
   col.AppendNull();
@@ -61,7 +61,7 @@ TEST(TypedColumnVectorInt32Test, NullHandling) {
 }
 
 TEST(TypedColumnVectorInt32Test, SetValue) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 10);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
   col.Append(0);
   col.Append(0);
 
@@ -73,7 +73,7 @@ TEST(TypedColumnVectorInt32Test, SetValue) {
 }
 
 TEST(TypedColumnVectorInt32Test, SetNull) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 10);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
   col.Append(42);
 
   EXPECT_FALSE(col.IsNull(0));
@@ -84,7 +84,7 @@ TEST(TypedColumnVectorInt32Test, SetNull) {
 }
 
 TEST(TypedColumnVectorInt32Test, Resize) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 10);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
   col.Append(1);
   col.Append(2);
   col.Append(3);
@@ -97,7 +97,7 @@ TEST(TypedColumnVectorInt32Test, Resize) {
 }
 
 TEST(TypedColumnVectorInt32Test, Spans) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 10);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
   col.Append(10);
   col.Append(20);
   col.Append(30);
@@ -118,7 +118,7 @@ TEST(TypedColumnVectorInt32Test, Spans) {
 // =============================================================================
 
 TEST(TypedColumnVectorInt64Test, BasicOperations) {
-  TypedColumnVector<int64_t> col(Int64Type{}, 10);
+  TypedColumnVector<int64_t> col(DataType::kInt64, 10);
 
   col.Append(1000000000000LL);
   col.Append(-1000000000000LL);
@@ -133,7 +133,7 @@ TEST(TypedColumnVectorInt64Test, BasicOperations) {
 // =============================================================================
 
 TEST(TypedColumnVectorDoubleTest, BasicOperations) {
-  TypedColumnVector<double> col(DoubleType{}, 10);
+  TypedColumnVector<double> col(DataType::kDouble, 10);
 
   col.Append(3.14159);
   col.Append(-2.71828);
@@ -146,7 +146,7 @@ TEST(TypedColumnVectorDoubleTest, BasicOperations) {
 }
 
 TEST(TypedColumnVectorDoubleTest, SpecialValues) {
-  TypedColumnVector<double> col(DoubleType{}, 10);
+  TypedColumnVector<double> col(DataType::kDouble, 10);
 
   col.Append(std::numeric_limits<double>::infinity());
   col.Append(-std::numeric_limits<double>::infinity());
@@ -162,7 +162,7 @@ TEST(TypedColumnVectorDoubleTest, SpecialValues) {
 // =============================================================================
 
 TEST(TypedColumnVectorFloatTest, BasicOperations) {
-  TypedColumnVector<float> col(FloatType{}, 10);
+  TypedColumnVector<float> col(DataType::kFloat, 10);
 
   col.Append(1.5f);
   col.Append(-2.5f);
@@ -177,7 +177,7 @@ TEST(TypedColumnVectorFloatTest, BasicOperations) {
 // =============================================================================
 
 TEST(TypedColumnVectorBoolTest, BasicOperations) {
-  TypedColumnVector<bool> col(BoolType{}, 10);
+  TypedColumnVector<bool> col(DataType::kBool, 10);
 
   col.Append(true);
   col.Append(false);
@@ -190,7 +190,7 @@ TEST(TypedColumnVectorBoolTest, BasicOperations) {
 }
 
 TEST(TypedColumnVectorBoolTest, NullHandling) {
-  TypedColumnVector<bool> col(BoolType{}, 10);
+  TypedColumnVector<bool> col(DataType::kBool, 10);
 
   col.Append(true);
   col.AppendNull();
@@ -206,13 +206,13 @@ TEST(TypedColumnVectorBoolTest, NullHandling) {
 // =============================================================================
 
 TEST(StringColumnVectorTest, Construction) {
-  StringColumnVector col(StringType{}, 10);
+  StringColumnVector col(DataType::kString, 10);
   EXPECT_EQ(col.size(), 0U);
-  EXPECT_TRUE(std::holds_alternative<StringType>(col.GetType()));
+  EXPECT_EQ(col.GetType(), DataType::kString);
 }
 
 TEST(StringColumnVectorTest, AppendAndGet) {
-  StringColumnVector col(StringType{}, 10);
+  StringColumnVector col(DataType::kString, 10);
 
   col.Append("hello");
   col.Append("world");
@@ -225,7 +225,7 @@ TEST(StringColumnVectorTest, AppendAndGet) {
 }
 
 TEST(StringColumnVectorTest, GetValueVariant) {
-  StringColumnVector col(StringType{}, 5);
+  StringColumnVector col(DataType::kString, 5);
   col.Append("test");
 
   Value val = col.GetValue(0);
@@ -234,7 +234,7 @@ TEST(StringColumnVectorTest, GetValueVariant) {
 }
 
 TEST(StringColumnVectorTest, NullHandling) {
-  StringColumnVector col(StringType{}, 10);
+  StringColumnVector col(DataType::kString, 10);
 
   col.Append("first");
   col.AppendNull();
@@ -246,7 +246,7 @@ TEST(StringColumnVectorTest, NullHandling) {
 }
 
 TEST(StringColumnVectorTest, UnicodeStrings) {
-  StringColumnVector col(StringType{}, 10);
+  StringColumnVector col(DataType::kString, 10);
 
   col.Append("Hello, 世界!");
   col.Append("🎉🎊🎈");
@@ -258,7 +258,7 @@ TEST(StringColumnVectorTest, UnicodeStrings) {
 }
 
 TEST(StringColumnVectorTest, LongStrings) {
-  StringColumnVector col(StringType{}, 10);
+  StringColumnVector col(DataType::kString, 10);
 
   std::string long_str(10000, 'x');
   col.Append(long_str);
@@ -272,7 +272,7 @@ TEST(StringColumnVectorTest, LongStrings) {
 // =============================================================================
 
 TEST(StringColumnVectorTest, BinaryData) {
-  StringColumnVector col(BinaryType{}, 10);
+  StringColumnVector col(DataType::kString, 10);
 
   // Build a binary string with embedded null bytes
   std::string binary_data;
@@ -291,45 +291,45 @@ TEST(StringColumnVectorTest, BinaryData) {
 // =============================================================================
 
 TEST(CreateColumnVectorTest, Bool) {
-  auto col = CreateColumnVector(BoolType{}, 10);
+  auto col = CreateColumnVector(DataType::kBool, 10);
   EXPECT_NE(col, nullptr);
-  EXPECT_TRUE(std::holds_alternative<BoolType>(col->GetType()));
+  EXPECT_EQ(col->GetType(), DataType::kBool);
 }
 
 TEST(CreateColumnVectorTest, Int32) {
-  auto col = CreateColumnVector(Int32Type{}, 10);
+  auto col = CreateColumnVector(DataType::kInt32, 10);
   EXPECT_NE(col, nullptr);
-  EXPECT_TRUE(std::holds_alternative<Int32Type>(col->GetType()));
+  EXPECT_EQ(col->GetType(), DataType::kInt32);
 }
 
 TEST(CreateColumnVectorTest, Int64) {
-  auto col = CreateColumnVector(Int64Type{}, 10);
+  auto col = CreateColumnVector(DataType::kInt64, 10);
   EXPECT_NE(col, nullptr);
-  EXPECT_TRUE(std::holds_alternative<Int64Type>(col->GetType()));
+  EXPECT_EQ(col->GetType(), DataType::kInt64);
 }
 
 TEST(CreateColumnVectorTest, Float) {
-  auto col = CreateColumnVector(FloatType{}, 10);
+  auto col = CreateColumnVector(DataType::kFloat, 10);
   EXPECT_NE(col, nullptr);
-  EXPECT_TRUE(std::holds_alternative<FloatType>(col->GetType()));
+  EXPECT_EQ(col->GetType(), DataType::kFloat);
 }
 
 TEST(CreateColumnVectorTest, Double) {
-  auto col = CreateColumnVector(DoubleType{}, 10);
+  auto col = CreateColumnVector(DataType::kDouble, 10);
   EXPECT_NE(col, nullptr);
-  EXPECT_TRUE(std::holds_alternative<DoubleType>(col->GetType()));
+  EXPECT_EQ(col->GetType(), DataType::kDouble);
 }
 
 TEST(CreateColumnVectorTest, String) {
-  auto col = CreateColumnVector(StringType{}, 10);
+  auto col = CreateColumnVector(DataType::kString, 10);
   EXPECT_NE(col, nullptr);
-  EXPECT_TRUE(std::holds_alternative<StringType>(col->GetType()));
+  EXPECT_EQ(col->GetType(), DataType::kString);
 }
 
 TEST(CreateColumnVectorTest, Binary) {
-  auto col = CreateColumnVector(BinaryType{}, 10);
+  auto col = CreateColumnVector(DataType::kString, 10);
   EXPECT_NE(col, nullptr);
-  EXPECT_TRUE(std::holds_alternative<BinaryType>(col->GetType()));
+  EXPECT_EQ(col->GetType(), DataType::kString);
 }
 
 // =============================================================================
@@ -337,12 +337,12 @@ TEST(CreateColumnVectorTest, Binary) {
 // =============================================================================
 
 TEST(ColumnVectorEdgeCaseTest, EmptyColumn) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 0);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 0);
   EXPECT_EQ(col.size(), 0U);
 }
 
 TEST(ColumnVectorEdgeCaseTest, LargeColumn) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 100000);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 100000);
 
   for (int i = 0; i < 10000; ++i) {
     col.Append(i);
@@ -354,7 +354,7 @@ TEST(ColumnVectorEdgeCaseTest, LargeColumn) {
 }
 
 TEST(ColumnVectorEdgeCaseTest, AllNulls) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 10);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
 
   for (int i = 0; i < 5; ++i) {
     col.AppendNull();
@@ -378,28 +378,28 @@ TEST(Date32Test, ValueToStringIsIsoDate) {
 }
 
 TEST(Date32Test, TypeTraits) {
-  EXPECT_EQ(GetTypeName(Date32Type{}), "Date32");
-  EXPECT_EQ(GetTypeByteWidth(Date32Type{}), 4);
-  EXPECT_TRUE(IsFixedWidth(Date32Type{}));
+  EXPECT_EQ(GetTypeName(DataType::kDate32), "Date32");
+  EXPECT_TRUE(VisitType(DataType::kDate32,
+                        []<typename Tag>(Tag) { return std::same_as<typename Tag::CType, Date32>; }));
 }
 
 TEST(Date32Test, CreateColumnVectorHoldsDate32Values) {
-  auto col = CreateColumnVector(Date32Type{}, 2);
+  auto col = CreateColumnVector(DataType::kDate32, 2);
   auto* typed = dynamic_cast<TypedColumnVector<Date32>*>(col.get());
   ASSERT_NE(typed, nullptr);
   typed->Append(Date32{8766});
   typed->AppendNull();
 
-  EXPECT_TRUE(std::holds_alternative<Date32Type>(col->GetType()));
+  EXPECT_EQ(col->GetType(), DataType::kDate32);
   EXPECT_EQ(col->GetValue(0), Value{Date32{8766}});
   EXPECT_TRUE(col->IsNull(1));
 }
 
 TEST(Date32Test, ConcatenateKeepsDate32) {
-  Schema schema({Field("d", Date32Type{}, Repetition::kOptional)});
-  auto first = std::make_shared<TypedColumnVector<Date32>>(Date32Type{}, 1);
+  Schema schema({Field("d", DataType::kDate32, Repetition::kOptional)});
+  auto first = std::make_shared<TypedColumnVector<Date32>>(DataType::kDate32, 1);
   first->Append(Date32{1});
-  auto second = std::make_shared<TypedColumnVector<Date32>>(Date32Type{}, 2);
+  auto second = std::make_shared<TypedColumnVector<Date32>>(DataType::kDate32, 2);
   second->AppendNull();
   second->Append(Date32{2});
   RecordBatch a(schema, {first});
@@ -407,7 +407,7 @@ TEST(Date32Test, ConcatenateKeepsDate32) {
 
   ASSERT_OK_AND_ASSIGN(auto merged, ConcatenateRecordBatches({&a, &b}));
   ASSERT_EQ(merged.num_rows(), 3U);
-  EXPECT_TRUE(std::holds_alternative<Date32Type>(merged.column(0).GetType()));
+  EXPECT_EQ(merged.column(0).GetType(), DataType::kDate32);
   EXPECT_EQ(merged.column(0).GetValue(0), Value{Date32{1}});
   EXPECT_TRUE(merged.column(0).IsNull(1));
   EXPECT_EQ(merged.column(0).GetValue(2), Value{Date32{2}});

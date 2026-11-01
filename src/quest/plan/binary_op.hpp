@@ -6,6 +6,7 @@
 /// @file binary_op.hpp
 /// @brief Binary operator kinds shared by the logical and physical plan layers.
 
+#include <algorithm>
 #include <array>
 #include <string>
 #include <string_view>
@@ -65,38 +66,26 @@ inline constexpr std::array<std::string_view, 13> kBinaryOpSymbols = {
 /// @param right Right operand type.
 /// @return The result type, or `TypeError` for arithmetic on a non-numeric type or a
 /// comparison between a Date32 and a non-date.
-[[nodiscard]] inline Result<columnar::DataType> BinaryResultType(BinaryOp op,
-                                                                 const columnar::DataType& left,
-                                                                 const columnar::DataType& right) {
+[[nodiscard]] inline Result<columnar::DataType> BinaryResultType(BinaryOp op, columnar::DataType left,
+                                                                 columnar::DataType right) {
   if (!IsArithmetic(op)) {
-    if (std::holds_alternative<columnar::Date32Type>(left) !=
-        std::holds_alternative<columnar::Date32Type>(right)) {
+    if ((left == columnar::DataType::kDate32) != (right == columnar::DataType::kDate32)) {
       return Error::TypeError("'" + std::string(ToString(op)) + "' cannot compare " +
                               columnar::GetTypeName(left) + " with " +
                               columnar::GetTypeName(right));
     }
-    return columnar::BoolType{};
+    return columnar::DataType::kBool;
   }
-  auto is_int = [](const columnar::DataType& t) {
-    return std::holds_alternative<columnar::Int8Type>(t) ||
-           std::holds_alternative<columnar::Int16Type>(t) ||
-           std::holds_alternative<columnar::Int32Type>(t) ||
-           std::holds_alternative<columnar::Int64Type>(t);
-  };
-  auto is_float = [](const columnar::DataType& t) {
-    return std::holds_alternative<columnar::FloatType>(t) ||
-           std::holds_alternative<columnar::DoubleType>(t);
-  };
-  if (!(is_int(left) || is_float(left)) || !(is_int(right) || is_float(right))) {
+  if (!columnar::IsNumeric(left) || !columnar::IsNumeric(right)) {
     return Error::TypeError("'" + std::string(ToString(op)) + "' needs numeric operands, got " +
                             columnar::GetTypeName(left) + " and " +
                             columnar::GetTypeName(right));
   }
-  if (is_float(left) || is_float(right) || op == BinaryOp::kDivide) {
-    return columnar::DoubleType{};
+  if (!columnar::IsInteger(left) || !columnar::IsInteger(right) || op == BinaryOp::kDivide) {
+    return columnar::DataType::kDouble;
   }
-  // Int8Type..Int64Type are declared in width order in DataType.
-  return left.index() >= right.index() ? left : right;
+  // kInt8..kInt64 are declared in width order.
+  return std::max(left, right);
 }
 
 /// @brief Type that both @p left and @p right convert to, e.g. the result type of the
@@ -107,9 +96,9 @@ inline constexpr std::array<std::string_view, 13> kBinaryOpSymbols = {
 /// @param left First type.
 /// @param right Second type.
 /// @return The common type, or `TypeError` if the types are incompatible.
-[[nodiscard]] inline Result<columnar::DataType> CommonType(const columnar::DataType& left,
-                                                           const columnar::DataType& right) {
-  if (left.index() == right.index()) {
+[[nodiscard]] inline Result<columnar::DataType> CommonType(columnar::DataType left,
+                                                           columnar::DataType right) {
+  if (left == right) {
     return left;
   }
   auto widened = BinaryResultType(BinaryOp::kAdd, left, right);

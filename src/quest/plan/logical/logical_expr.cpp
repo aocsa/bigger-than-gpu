@@ -41,23 +41,23 @@ Result<Field> Literal::ToField(const LogicalPlan& /*input*/) const {
       [](const auto& v) -> DataType {
         using T = std::decay_t<decltype(v)>;
         if constexpr (std::is_same_v<T, int8_t>) {
-          return columnar::Int8Type{};
+          return columnar::DataType::kInt8;
         } else if constexpr (std::is_same_v<T, int16_t>) {
-          return columnar::Int16Type{};
+          return columnar::DataType::kInt16;
         } else if constexpr (std::is_same_v<T, int32_t>) {
-          return columnar::Int32Type{};
+          return columnar::DataType::kInt32;
         } else if constexpr (std::is_same_v<T, int64_t>) {
-          return columnar::Int64Type{};
+          return columnar::DataType::kInt64;
         } else if constexpr (std::is_same_v<T, float>) {
-          return columnar::FloatType{};
+          return columnar::DataType::kFloat;
         } else if constexpr (std::is_same_v<T, double>) {
-          return columnar::DoubleType{};
+          return columnar::DataType::kDouble;
         } else if constexpr (std::is_same_v<T, bool>) {
-          return columnar::BoolType{};
+          return columnar::DataType::kBool;
         } else if constexpr (std::is_same_v<T, columnar::Date32>) {
-          return columnar::Date32Type{};
+          return columnar::DataType::kDate32;
         } else {
-          return columnar::StringType{};
+          return columnar::DataType::kString;
         }
       },
       value_);
@@ -138,7 +138,7 @@ Result<Field> CaseExpr::ToField(const LogicalPlan& input) const {
       return condition;
     }
     if (!IsNullLiteral(*when) &&
-        !std::holds_alternative<columnar::BoolType>(condition->data_type)) {
+        !(condition->data_type == columnar::DataType::kBool)) {
       return Error::TypeError("CASE WHEN needs a bool condition, got " +
                               columnar::GetTypeName(condition->data_type));
     }
@@ -179,19 +179,19 @@ Result<Field> Sum::ToField(const LogicalPlan& input) const {
   }
   // SQL: SUM of an integer type is BIGINT, of a floating type DOUBLE.
   const auto& type = input_field->data_type;
-  const bool is_integral = std::holds_alternative<columnar::BoolType>(type) ||
-                           std::holds_alternative<columnar::Int8Type>(type) ||
-                           std::holds_alternative<columnar::Int16Type>(type) ||
-                           std::holds_alternative<columnar::Int32Type>(type) ||
-                           std::holds_alternative<columnar::Int64Type>(type);
-  const bool is_floating = std::holds_alternative<columnar::FloatType>(type) ||
-                           std::holds_alternative<columnar::DoubleType>(type);
+  const bool is_integral = (type == columnar::DataType::kBool) ||
+                           (type == columnar::DataType::kInt8) ||
+                           (type == columnar::DataType::kInt16) ||
+                           (type == columnar::DataType::kInt32) ||
+                           (type == columnar::DataType::kInt64);
+  const bool is_floating = (type == columnar::DataType::kFloat) ||
+                           (type == columnar::DataType::kDouble);
   if (!is_integral && !is_floating) {
     return Error::TypeError("SUM needs a numeric input, got " + columnar::GetTypeName(type));
   }
   return Field{"SUM(" + input_->ToString() + ")",
-               is_integral ? columnar::DataType{columnar::Int64Type{}}
-                           : columnar::DataType{columnar::DoubleType{}}};
+               is_integral ? columnar::DataType{columnar::DataType::kInt64}
+                           : columnar::DataType{columnar::DataType::kDouble}};
 }
 
 Result<Field> Min::ToField(const LogicalPlan& input) const {

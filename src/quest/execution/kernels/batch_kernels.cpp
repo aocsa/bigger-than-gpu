@@ -25,18 +25,8 @@ template <typename T>
   for (size_t idx : indices) {
     auto val = col.GetValue(idx);
     if (auto* v = std::get_if<T>(&val)) {
-      data.push_back(*v);
+      data.push_back(std::move(*v));
       validity.push_back(true);
-    } else if constexpr (std::is_same_v<T, std::string>) {
-      // Binary and fixed-width byte types are carried as strings.
-      if (std::holds_alternative<std::monostate>(val)) {
-        data.emplace_back();
-        validity.push_back(false);
-        has_null = true;
-      } else {
-        data.push_back(columnar::ValueToString(val));
-        validity.push_back(true);
-      }
     } else {
       data.push_back(T{});
       validity.push_back(false);
@@ -44,7 +34,7 @@ template <typename T>
     }
   }
   return std::make_shared<plan::physical::MaterializedColumnVector>(
-      plan::physical::ColumnData{std::move(data)}, std::move(type),
+      plan::physical::ColumnData{std::move(data)}, type,
       has_null ? std::move(validity) : std::vector<bool>{});
 }
 
@@ -52,30 +42,9 @@ template <typename T>
 
 std::shared_ptr<columnar::ColumnVector> GatherColumn(
     const columnar::ColumnVector& col, const std::vector<size_t>& indices) {
-  return std::visit(
-      [&](const auto& type_tag) -> std::shared_ptr<columnar::ColumnVector> {
-        using TypeTag = std::decay_t<decltype(type_tag)>;
-        if constexpr (std::is_same_v<TypeTag, columnar::BoolType>) {
-          return GatherTyped<bool>(col, indices, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, columnar::Int8Type>) {
-          return GatherTyped<int8_t>(col, indices, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, columnar::Int16Type>) {
-          return GatherTyped<int16_t>(col, indices, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, columnar::Int32Type>) {
-          return GatherTyped<int32_t>(col, indices, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, columnar::Int64Type>) {
-          return GatherTyped<int64_t>(col, indices, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, columnar::FloatType>) {
-          return GatherTyped<float>(col, indices, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, columnar::DoubleType>) {
-          return GatherTyped<double>(col, indices, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, columnar::Date32Type>) {
-          return GatherTyped<columnar::Date32>(col, indices, type_tag);
-        } else {
-          return GatherTyped<std::string>(col, indices, columnar::StringType{});
-        }
-      },
-      col.GetType());
+  return columnar::VisitType(col.GetType(), [&]<typename Tag>(Tag) {
+    return GatherTyped<columnar::ValueOf<typename Tag::CType>>(col, indices, Tag::kId);
+  });
 }
 
 Result<columnar::RecordBatch> FilterRecordBatch(

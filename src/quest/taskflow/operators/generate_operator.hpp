@@ -62,7 +62,7 @@ class GenerateOperator : public Operator {
     columns.reserve(num_columns_);
     for (std::size_t col_idx = 0; col_idx < num_columns_; ++col_idx) {
       auto column = std::make_shared<columnar::TypedColumnVector<std::int32_t>>(
-          columnar::Int32Type{}, rows_per_batch_);
+          columnar::DataType::kInt32, rows_per_batch_);
       for (std::size_t row = 0; row < rows_per_batch_; ++row) {
         column->Append(static_cast<std::int32_t>(((next_row_ + row) * num_columns_) + col_idx));
       }
@@ -81,7 +81,7 @@ class GenerateOperator : public Operator {
     std::vector<columnar::Field> fields;
     fields.reserve(num_columns);
     for (std::size_t col_idx = 0; col_idx < num_columns; ++col_idx) {
-      fields.emplace_back("col" + std::to_string(col_idx), columnar::Int32Type{});
+      fields.emplace_back("col" + std::to_string(col_idx), columnar::DataType::kInt32);
     }
     return columnar::Schema(std::move(fields));
   }

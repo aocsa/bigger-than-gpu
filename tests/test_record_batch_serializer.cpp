@@ -26,9 +26,9 @@ using namespace quest::columnar;
 // =============================================================================
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeInt32Column) {
-  Schema schema({Field("id", Int32Type{})});
+  Schema schema({Field("id", DataType::kInt32)});
 
-  auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 5);
+  auto col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
   col->Append(1);
   col->Append(2);
   col->Append(3);
@@ -57,22 +57,22 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeInt32Column) {
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeMultipleColumns) {
   Schema schema({
-    Field("id", Int32Type{}),
-    Field("name", StringType{}),
-    Field("value", DoubleType{})
+    Field("id", DataType::kInt32),
+    Field("name", DataType::kString),
+    Field("value", DataType::kDouble)
   });
 
-  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 3);
+  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 3);
   id_col->Append(1);
   id_col->Append(2);
   id_col->Append(3);
 
-  auto name_col = std::make_shared<StringColumnVector>(StringType{}, 3);
+  auto name_col = std::make_shared<StringColumnVector>(DataType::kString, 3);
   name_col->Append("Alice");
   name_col->Append("Bob");
   name_col->Append("Charlie");
 
-  auto value_col = std::make_shared<TypedColumnVector<double>>(DoubleType{}, 3);
+  auto value_col = std::make_shared<TypedColumnVector<double>>(DataType::kDouble, 3);
   value_col->Append(3.14);
   value_col->Append(2.718);
   value_col->Append(1.414);
@@ -105,9 +105,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeMultipleColumns) {
 // =============================================================================
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeWithNulls) {
-  Schema schema({Field("value", Int32Type{}, Repetition::kOptional)});
+  Schema schema({Field("value", DataType::kInt32, Repetition::kOptional)});
 
-  auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 5);
+  auto col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
   col->Append(10);
   col->AppendNull();
   col->Append(20);
@@ -132,8 +132,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeWithNulls) {
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeDate32WithNulls) {
-  Schema schema({Field("d", Date32Type{}, Repetition::kOptional)});
-  auto col = std::make_shared<TypedColumnVector<Date32>>(Date32Type{}, 3);
+  Schema schema({Field("d", DataType::kDate32, Repetition::kOptional)});
+  auto col = std::make_shared<TypedColumnVector<Date32>>(DataType::kDate32, 3);
   col->Append(Date32{9538});
   col->AppendNull();
   col->Append(Date32{-1});
@@ -142,9 +142,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeDate32WithNulls) {
   ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
   ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
-  EXPECT_TRUE(std::holds_alternative<Date32Type>(deserialized.schema().field(0).data_type));
+  EXPECT_EQ(deserialized.schema().field(0).data_type, DataType::kDate32);
   const auto& out = deserialized.column(0);
-  EXPECT_TRUE(std::holds_alternative<Date32Type>(out.GetType()));
+  EXPECT_EQ(out.GetType(), DataType::kDate32);
   ASSERT_EQ(out.size(), 3U);
   EXPECT_EQ(out.GetValue(0), Value{Date32{9538}});
   EXPECT_TRUE(out.IsNull(1));
@@ -152,9 +152,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeDate32WithNulls) {
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeStringWithNulls) {
-  Schema schema({Field("text", StringType{}, Repetition::kOptional)});
+  Schema schema({Field("text", DataType::kString, Repetition::kOptional)});
 
-  auto col = std::make_shared<StringColumnVector>(StringType{}, 4);
+  auto col = std::make_shared<StringColumnVector>(DataType::kString, 4);
   col->Append("Hello");
   col->AppendNull();
   col->Append("World");
@@ -180,9 +180,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeStringWithNulls) {
 // =============================================================================
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeBool) {
-  Schema schema({Field("flag", BoolType{})});
+  Schema schema({Field("flag", DataType::kBool)});
 
-  auto col = std::make_shared<TypedColumnVector<bool>>(BoolType{}, 4);
+  auto col = std::make_shared<TypedColumnVector<bool>>(DataType::kBool, 4);
   col->Append(true);
   col->Append(false);
   col->Append(true);
@@ -201,9 +201,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeBool) {
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeInt64) {
-  Schema schema({Field("big_number", Int64Type{})});
+  Schema schema({Field("big_number", DataType::kInt64)});
 
-  auto col = std::make_shared<TypedColumnVector<int64_t>>(Int64Type{}, 3);
+  auto col = std::make_shared<TypedColumnVector<int64_t>>(DataType::kInt64, 3);
   col->Append(9223372036854775807LL);  // max int64
   col->Append(0);
   col->Append(-9223372036854775807LL);  // min int64 + 1
@@ -220,9 +220,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeInt64) {
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeFloat) {
-  Schema schema({Field("price", FloatType{})});
+  Schema schema({Field("price", DataType::kFloat)});
 
-  auto col = std::make_shared<TypedColumnVector<float>>(FloatType{}, 3);
+  auto col = std::make_shared<TypedColumnVector<float>>(DataType::kFloat, 3);
   col->Append(1.5f);
   col->Append(2.75f);
   col->Append(-0.125f);
@@ -240,25 +240,25 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeFloat) {
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeAllIntTypes) {
   Schema schema({
-    Field("int8_col", Int8Type{}),
-    Field("int16_col", Int16Type{}),
-    Field("int32_col", Int32Type{}),
-    Field("int64_col", Int64Type{})
+    Field("int8_col", DataType::kInt8),
+    Field("int16_col", DataType::kInt16),
+    Field("int32_col", DataType::kInt32),
+    Field("int64_col", DataType::kInt64)
   });
 
-  auto int8_col = std::make_shared<TypedColumnVector<int8_t>>(Int8Type{}, 2);
+  auto int8_col = std::make_shared<TypedColumnVector<int8_t>>(DataType::kInt8, 2);
   int8_col->Append(127);
   int8_col->Append(-128);
 
-  auto int16_col = std::make_shared<TypedColumnVector<int16_t>>(Int16Type{}, 2);
+  auto int16_col = std::make_shared<TypedColumnVector<int16_t>>(DataType::kInt16, 2);
   int16_col->Append(32767);
   int16_col->Append(-32768);
 
-  auto int32_col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 2);
+  auto int32_col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 2);
   int32_col->Append(2147483647);
   int32_col->Append(-2147483648);
 
-  auto int64_col = std::make_shared<TypedColumnVector<int64_t>>(Int64Type{}, 2);
+  auto int64_col = std::make_shared<TypedColumnVector<int64_t>>(DataType::kInt64, 2);
   int64_col->Append(9223372036854775807LL);
   int64_col->Append(-9223372036854775807LL);
 
@@ -284,16 +284,16 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeAllIntTypes) {
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeFile) {
   Schema schema({
-    Field("id", Int32Type{}),
-    Field("name", StringType{})
+    Field("id", DataType::kInt32),
+    Field("name", DataType::kString)
   });
 
-  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 3);
+  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 3);
   id_col->Append(1);
   id_col->Append(2);
   id_col->Append(3);
 
-  auto name_col = std::make_shared<StringColumnVector>(StringType{}, 3);
+  auto name_col = std::make_shared<StringColumnVector>(DataType::kString, 3);
   name_col->Append("Test1");
   name_col->Append("Test2");
   name_col->Append("Test3");
@@ -325,8 +325,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeFile) {
 // =============================================================================
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeEmptyBatch) {
-  Schema schema({Field("value", Int32Type{})});
-  auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 0);
+  Schema schema({Field("value", DataType::kInt32)});
+  auto col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 0);
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
 
@@ -338,9 +338,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeEmptyBatch) {
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeEmptyStrings) {
-  Schema schema({Field("text", StringType{})});
+  Schema schema({Field("text", DataType::kString)});
 
-  auto col = std::make_shared<StringColumnVector>(StringType{}, 3);
+  auto col = std::make_shared<StringColumnVector>(DataType::kString, 3);
   col->Append("");
   col->Append("non-empty");
   col->Append("");
@@ -375,8 +375,8 @@ TEST(RecordBatchSerializerTest, InvalidVersion) {
 }
 
 TEST(RecordBatchSerializerTest, TruncatedBuffer) {
-  Schema schema({Field("value", Int32Type{})});
-  auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 1);
+  Schema schema({Field("value", DataType::kInt32)});
+  auto col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 1);
   col->Append(42);
   std::vector<std::shared_ptr<ColumnVector>> columns = {col};
   RecordBatch original(schema, columns);
@@ -395,9 +395,9 @@ TEST(RecordBatchSerializerTest, TruncatedBuffer) {
 // =============================================================================
 
 TEST(RecordBatchSerializerTest, LargeNumberOfRows) {
-  Schema schema({Field("id", Int32Type{})});
+  Schema schema({Field("id", DataType::kInt32)});
 
-  auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 10000);
+  auto col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 10000);
   for (int32_t i = 0; i < 10000; ++i) {
     col->Append(i);
   }
@@ -416,9 +416,9 @@ TEST(RecordBatchSerializerTest, LargeNumberOfRows) {
 }
 
 TEST(RecordBatchSerializerTest, LongStrings) {
-  Schema schema({Field("text", StringType{})});
+  Schema schema({Field("text", DataType::kString)});
 
-  auto col = std::make_shared<StringColumnVector>(StringType{}, 2);
+  auto col = std::make_shared<StringColumnVector>(DataType::kString, 2);
   std::string long_string(10000, 'A');
   col->Append(long_string);
   col->Append("short");

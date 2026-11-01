@@ -72,27 +72,26 @@ enum class CompressionType : int8_t {
   kLz4Raw = 7
 };
 
-inline DataType PhysicalTypeToDataType(PhysicalType type,
-                                       int32_t type_length = 0) {
+/// @brief The DataType a physical type reads as when no logical type says otherwise.
+/// BYTE_ARRAY, INT96 and FIXED_LEN_BYTE_ARRAY read as String with the raw bytes.
+[[nodiscard]] constexpr DataType PhysicalTypeToDataType(PhysicalType type) noexcept {
   switch (type) {
     case PhysicalType::kBoolean:
-      return columnar::BoolType{};
+      return DataType::kBool;
     case PhysicalType::kInt32:
-      return columnar::Int32Type{};
+      return DataType::kInt32;
     case PhysicalType::kInt64:
-      return columnar::Int64Type{};
-    case PhysicalType::kInt96:
-      return columnar::Int96Type{};
+      return DataType::kInt64;
     case PhysicalType::kFloat:
-      return columnar::FloatType{};
+      return DataType::kFloat;
     case PhysicalType::kDouble:
-      return columnar::DoubleType{};
+      return DataType::kDouble;
+    case PhysicalType::kInt96:
     case PhysicalType::kByteArray:
-      return columnar::BinaryType{};
     case PhysicalType::kFixedLenByteArray:
-      return columnar::FixedLenByteArrayType{type_length};
+      return DataType::kString;
   }
-  return columnar::BinaryType{};  // Default fallback
+  return DataType::kString;
 }
 
 }  // namespace quest::io::parquet

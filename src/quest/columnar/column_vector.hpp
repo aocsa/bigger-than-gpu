@@ -22,14 +22,6 @@
 
 namespace quest::columnar {
 
-/// @brief A `Date32Type` value: days since 1970-01-01, the Parquet DATE representation.
-struct Date32 {
-  std::int32_t days;
-  auto operator<=>(const Date32&) const = default;
-};
-// Parquet plain/dictionary decoding memcpy's raw INT32 values into Date32.
-static_assert(sizeof(Date32) == sizeof(std::int32_t) && std::is_trivially_copyable_v<Date32>);
-
 using Value = std::variant<std::monostate,  // null
                            bool, int8_t, int16_t, int32_t, int64_t, float,
                            double, std::string, std::vector<uint8_t>, Date32>;
@@ -71,7 +63,7 @@ template <typename T>
 class TypedColumnVector : public  ColumnVector {
  public:
   TypedColumnVector(DataType type, size_t capacity)
-      : type_(std::move(type)), values_(capacity), null_bitmap_() {
+      : type_(type), values_(capacity), null_bitmap_() {
     null_bitmap_.resize((capacity + 7) / 8, 0xFF);  // All valid by default
   }
 
@@ -152,7 +144,7 @@ class TypedColumnVector : public  ColumnVector {
 class StringColumnVector : public ColumnVector {
  public:
   explicit StringColumnVector(DataType type, size_t capacity = 0)
-      : type_(std::move(type)) {
+      : type_(type) {
     values_.reserve(capacity);
     null_bitmap_.resize((capacity + 7) / 8, 0xFF);
   }
@@ -211,129 +203,41 @@ class StringColumnVector : public ColumnVector {
   std::vector<uint8_t> null_bitmap_;
 };
 
-inline std::unique_ptr<ColumnVector> CreateColumnVector(const DataType& type,
-                                                        size_t capacity) {
-  return std::visit(
-      [capacity](const auto& t) -> std::unique_ptr<ColumnVector> {
-        using T = std::decay_t<decltype(t)>;
-        if constexpr (std::is_same_v<T, BoolType>) {
-          return std::make_unique<TypedColumnVector<bool>>(t, capacity);
-        } else if constexpr (std::is_same_v<T, Int8Type>) {
-          return std::make_unique<TypedColumnVector<int8_t>>(t, capacity);
-        } else if constexpr (std::is_same_v<T, Int16Type>) {
-          return std::make_unique<TypedColumnVector<int16_t>>(t, capacity);
-        } else if constexpr (std::is_same_v<T, Int32Type>) {
-          return std::make_unique<TypedColumnVector<int32_t>>(t, capacity);
-        } else if constexpr (std::is_same_v<T, Int64Type>) {
-          return std::make_unique<TypedColumnVector<int64_t>>(t, capacity);
-        } else if constexpr (std::is_same_v<T, FloatType>) {
-          return std::make_unique<TypedColumnVector<float>>(t, capacity);
-        } else if constexpr (std::is_same_v<T, DoubleType>) {
-          return std::make_unique<TypedColumnVector<double>>(t, capacity);
-        } else if constexpr (std::is_same_v<T, Date32Type>) {
-          return std::make_unique<TypedColumnVector<Date32>>(t, capacity);
-        } else {
-          return std::make_unique<StringColumnVector>(t, capacity);
-        }
-      },
-      type);
+/// @brief The column class that stores C++ type @p T (`TypeTraits` CType).
+template <typename T>
+using ColumnOf =
+    std::conditional_t<std::same_as<T, std::string_view>, StringColumnVector, TypedColumnVector<T>>;
+
+/// @brief The `Value` alternative for C++ type @p T: a String cell is a `std::string`.
+template <typename T>
+using ValueOf = std::conditional_t<std::same_as<T, std::string_view>, std::string, T>;
+
+inline std::unique_ptr<ColumnVector> CreateColumnVector(DataType type, size_t capacity) {
+  return VisitType(type, [&]<typename Tag>(Tag) -> std::unique_ptr<ColumnVector> {
+    return std::make_unique<ColumnOf<typename Tag::CType>>(type, capacity);
+  });
 }
 
-/// @brief Append values from @p src onto a typed destination column.
+/// @brief Append values from @p src onto a destination column of the same type.
 [[nodiscard]] inline Status AppendColumnValues(ColumnVector& dest, const ColumnVector& src) {
-  return std::visit(
-      [&dest, &src](const auto& type_tag) -> Status {
-        using TypeTag = std::decay_t<decltype(type_tag)>;
-        auto append_one = [&](auto* typed) -> Status {
-          if (!typed) {
-            return Error::Invalid("Concatenate destination type mismatch");
-          }
-          for (size_t i = 0; i < src.size(); ++i) {
-            auto val = src.GetValue(i);
-            if (std::holds_alternative<std::monostate>(val)) {
-              typed->AppendNull();
-              continue;
-            }
-            if constexpr (std::is_same_v<TypeTag, BoolType>) {
-              if (auto* v = std::get_if<bool>(&val)) {
-                typed->Append(*v);
-              } else {
-                return Error::Invalid("Concatenate value type mismatch (bool)");
-              }
-            } else if constexpr (std::is_same_v<TypeTag, Int8Type>) {
-              if (auto* v = std::get_if<int8_t>(&val)) {
-                typed->Append(*v);
-              } else {
-                return Error::Invalid("Concatenate value type mismatch (int8)");
-              }
-            } else if constexpr (std::is_same_v<TypeTag, Int16Type>) {
-              if (auto* v = std::get_if<int16_t>(&val)) {
-                typed->Append(*v);
-              } else {
-                return Error::Invalid("Concatenate value type mismatch (int16)");
-              }
-            } else if constexpr (std::is_same_v<TypeTag, Int32Type>) {
-              if (auto* v = std::get_if<int32_t>(&val)) {
-                typed->Append(*v);
-              } else {
-                return Error::Invalid("Concatenate value type mismatch (int32)");
-              }
-            } else if constexpr (std::is_same_v<TypeTag, Int64Type>) {
-              if (auto* v = std::get_if<int64_t>(&val)) {
-                typed->Append(*v);
-              } else {
-                return Error::Invalid("Concatenate value type mismatch (int64)");
-              }
-            } else if constexpr (std::is_same_v<TypeTag, FloatType>) {
-              if (auto* v = std::get_if<float>(&val)) {
-                typed->Append(*v);
-              } else {
-                return Error::Invalid("Concatenate value type mismatch (float)");
-              }
-            } else if constexpr (std::is_same_v<TypeTag, DoubleType>) {
-              if (auto* v = std::get_if<double>(&val)) {
-                typed->Append(*v);
-              } else {
-                return Error::Invalid("Concatenate value type mismatch (double)");
-              }
-            } else if constexpr (std::is_same_v<TypeTag, Date32Type>) {
-              if (auto* v = std::get_if<Date32>(&val)) {
-                typed->Append(*v);
-              } else {
-                return Error::Invalid("Concatenate value type mismatch (date32)");
-              }
-            } else {
-              if (auto* v = std::get_if<std::string>(&val)) {
-                typed->Append(*v);
-              } else {
-                typed->Append(ValueToString(val));
-              }
-            }
-          }
-          return {};
-        };
-
-        if constexpr (std::is_same_v<TypeTag, BoolType>) {
-          return append_one(dynamic_cast<TypedColumnVector<bool>*>(&dest));
-        } else if constexpr (std::is_same_v<TypeTag, Int8Type>) {
-          return append_one(dynamic_cast<TypedColumnVector<int8_t>*>(&dest));
-        } else if constexpr (std::is_same_v<TypeTag, Int16Type>) {
-          return append_one(dynamic_cast<TypedColumnVector<int16_t>*>(&dest));
-        } else if constexpr (std::is_same_v<TypeTag, Int32Type>) {
-          return append_one(dynamic_cast<TypedColumnVector<int32_t>*>(&dest));
-        } else if constexpr (std::is_same_v<TypeTag, Int64Type>) {
-          return append_one(dynamic_cast<TypedColumnVector<int64_t>*>(&dest));
-        } else if constexpr (std::is_same_v<TypeTag, FloatType>) {
-          return append_one(dynamic_cast<TypedColumnVector<float>*>(&dest));
-        } else if constexpr (std::is_same_v<TypeTag, DoubleType>) {
-          return append_one(dynamic_cast<TypedColumnVector<double>*>(&dest));
-        } else if constexpr (std::is_same_v<TypeTag, Date32Type>) {
-          return append_one(dynamic_cast<TypedColumnVector<Date32>*>(&dest));
-        } else {
-          return append_one(dynamic_cast<StringColumnVector*>(&dest));
-        }
-      },
-      src.GetType());
+  return VisitType(src.GetType(), [&]<typename Tag>(Tag) -> Status {
+    using T = typename Tag::CType;
+    auto* typed = dynamic_cast<ColumnOf<T>*>(&dest);
+    if (typed == nullptr) {
+      return Error::Invalid("Concatenate destination type mismatch");
+    }
+    for (size_t i = 0; i < src.size(); ++i) {
+      const Value val = src.GetValue(i);
+      if (std::holds_alternative<std::monostate>(val)) {
+        typed->AppendNull();
+      } else if (const auto* v = std::get_if<ValueOf<T>>(&val)) {
+        typed->Append(*v);
+      } else {
+        return Error::Invalid("Concatenate value type mismatch (" + std::string(Tag::kName) + ")");
+      }
+    }
+    return {};
+  });
 }
 
 }  // namespace quest::columnar

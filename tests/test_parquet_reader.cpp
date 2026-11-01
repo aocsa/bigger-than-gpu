@@ -144,10 +144,10 @@ TEST_F(ParquetReaderTest, Utf8ColumnReadsAsString) {
   ASSERT_OK_AND_ASSIGN(auto ds, ParquetDataSource::Open(employees_file().string()));
   auto index = ds.schema().GetFieldIndex("name");
   ASSERT_TRUE(index.has_value());
-  EXPECT_TRUE(std::holds_alternative<StringType>(ds.schema().field(*index).data_type));
+  EXPECT_EQ(ds.schema().field(*index).data_type, DataType::kString);
 
   ASSERT_OK_AND_ASSIGN(auto batch, ds.ReadPartition(0, {"name"}));
-  EXPECT_TRUE(std::holds_alternative<StringType>(batch.column(0).GetType()));
+  EXPECT_EQ(batch.column(0).GetType(), DataType::kString);
   EXPECT_TRUE(std::holds_alternative<std::string>(batch.column(0).GetValue(0)));
 }
 
@@ -161,10 +161,10 @@ TEST_F(ParquetReaderTest, NumericColumnTypes) {
 
   for (size_t i = 0; i < schema.num_fields(); ++i) {
     const auto& field = schema.field(i);
-    bool is_numeric = std::holds_alternative<Int32Type>(field.data_type) ||
-                      std::holds_alternative<Int64Type>(field.data_type) ||
-                      std::holds_alternative<FloatType>(field.data_type) ||
-                      std::holds_alternative<DoubleType>(field.data_type);
+    bool is_numeric = (field.data_type == DataType::kInt32) ||
+                      (field.data_type == DataType::kInt64) ||
+                      (field.data_type == DataType::kFloat) ||
+                      (field.data_type == DataType::kDouble);
 
     if (is_numeric) {
       for (size_t i = 0; i < ds.num_partitions(); ++i) {
@@ -315,11 +315,11 @@ TEST(ParquetDateTest, DictionaryEncodedDateLoadsAsDate32) {
   for (const char* name : {"l_commitdate", "l_receiptdate", "l_shipdate"}) {
     auto idx = ds.schema().GetFieldIndex(name);
     ASSERT_TRUE(idx.has_value()) << name;
-    EXPECT_TRUE(std::holds_alternative<Date32Type>(ds.schema().field(*idx).data_type)) << name;
+    EXPECT_EQ(ds.schema().field(*idx).data_type, DataType::kDate32) << name;
   }
 
   ASSERT_OK_AND_ASSIGN(auto batch, ds.ReadPartition(0, {"l_commitdate"}));
-  EXPECT_TRUE(std::holds_alternative<Date32Type>(batch.column(0).GetType()));
+  EXPECT_EQ(batch.column(0).GetType(), DataType::kDate32);
   EXPECT_EQ(batch.column(0).GetValue(0), Value{Date32{9538}});
   EXPECT_EQ(ValueToString(batch.column(0).GetValue(0)), "1996-02-12");
 }
@@ -334,7 +334,7 @@ TEST(ParquetDateTest, PlainEncodedDateWithNullLoadsAsDate32) {
   ASSERT_OK_AND_ASSIGN(auto ds, ParquetDataSource::Open(path.string()));
   ASSERT_OK_AND_ASSIGN(auto batch, ds.ReadPartition(0, {"d"}));
   const auto& col = batch.column(0);
-  EXPECT_TRUE(std::holds_alternative<Date32Type>(col.GetType()));
+  EXPECT_EQ(col.GetType(), DataType::kDate32);
   ASSERT_EQ(col.size(), 4U);
   EXPECT_EQ(col.GetValue(0), Value{Date32{9538}});
   EXPECT_TRUE(col.IsNull(1));
@@ -361,7 +361,7 @@ TEST(ParquetTpchTest, DecimalColumnReadsAsDouble) {
   const auto index = reader.schema().GetFieldIndex("l_extendedprice");
   ASSERT_TRUE(index.has_value());
   const auto& field = reader.schema().field(*index);
-  EXPECT_TRUE(std::holds_alternative<DoubleType>(field.data_type));
+  EXPECT_TRUE(field.data_type == DataType::kDouble);
   EXPECT_EQ(field.decimal_scale, 2);
   EXPECT_FALSE(field.field_id.has_value());  // Thrift field 7 is the scale, not the field id
 

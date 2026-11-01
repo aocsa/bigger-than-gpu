@@ -36,21 +36,21 @@ using namespace quest::execution;
 namespace {
 
 RecordBatch MakeTestBatch() {
-  auto col_a = std::make_unique<TypedColumnVector<int32_t>>(Int32Type{}, 5);
+  auto col_a = std::make_unique<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
   col_a->Append(10);
   col_a->Append(20);
   col_a->Append(30);
   col_a->Append(40);
   col_a->Append(50);
 
-  auto col_b = std::make_unique<TypedColumnVector<double>>(DoubleType{}, 5);
+  auto col_b = std::make_unique<TypedColumnVector<double>>(DataType::kDouble, 5);
   col_b->Append(1.0);
   col_b->Append(2.0);
   col_b->Append(3.0);
   col_b->Append(4.0);
   col_b->Append(5.0);
 
-  auto col_c = std::make_unique<TypedColumnVector<bool>>(BoolType{}, 5);
+  auto col_c = std::make_unique<TypedColumnVector<bool>>(DataType::kBool, 5);
   col_c->Append(true);
   col_c->Append(false);
   col_c->Append(true);
@@ -58,9 +58,9 @@ RecordBatch MakeTestBatch() {
   col_c->Append(true);
 
   std::vector<Field> fields = {
-      Field("a", Int32Type{}),
-      Field("b", DoubleType{}),
-      Field("c", BoolType{}),
+      Field("a", DataType::kInt32),
+      Field("b", DataType::kDouble),
+      Field("c", DataType::kBool),
   };
   Schema schema(fields);
 
@@ -73,14 +73,14 @@ RecordBatch MakeTestBatch() {
 }
 
 RecordBatch MakeNullableBatch() {
-  auto col = std::make_unique<TypedColumnVector<int32_t>>(Int32Type{}, 5);
+  auto col = std::make_unique<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
   col->Append(10);
   col->AppendNull();
   col->Append(30);
   col->AppendNull();
   col->Append(50);
 
-  std::vector<Field> fields = {Field("a", Int32Type{}, Repetition::kOptional)};
+  std::vector<Field> fields = {Field("a", DataType::kInt32, Repetition::kOptional)};
   Schema schema(fields);
 
   std::vector<std::shared_ptr<ColumnVector>> columns;
@@ -482,10 +482,10 @@ TEST(MaxExpressionTest, WithNulls) {
 // =============================================================================
 
 TEST(PhysicalExprEdgeCaseTest, EmptyBatch) {
-  std::vector<Field> fields = {Field("a", Int32Type{})};
+  std::vector<Field> fields = {Field("a", DataType::kInt32)};
   Schema schema(fields);
 
-  auto col = std::make_unique<TypedColumnVector<int32_t>>(Int32Type{}, 0);
+  auto col = std::make_unique<TypedColumnVector<int32_t>>(DataType::kInt32, 0);
   std::vector<std::shared_ptr<ColumnVector>> columns;
   columns.push_back(std::move(col));
 
@@ -500,12 +500,12 @@ TEST(PhysicalExprEdgeCaseTest, EmptyBatch) {
 }
 
 TEST(PhysicalExprEdgeCaseTest, NegativeNumbers) {
-  auto col = std::make_unique<TypedColumnVector<int32_t>>(Int32Type{}, 3);
+  auto col = std::make_unique<TypedColumnVector<int32_t>>(DataType::kInt32, 3);
   col->Append(-10);
   col->Append(0);
   col->Append(10);
 
-  std::vector<Field> fields = {Field("a", Int32Type{})};
+  std::vector<Field> fields = {Field("a", DataType::kInt32)};
   Schema schema(fields);
 
   std::vector<std::shared_ptr<ColumnVector>> columns;
@@ -540,7 +540,7 @@ class SchemaOnlyPlan : public LogicalPlan {
 }  // namespace
 
 TEST(CreatePhysicalExprTest, ArithmeticOpsRoundTripEvaluate) {
-  SchemaOnlyPlan input(Schema({Field("a", Int32Type{}), Field("b", DoubleType{})}));
+  SchemaOnlyPlan input(Schema({Field("a", DataType::kInt32), Field("b", DataType::kDouble)}));
   auto batch = MakeTestBatch();
 
   {
@@ -587,16 +587,16 @@ namespace {
 /// Two nullable bool columns "l", "r" covering all nine {true, false, null} pairs.
 RecordBatch MakeTruthTableBatch() {
   const std::optional<bool> kVals[] = {true, false, std::nullopt};
-  auto l = std::make_shared<TypedColumnVector<bool>>(BoolType{}, 9);
-  auto r = std::make_shared<TypedColumnVector<bool>>(BoolType{}, 9);
+  auto l = std::make_shared<TypedColumnVector<bool>>(DataType::kBool, 9);
+  auto r = std::make_shared<TypedColumnVector<bool>>(DataType::kBool, 9);
   for (auto lv : kVals) {
     for (auto rv : kVals) {
       lv ? l->Append(*lv) : l->AppendNull();
       rv ? r->Append(*rv) : r->AppendNull();
     }
   }
-  Schema schema({Field("l", BoolType{}, Repetition::kOptional),
-                 Field("r", BoolType{}, Repetition::kOptional)});
+  Schema schema({Field("l", DataType::kBool, Repetition::kOptional),
+                 Field("r", DataType::kBool, Repetition::kOptional)});
   return RecordBatch(schema, {l, r});
 }
 
@@ -697,7 +697,7 @@ TEST(SqlNullTest, ArithmeticWithNullIsNull) {
 
   BinaryExpression add_null(BinaryOp::kAdd, Col(0), Lit(std::monostate{}));
   ASSERT_OK_AND_ASSIGN(auto all_null, add_null.Evaluate(batch));
-  EXPECT_TRUE(std::holds_alternative<Int32Type>(all_null->GetType()));
+  EXPECT_EQ(all_null->GetType(), DataType::kInt32);
   ExpectColumn<int32_t>(*all_null, std::vector<std::optional<int32_t>>(5, std::nullopt));
 }
 
@@ -711,29 +711,29 @@ TEST(SqlNullTest, IntArithmeticStaysIntegral) {
     Value first;
   };
   Case cases[] = {
-      {BinaryOp::kAdd, Col(0), Col(0), Int32Type{}, Value{int32_t{20}}},
-      {BinaryOp::kSubtract, Col(0), Lit(Value{5}), Int32Type{}, Value{int32_t{5}}},
-      {BinaryOp::kMultiply, Col(0), Lit(Value{int64_t{3}}), Int64Type{}, Value{int64_t{30}}},
-      {BinaryOp::kModulo, Col(0), Lit(Value{3}), Int32Type{}, Value{int32_t{1}}},
+      {BinaryOp::kAdd, Col(0), Col(0), DataType::kInt32, Value{int32_t{20}}},
+      {BinaryOp::kSubtract, Col(0), Lit(Value{5}), DataType::kInt32, Value{int32_t{5}}},
+      {BinaryOp::kMultiply, Col(0), Lit(Value{int64_t{3}}), DataType::kInt64, Value{int64_t{30}}},
+      {BinaryOp::kModulo, Col(0), Lit(Value{3}), DataType::kInt32, Value{int32_t{1}}},
       // int / int is real division, as in DuckDB.
-      {BinaryOp::kDivide, Col(0), Lit(Value{4}), DoubleType{}, Value{2.5}},
-      {BinaryOp::kAdd, Col(0), Col(1), DoubleType{}, Value{11.0}},
+      {BinaryOp::kDivide, Col(0), Lit(Value{4}), DataType::kDouble, Value{2.5}},
+      {BinaryOp::kAdd, Col(0), Col(1), DataType::kDouble, Value{11.0}},
   };
   for (auto& c : cases) {
     BinaryExpression expr(c.op, std::move(c.left), std::move(c.right));
     SCOPED_TRACE(expr.ToString());
     ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
-    EXPECT_EQ(result->GetType().index(), c.type.index());
+    EXPECT_EQ(result->GetType(), c.type);
     EXPECT_EQ(result->GetValue(0), c.first);
   }
 }
 
 TEST(SqlNullTest, SmallIntLiteralsAreNumeric) {
-  SchemaOnlyPlan input(Schema({Field("a", Int32Type{})}));
+  SchemaOnlyPlan input(Schema({Field("a", DataType::kInt32)}));
   auto batch = MakeTestBatch();
   BinaryExpr expr(BinaryOp::kAdd, lit(int8_t{1}), lit(int16_t{2}));
   ASSERT_OK_AND_ASSIGN(auto field, expr.ToField(input));
-  EXPECT_TRUE(std::holds_alternative<Int16Type>(field.data_type));
+  EXPECT_TRUE(field.data_type == DataType::kInt16);
   ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(expr, input));
   ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
   EXPECT_EQ(result->GetValue(0), Value{int16_t{3}});
@@ -791,8 +791,8 @@ TEST(SqlNullTest, FilterPreservesNullsInSelectedRows) {
 }
 
 TEST(SqlNullTest, LogicalResultTypeMatchesPhysical) {
-  SchemaOnlyPlan input(Schema({Field("a", Int32Type{}), Field("b", DoubleType{}),
-                               Field("c", BoolType{})}));
+  SchemaOnlyPlan input(Schema({Field("a", DataType::kInt32), Field("b", DataType::kDouble),
+                               Field("c", DataType::kBool)}));
   auto batch = MakeTestBatch();
   const BinaryOp kOps[] = {BinaryOp::kEq,  BinaryOp::kNeq,      BinaryOp::kLt,
                            BinaryOp::kLtEq, BinaryOp::kGt,      BinaryOp::kGtEq,
@@ -814,17 +814,17 @@ TEST(SqlNullTest, LogicalResultTypeMatchesPhysical) {
       ASSERT_OK_AND_ASSIGN(auto field, expr.ToField(input));
       ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(expr, input));
       ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
-      EXPECT_EQ(field.data_type.index(), result->GetType().index());
+      EXPECT_EQ(field.data_type, result->GetType());
     }
   }
 
   BinaryExpr and_expr(BinaryOp::kAnd, col("c"), col("c"));
   ASSERT_OK_AND_ASSIGN(auto and_field, and_expr.ToField(input));
-  EXPECT_TRUE(std::holds_alternative<BoolType>(and_field.data_type));
+  EXPECT_TRUE(and_field.data_type == DataType::kBool);
 
   BinaryExpr int_div(BinaryOp::kDivide, col("a"), col("a"));
   ASSERT_OK_AND_ASSIGN(auto div_field, int_div.ToField(input));
-  EXPECT_TRUE(std::holds_alternative<DoubleType>(div_field.data_type));
+  EXPECT_TRUE(div_field.data_type == DataType::kDouble);
 
   BinaryExpr bad(BinaryOp::kAdd, col("a"), col("c"));
   EXPECT_FALSE(bad.ToField(input).has_value());
@@ -848,14 +848,14 @@ ExpressionPtr Gt(ExpressionPtr l, ExpressionPtr r) {
 
 /// o_orderpriority: ["1-URGENT", "2-HIGH", "3-MEDIUM", null, "5-LOW", "2-HIGH"].
 RecordBatch MakePriorityBatch() {
-  auto p = std::make_shared<StringColumnVector>(StringType{}, 6);
+  auto p = std::make_shared<StringColumnVector>(DataType::kString, 6);
   p->Append("1-URGENT");
   p->Append("2-HIGH");
   p->Append("3-MEDIUM");
   p->AppendNull();
   p->Append("5-LOW");
   p->Append("2-HIGH");
-  return RecordBatch(Schema({Field("o_orderpriority", StringType{}, Repetition::kOptional)}), {p});
+  return RecordBatch(Schema({Field("o_orderpriority", DataType::kString, Repetition::kOptional)}), {p});
 }
 
 }  // namespace
@@ -864,7 +864,7 @@ TEST(CaseExpressionTest, NullWhenTakesElse) {
   auto batch = MakeTruthTableBatch();  // l: [t, t, t, f, f, f, null, null, null]
   auto expr = Case(Col(0), Lit(Value{1}), Lit(Value{0}));
   ASSERT_OK_AND_ASSIGN(auto result, expr->Evaluate(batch));
-  EXPECT_TRUE(std::holds_alternative<Int32Type>(result->GetType()));
+  EXPECT_EQ(result->GetType(), DataType::kInt32);
   ExpectColumn<int32_t>(*result, {1, 1, 1, 0, 0, 0, 0, 0, 0});
 }
 
@@ -879,12 +879,12 @@ TEST(CaseExpressionTest, NullsInChosenBranchArePreserved) {
   auto batch = MakeNullableBatch();  // a: [10, null, 30, null, 50]
   auto then_a = Case(Gt(Col(0), Lit(Value{20})), Col(0), Lit(std::monostate{}));
   ASSERT_OK_AND_ASSIGN(auto r1, then_a->Evaluate(batch));
-  EXPECT_TRUE(std::holds_alternative<Int32Type>(r1->GetType()));
+  EXPECT_EQ(r1->GetType(), DataType::kInt32);
   ExpectColumn<int32_t>(*r1, {std::nullopt, std::nullopt, 30, std::nullopt, 50});
 
   auto else_a = Case(Gt(Col(0), Lit(Value{20})), Lit(std::monostate{}), Col(0));
   ASSERT_OK_AND_ASSIGN(auto r2, else_a->Evaluate(batch));
-  EXPECT_TRUE(std::holds_alternative<Int32Type>(r2->GetType()));
+  EXPECT_EQ(r2->GetType(), DataType::kInt32);
   ExpectColumn<int32_t>(*r2, {10, std::nullopt, std::nullopt, std::nullopt, std::nullopt});
 
   // A null in the branch that is not chosen does not leak into the result.
@@ -897,27 +897,27 @@ TEST(CaseExpressionTest, BranchesWidenToCommonType) {
   auto batch = MakeTestBatch();  // a: int32 [10..50], b: double [1..5], c: [t, f, t, f, t]
   auto same = Case(Col(2), Col(0), Col(0));
   ASSERT_OK_AND_ASSIGN(auto r1, same->Evaluate(batch));
-  EXPECT_TRUE(std::holds_alternative<Int32Type>(r1->GetType()));
+  EXPECT_EQ(r1->GetType(), DataType::kInt32);
   ExpectColumn<int32_t>(*r1, {10, 20, 30, 40, 50});
 
   auto int64 = Case(Col(2), Col(0), Lit(Value{int64_t{7}}));
   ASSERT_OK_AND_ASSIGN(auto r2, int64->Evaluate(batch));
-  EXPECT_TRUE(std::holds_alternative<Int64Type>(r2->GetType()));
+  EXPECT_EQ(r2->GetType(), DataType::kInt64);
   ExpectColumn<int64_t>(*r2, {10, 7, 30, 7, 50});
 
   auto dbl = Case(Col(2), Col(0), Col(1));
   ASSERT_OK_AND_ASSIGN(auto r3, dbl->Evaluate(batch));
-  EXPECT_TRUE(std::holds_alternative<DoubleType>(r3->GetType()));
+  EXPECT_EQ(r3->GetType(), DataType::kDouble);
   ExpectColumn<double>(*r3, {10.0, 2.0, 30.0, 4.0, 50.0});
 
   auto strings = Case(Col(2), Lit(Value{std::string("y")}), Lit(Value{std::string("n")}));
   ASSERT_OK_AND_ASSIGN(auto r4, strings->Evaluate(batch));
-  EXPECT_TRUE(std::holds_alternative<StringType>(r4->GetType()));
+  EXPECT_EQ(r4->GetType(), DataType::kString);
   ExpectColumn<std::string>(*r4, {"y", "n", "y", "n", "y"});
 
   auto bools = Case(Col(2), Lit(Value{false}), Col(2));
   ASSERT_OK_AND_ASSIGN(auto r5, bools->Evaluate(batch));
-  EXPECT_TRUE(std::holds_alternative<BoolType>(r5->GetType()));
+  EXPECT_EQ(r5->GetType(), DataType::kBool);
   ExpectColumn<bool>(*r5, {false, false, false, false, false});
 }
 
@@ -945,8 +945,8 @@ TEST(CaseExpressionTest, ToString) {
 }
 
 TEST(CaseExpressionTest, EmptyBatch) {
-  RecordBatch empty(Schema({Field("c", BoolType{})}),
-                    {std::make_shared<TypedColumnVector<bool>>(BoolType{}, 0)});
+  RecordBatch empty(Schema({Field("c", DataType::kBool)}),
+                    {std::make_shared<TypedColumnVector<bool>>(DataType::kBool, 0)});
   auto expr = Case(Col(0), Lit(Value{1}), Col(0));
   ASSERT_FALSE(expr->Evaluate(empty).has_value());  // int32 vs bool is still a type error
   auto ok = Case(Col(0), Lit(Value{1}), Lit(Value{0}));
@@ -966,7 +966,7 @@ TEST(CaseExpressionTest, Q12PriorityFlag) {
   auto high = Case(std::make_unique<BinaryExpression>(BinaryOp::kOr, is("1-URGENT"), is("2-HIGH")),
                    Lit(Value{1}), Lit(Value{0}));
   ASSERT_OK_AND_ASSIGN(auto high_result, high->Evaluate(batch));
-  EXPECT_TRUE(std::holds_alternative<Int32Type>(high_result->GetType()));
+  EXPECT_EQ(high_result->GetType(), DataType::kInt32);
   ExpectColumn<int32_t>(*high_result, {1, 1, 0, 0, 0, 1});
 
   auto low =
@@ -983,24 +983,24 @@ TEST(CaseExprTest, ToString) {
 }
 
 TEST(CaseExprTest, ResultTypeIsCommonTypeOfBranches) {
-  SchemaOnlyPlan input(Schema({Field("a", Int32Type{}), Field("b", DoubleType{}),
-                               Field("c", BoolType{}), Field("s", StringType{})}));
+  SchemaOnlyPlan input(Schema({Field("a", DataType::kInt32), Field("b", DataType::kDouble),
+                               Field("c", DataType::kBool), Field("s", DataType::kString)}));
   struct Want {
     LogicalExprPtr then;
     LogicalExprPtr otherwise;
     DataType type;
   };
   Want cases[] = {
-      {col("a"), col("a"), Int32Type{}},
-      {col("a"), lit(int64_t{7}), Int64Type{}},
-      {lit(int8_t{1}), lit(int16_t{2}), Int16Type{}},
-      {col("a"), col("b"), DoubleType{}},
-      {lit(1.5F), col("a"), DoubleType{}},
-      {lit(1.5F), lit(2.5F), FloatType{}},
-      {col("a"), lit(Value{std::monostate{}}), Int32Type{}},
-      {lit(Value{std::monostate{}}), col("b"), DoubleType{}},
-      {col("s"), lit(std::string("x")), StringType{}},
-      {col("c"), lit(false), BoolType{}},
+      {col("a"), col("a"), DataType::kInt32},
+      {col("a"), lit(int64_t{7}), DataType::kInt64},
+      {lit(int8_t{1}), lit(int16_t{2}), DataType::kInt16},
+      {col("a"), col("b"), DataType::kDouble},
+      {lit(1.5F), col("a"), DataType::kDouble},
+      {lit(1.5F), lit(2.5F), DataType::kFloat},
+      {col("a"), lit(Value{std::monostate{}}), DataType::kInt32},
+      {lit(Value{std::monostate{}}), col("b"), DataType::kDouble},
+      {col("s"), lit(std::string("x")), DataType::kString},
+      {col("c"), lit(false), DataType::kBool},
   };
   for (auto& c : cases) {
     std::vector<std::pair<LogicalExprPtr, LogicalExprPtr>> branches;
@@ -1008,14 +1008,14 @@ TEST(CaseExprTest, ResultTypeIsCommonTypeOfBranches) {
     CaseExpr expr(std::move(branches), std::move(c.otherwise));
     SCOPED_TRACE(expr.ToString());
     ASSERT_OK_AND_ASSIGN(auto field, expr.ToField(input));
-    EXPECT_EQ(field.data_type.index(), c.type.index());
+    EXPECT_EQ(field.data_type, c.type);
     EXPECT_EQ(field.name, expr.ToString());
   }
 }
 
 TEST(CaseExprTest, TypeErrors) {
   SchemaOnlyPlan input(
-      Schema({Field("a", Int32Type{}), Field("c", BoolType{}), Field("s", StringType{})}));
+      Schema({Field("a", DataType::kInt32), Field("c", DataType::kBool), Field("s", DataType::kString)}));
   auto expect_type_error = [&](const LogicalExprPtr& expr) {
     SCOPED_TRACE(expr->ToString());
     auto field = expr->ToField(input);
@@ -1034,7 +1034,7 @@ TEST(CaseExprTest, TypeErrors) {
 
 TEST(CaseExprTest, LogicalTypeMatchesPhysical) {
   SchemaOnlyPlan input(
-      Schema({Field("a", Int32Type{}), Field("b", DoubleType{}), Field("c", BoolType{})}));
+      Schema({Field("a", DataType::kInt32), Field("b", DataType::kDouble), Field("c", DataType::kBool)}));
   auto batch = MakeTestBatch();
   auto branches = [] {
     std::vector<std::pair<LogicalExprPtr, LogicalExprPtr>> v;
@@ -1051,17 +1051,17 @@ TEST(CaseExprTest, LogicalTypeMatchesPhysical) {
     ASSERT_OK_AND_ASSIGN(auto field, expr->ToField(input));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(*expr, input));
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
-    EXPECT_EQ(field.data_type.index(), result->GetType().index());
+    EXPECT_EQ(field.data_type, result->GetType());
   }
 }
 
 TEST(CaseExprTest, LoweredQ12PriorityFlag) {
-  SchemaOnlyPlan input(Schema({Field("o_orderpriority", StringType{}, Repetition::kOptional)}));
+  SchemaOnlyPlan input(Schema({Field("o_orderpriority", DataType::kString, Repetition::kOptional)}));
   auto expr = case_when(or_expr(eq(col("o_orderpriority"), lit(std::string("1-URGENT"))),
                                 eq(col("o_orderpriority"), lit(std::string("2-HIGH")))),
                         lit(1), lit(0));
   ASSERT_OK_AND_ASSIGN(auto field, expr->ToField(input));
-  EXPECT_TRUE(std::holds_alternative<Int32Type>(field.data_type));
+  EXPECT_TRUE(field.data_type == DataType::kInt32);
   ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(*expr, input));
   ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(MakePriorityBatch()));
   ExpectColumn<int32_t>(*result, {1, 1, 0, 0, 0, 1});
@@ -1079,20 +1079,20 @@ constexpr Date32 k19950615{9296};
 
 /// a: [1994-01-01, null, 1995-06-15], b: [1994-01-01, 1994-01-01, 1994-12-31], i: int32
 RecordBatch MakeDateBatch() {
-  auto a = std::make_shared<TypedColumnVector<Date32>>(Date32Type{}, 3);
+  auto a = std::make_shared<TypedColumnVector<Date32>>(DataType::kDate32, 3);
   a->Append(k19940101);
   a->AppendNull();
   a->Append(k19950615);
-  auto b = std::make_shared<TypedColumnVector<Date32>>(Date32Type{}, 3);
+  auto b = std::make_shared<TypedColumnVector<Date32>>(DataType::kDate32, 3);
   b->Append(k19940101);
   b->Append(k19940101);
   b->Append(k19941231);
-  auto i = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 3);
+  auto i = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 3);
   i->Append(8766);
   i->Append(8766);
   i->Append(9130);
-  return RecordBatch(Schema({Field("a", Date32Type{}, Repetition::kOptional),
-                             Field("b", Date32Type{}), Field("i", Int32Type{})}),
+  return RecordBatch(Schema({Field("a", DataType::kDate32, Repetition::kOptional),
+                             Field("b", DataType::kDate32), Field("i", DataType::kInt32)}),
                      {a, b, i});
 }
 
@@ -1153,11 +1153,11 @@ TEST(Date32ExprTest, ArithmeticOnDatesIsTypeError) {
 }
 
 TEST(Date32ExprTest, LogicalTypesMatchPhysicalRules) {
-  SchemaOnlyPlan input(Schema({Field("a", Date32Type{}, Repetition::kOptional),
-                               Field("b", Date32Type{}), Field("i", Int32Type{})}));
+  SchemaOnlyPlan input(Schema({Field("a", DataType::kDate32, Repetition::kOptional),
+                               Field("b", DataType::kDate32), Field("i", DataType::kInt32)}));
   BinaryExpr cmp(BinaryOp::kLtEq, col("a"), col("b"));
   ASSERT_OK_AND_ASSIGN(auto cmp_field, cmp.ToField(input));
-  EXPECT_TRUE(std::holds_alternative<BoolType>(cmp_field.data_type));
+  EXPECT_TRUE(cmp_field.data_type == DataType::kBool);
 
   BinaryExpr cmp_null(BinaryOp::kEq, col("a"), lit(Value{std::monostate{}}));
   EXPECT_TRUE(cmp_null.ToField(input).has_value());
@@ -1176,14 +1176,14 @@ TEST(Date32ExprTest, LitDateIsATypedDate32Literal) {
   EXPECT_EQ(literal->value(), Value{k19940101});
   EXPECT_EQ(literal->ToString(), "DATE '1994-01-01'");
 
-  SchemaOnlyPlan input(Schema({Field("b", Date32Type{})}));
+  SchemaOnlyPlan input(Schema({Field("b", DataType::kDate32)}));
   ASSERT_OK_AND_ASSIGN(auto field, literal->ToField(input));
-  EXPECT_TRUE(std::holds_alternative<Date32Type>(field.data_type));
+  EXPECT_TRUE(field.data_type == DataType::kDate32);
 
   ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(*literal, input));
   EXPECT_EQ(phys->ToString(), "DATE '1994-01-01'");
   ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(MakeDateBatch()));
-  EXPECT_TRUE(std::holds_alternative<Date32Type>(result->GetType()));
+  EXPECT_EQ(result->GetType(), DataType::kDate32);
   EXPECT_EQ(result->GetValue(2), Value{k19940101});
 
   EXPECT_EQ(LitDate(std::chrono::year{2000} / 2 / 29).GetExpr().ToString(), "DATE '2000-02-29'");
@@ -1194,7 +1194,7 @@ TEST(Date32ExprTest, FilterKeepsDate32Columns) {
   BinaryExpression pred(BinaryOp::kGtEq, Col(1), Lit(Value{k19941231}));
   ASSERT_OK_AND_ASSIGN(auto out, FilterRecordBatch(batch, pred));
   ASSERT_EQ(out.num_rows(), 1U);
-  EXPECT_TRUE(std::holds_alternative<Date32Type>(out.column(0).GetType()));
+  EXPECT_EQ(out.column(0).GetType(), DataType::kDate32);
   ExpectColumn<Date32>(out.column(0), {k19950615});
   ExpectColumn<Date32>(out.column(1), {k19941231});
 }

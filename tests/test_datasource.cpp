@@ -21,60 +21,49 @@ using namespace quest::io::parquet;
 // =============================================================================
 
 TEST(TypesTest, PhysicalTypeToDataType) {
-  auto bool_type = PhysicalTypeToDataType(PhysicalType::kBoolean);
-  EXPECT_TRUE(std::holds_alternative<BoolType>(bool_type));
-
-  auto int32_type = PhysicalTypeToDataType(PhysicalType::kInt32);
-  EXPECT_TRUE(std::holds_alternative<Int32Type>(int32_type));
-
-  auto int64_type = PhysicalTypeToDataType(PhysicalType::kInt64);
-  EXPECT_TRUE(std::holds_alternative<Int64Type>(int64_type));
-
-  auto float_type = PhysicalTypeToDataType(PhysicalType::kFloat);
-  EXPECT_TRUE(std::holds_alternative<FloatType>(float_type));
-
-  auto double_type = PhysicalTypeToDataType(PhysicalType::kDouble);
-  EXPECT_TRUE(std::holds_alternative<DoubleType>(double_type));
-
-  auto binary_type = PhysicalTypeToDataType(PhysicalType::kByteArray);
-  EXPECT_TRUE(std::holds_alternative<BinaryType>(binary_type));
-
-  auto fixed_type = PhysicalTypeToDataType(PhysicalType::kFixedLenByteArray, 16);
-  EXPECT_TRUE(std::holds_alternative<FixedLenByteArrayType>(fixed_type));
-  EXPECT_EQ(std::get<FixedLenByteArrayType>(fixed_type).byte_width, 16);
+  EXPECT_EQ(PhysicalTypeToDataType(PhysicalType::kBoolean), DataType::kBool);
+  EXPECT_EQ(PhysicalTypeToDataType(PhysicalType::kInt32), DataType::kInt32);
+  EXPECT_EQ(PhysicalTypeToDataType(PhysicalType::kInt64), DataType::kInt64);
+  EXPECT_EQ(PhysicalTypeToDataType(PhysicalType::kFloat), DataType::kFloat);
+  EXPECT_EQ(PhysicalTypeToDataType(PhysicalType::kDouble), DataType::kDouble);
+  EXPECT_EQ(PhysicalTypeToDataType(PhysicalType::kByteArray), DataType::kString);
+  EXPECT_EQ(PhysicalTypeToDataType(PhysicalType::kInt96), DataType::kString);
+  EXPECT_EQ(PhysicalTypeToDataType(PhysicalType::kFixedLenByteArray), DataType::kString);
 }
 
 TEST(TypesTest, GetTypeName) {
-  EXPECT_EQ(GetTypeName(BoolType{}), "Bool");
-  EXPECT_EQ(GetTypeName(Int32Type{}), "Int32");
-  EXPECT_EQ(GetTypeName(Int64Type{}), "Int64");
-  EXPECT_EQ(GetTypeName(FloatType{}), "Float");
-  EXPECT_EQ(GetTypeName(DoubleType{}), "Double");
-  EXPECT_EQ(GetTypeName(StringType{}), "String");
-  EXPECT_EQ(GetTypeName(BinaryType{}), "Binary");
-  EXPECT_EQ(GetTypeName(FixedLenByteArrayType{16}), "FixedLenByteArray(16)");
+  EXPECT_EQ(GetTypeName(DataType::kBool), "Bool");
+  EXPECT_EQ(GetTypeName(DataType::kInt32), "Int32");
+  EXPECT_EQ(GetTypeName(DataType::kInt64), "Int64");
+  EXPECT_EQ(GetTypeName(DataType::kFloat), "Float");
+  EXPECT_EQ(GetTypeName(DataType::kDouble), "Double");
+  EXPECT_EQ(GetTypeName(DataType::kString), "String");
+  EXPECT_EQ(GetTypeName(DataType::kDate32), "Date32");
 }
 
-TEST(TypesTest, GetTypeByteWidth) {
-  EXPECT_EQ(GetTypeByteWidth(BoolType{}), 1);
-  EXPECT_EQ(GetTypeByteWidth(Int8Type{}), 1);
-  EXPECT_EQ(GetTypeByteWidth(Int16Type{}), 2);
-  EXPECT_EQ(GetTypeByteWidth(Int32Type{}), 4);
-  EXPECT_EQ(GetTypeByteWidth(Int64Type{}), 8);
-  EXPECT_EQ(GetTypeByteWidth(FloatType{}), 4);
-  EXPECT_EQ(GetTypeByteWidth(DoubleType{}), 8);
-  EXPECT_EQ(GetTypeByteWidth(Int96Type{}), 12);
-  EXPECT_EQ(GetTypeByteWidth(FixedLenByteArrayType{16}), 16);
-  EXPECT_EQ(GetTypeByteWidth(StringType{}), -1);
-  EXPECT_EQ(GetTypeByteWidth(BinaryType{}), -1);
+TEST(TypesTest, VisitTypeGivesTheCType) {
+  auto width = [](DataType type) {
+    return VisitType(type, []<typename Tag>(Tag) { return sizeof(typename Tag::CType); });
+  };
+  EXPECT_EQ(width(DataType::kInt8), 1U);
+  EXPECT_EQ(width(DataType::kInt16), 2U);
+  EXPECT_EQ(width(DataType::kInt64), 8U);
+  EXPECT_EQ(width(DataType::kDate32), 4U);
+  EXPECT_TRUE(VisitType(DataType::kString, []<typename Tag>(Tag) {
+    return std::same_as<typename Tag::CType, std::string_view> && Tag::kId == DataType::kString;
+  }));
 }
 
-TEST(TypesTest, IsFixedWidth) {
-  EXPECT_TRUE(IsFixedWidth(Int32Type{}));
-  EXPECT_TRUE(IsFixedWidth(Int64Type{}));
-  EXPECT_TRUE(IsFixedWidth(DoubleType{}));
-  EXPECT_FALSE(IsFixedWidth(StringType{}));
-  EXPECT_FALSE(IsFixedWidth(BinaryType{}));
+TEST(TypesTest, IntegerAndNumericRanges) {
+  EXPECT_TRUE(IsInteger(DataType::kInt8));
+  EXPECT_TRUE(IsInteger(DataType::kInt64));
+  EXPECT_FALSE(IsInteger(DataType::kBool));
+  EXPECT_FALSE(IsInteger(DataType::kFloat));
+  EXPECT_TRUE(IsNumeric(DataType::kInt16));
+  EXPECT_TRUE(IsNumeric(DataType::kDouble));
+  EXPECT_FALSE(IsNumeric(DataType::kBool));
+  EXPECT_FALSE(IsNumeric(DataType::kString));
+  EXPECT_FALSE(IsNumeric(DataType::kDate32));
 }
 
 // =============================================================================
@@ -82,21 +71,21 @@ TEST(TypesTest, IsFixedWidth) {
 // =============================================================================
 
 TEST(FieldTest, Construction) {
-  Field f1("id", Int32Type{});
+  Field f1("id", DataType::kInt32);
   EXPECT_EQ(f1.name, "id");
-  EXPECT_TRUE(std::holds_alternative<Int32Type>(f1.data_type));
+  EXPECT_TRUE(f1.data_type == DataType::kInt32);
   EXPECT_EQ(f1.repetition, Repetition::kRequired);
   EXPECT_FALSE(f1.IsNullable());
 
-  Field f2("name", StringType{}, Repetition::kOptional);
+  Field f2("name", DataType::kString, Repetition::kOptional);
   EXPECT_EQ(f2.name, "name");
-  EXPECT_TRUE(std::holds_alternative<StringType>(f2.data_type));
+  EXPECT_TRUE(f2.data_type == DataType::kString);
   EXPECT_EQ(f2.repetition, Repetition::kOptional);
   EXPECT_TRUE(f2.IsNullable());
 }
 
 TEST(FieldTest, ToString) {
-  Field f("age", Int32Type{}, Repetition::kOptional);
+  Field f("age", DataType::kInt32, Repetition::kOptional);
   std::string str = f.ToString();
   EXPECT_NE(str.find("age"), std::string::npos);
   EXPECT_NE(str.find("Int32"), std::string::npos);
@@ -130,18 +119,18 @@ TEST(SchemaTest, Construction) {
   EXPECT_EQ(empty_schema.num_fields(), 0);
 
   std::vector<Field> fields = {
-      Field("id", Int64Type{}),
-      Field("name", StringType{}, Repetition::kOptional),
-      Field("score", DoubleType{})};
+      Field("id", DataType::kInt64),
+      Field("name", DataType::kString, Repetition::kOptional),
+      Field("score", DataType::kDouble)};
   Schema schema(fields);
   EXPECT_EQ(schema.num_fields(), 3);
 }
 
 TEST(SchemaTest, FieldAccess) {
   std::vector<Field> fields = {
-      Field("id", Int64Type{}),
-      Field("name", StringType{}),
-      Field("score", DoubleType{})};
+      Field("id", DataType::kInt64),
+      Field("name", DataType::kString),
+      Field("score", DataType::kDouble)};
   Schema schema(fields);
 
   EXPECT_EQ(schema.field(0).name, "id");
@@ -151,9 +140,9 @@ TEST(SchemaTest, FieldAccess) {
 
 TEST(SchemaTest, GetFieldIndex) {
   std::vector<Field> fields = {
-      Field("id", Int64Type{}),
-      Field("name", StringType{}),
-      Field("score", DoubleType{})};
+      Field("id", DataType::kInt64),
+      Field("name", DataType::kString),
+      Field("score", DataType::kDouble)};
   Schema schema(fields);
 
   auto id_idx = schema.GetFieldIndex("id");
@@ -170,8 +159,8 @@ TEST(SchemaTest, GetFieldIndex) {
 
 TEST(SchemaTest, GetFieldByName) {
   std::vector<Field> fields = {
-      Field("id", Int64Type{}),
-      Field("name", StringType{})};
+      Field("id", DataType::kInt64),
+      Field("name", DataType::kString)};
   Schema schema(fields);
 
   const Field* id_field = schema.GetFieldByName("id");
@@ -184,10 +173,10 @@ TEST(SchemaTest, GetFieldByName) {
 
 TEST(SchemaTest, Project) {
   std::vector<Field> fields = {
-      Field("a", Int32Type{}),
-      Field("b", Int64Type{}),
-      Field("c", DoubleType{}),
-      Field("d", StringType{})};
+      Field("a", DataType::kInt32),
+      Field("b", DataType::kInt64),
+      Field("c", DataType::kDouble),
+      Field("d", DataType::kString)};
   Schema schema(fields);
 
   ASSERT_OK_AND_ASSIGN(Schema projected, schema.Project({1, 3}));
@@ -202,9 +191,9 @@ TEST(SchemaTest, Project) {
 
 TEST(SchemaTest, Select) {
   std::vector<Field> fields = {
-      Field("a", Int32Type{}),
-      Field("b", Int64Type{}),
-      Field("c", DoubleType{})};
+      Field("a", DataType::kInt32),
+      Field("b", DataType::kInt64),
+      Field("c", DataType::kDouble)};
   Schema schema(fields);
 
   ASSERT_OK_AND_ASSIGN(Schema selected, schema.Select({"c", "a"}));
@@ -219,8 +208,8 @@ TEST(SchemaTest, Select) {
 
 TEST(SchemaTest, ToString) {
   std::vector<Field> fields = {
-      Field("id", Int32Type{}),
-      Field("name", StringType{})};
+      Field("id", DataType::kInt32),
+      Field("name", DataType::kString)};
   Schema schema(fields);
 
   std::string str = schema.ToString();
@@ -234,7 +223,7 @@ TEST(SchemaTest, ToString) {
 // =============================================================================
 
 TEST(TypedColumnVectorTest, Int32Basic) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 10);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
   EXPECT_EQ(col.size(), 0);
 
   col.Append(100);
@@ -252,7 +241,7 @@ TEST(TypedColumnVectorTest, Int32Basic) {
 }
 
 TEST(TypedColumnVectorTest, Nulls) {
-  TypedColumnVector<int64_t> col(Int64Type{}, 10);
+  TypedColumnVector<int64_t> col(DataType::kInt64, 10);
 
   col.Append(1);
   col.AppendNull();
@@ -272,7 +261,7 @@ TEST(TypedColumnVectorTest, Nulls) {
 }
 
 TEST(TypedColumnVectorTest, SetValue) {
-  TypedColumnVector<double> col(DoubleType{}, 5);
+  TypedColumnVector<double> col(DataType::kDouble, 5);
   col.Append(1.0);
   col.Append(2.0);
 
@@ -288,7 +277,7 @@ TEST(TypedColumnVectorTest, SetValue) {
 }
 
 TEST(TypedColumnVectorTest, Bool) {
-  TypedColumnVector<bool> col(BoolType{}, 5);
+  TypedColumnVector<bool> col(DataType::kBool, 5);
   col.Append(true);
   col.Append(false);
   col.AppendNull();
@@ -302,7 +291,7 @@ TEST(TypedColumnVectorTest, Bool) {
 }
 
 TEST(TypedColumnVectorTest, Float) {
-  TypedColumnVector<float> col(FloatType{}, 5);
+  TypedColumnVector<float> col(DataType::kFloat, 5);
   col.Append(1.5f);
   col.Append(2.5f);
 
@@ -312,7 +301,7 @@ TEST(TypedColumnVectorTest, Float) {
 }
 
 TEST(TypedColumnVectorTest, Resize) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 2);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 2);
 
   for (int i = 0; i < 100; ++i) {
     col.Append(i);
@@ -326,7 +315,7 @@ TEST(TypedColumnVectorTest, Resize) {
 }
 
 TEST(TypedColumnVectorTest, Spans) {
-  TypedColumnVector<int32_t> col(Int32Type{}, 10);
+  TypedColumnVector<int32_t> col(DataType::kInt32, 10);
   col.Append(1);
   col.Append(2);
   col.Append(3);
@@ -347,7 +336,7 @@ TEST(TypedColumnVectorTest, Spans) {
 // =============================================================================
 
 TEST(StringColumnVectorTest, Basic) {
-  StringColumnVector col(StringType{}, 10);
+  StringColumnVector col(DataType::kString, 10);
   EXPECT_EQ(col.size(), 0);
 
   col.Append("hello");
@@ -361,7 +350,7 @@ TEST(StringColumnVectorTest, Basic) {
 }
 
 TEST(StringColumnVectorTest, Nulls) {
-  StringColumnVector col(StringType{});
+  StringColumnVector col(DataType::kString);
 
   col.Append("first");
   col.AppendNull();
@@ -381,7 +370,7 @@ TEST(StringColumnVectorTest, Nulls) {
 }
 
 TEST(StringColumnVectorTest, Binary) {
-  StringColumnVector col(BinaryType{});
+  StringColumnVector col(DataType::kString);
   col.Append(std::string("\x00\x01\x02", 3));
   col.Append(std::string("\xFF\xFE", 2));
 
@@ -391,7 +380,7 @@ TEST(StringColumnVectorTest, Binary) {
 }
 
 TEST(StringColumnVectorTest, Resize) {
-  StringColumnVector col(StringType{}, 2);
+  StringColumnVector col(DataType::kString, 2);
 
   for (int i = 0; i < 100; ++i) {
     col.Append("value_" + std::to_string(i));
@@ -407,37 +396,37 @@ TEST(StringColumnVectorTest, Resize) {
 // =============================================================================
 
 TEST(CreateColumnVectorTest, Bool) {
-  auto col = CreateColumnVector(BoolType{}, 10);
+  auto col = CreateColumnVector(DataType::kBool, 10);
   EXPECT_NE(dynamic_cast<TypedColumnVector<bool>*>(col.get()), nullptr);
 }
 
 TEST(CreateColumnVectorTest, Int32) {
-  auto col = CreateColumnVector(Int32Type{}, 10);
+  auto col = CreateColumnVector(DataType::kInt32, 10);
   EXPECT_NE(dynamic_cast<TypedColumnVector<int32_t>*>(col.get()), nullptr);
 }
 
 TEST(CreateColumnVectorTest, Int64) {
-  auto col = CreateColumnVector(Int64Type{}, 10);
+  auto col = CreateColumnVector(DataType::kInt64, 10);
   EXPECT_NE(dynamic_cast<TypedColumnVector<int64_t>*>(col.get()), nullptr);
 }
 
 TEST(CreateColumnVectorTest, Float) {
-  auto col = CreateColumnVector(FloatType{}, 10);
+  auto col = CreateColumnVector(DataType::kFloat, 10);
   EXPECT_NE(dynamic_cast<TypedColumnVector<float>*>(col.get()), nullptr);
 }
 
 TEST(CreateColumnVectorTest, Double) {
-  auto col = CreateColumnVector(DoubleType{}, 10);
+  auto col = CreateColumnVector(DataType::kDouble, 10);
   EXPECT_NE(dynamic_cast<TypedColumnVector<double>*>(col.get()), nullptr);
 }
 
 TEST(CreateColumnVectorTest, String) {
-  auto col = CreateColumnVector(StringType{}, 10);
+  auto col = CreateColumnVector(DataType::kString, 10);
   EXPECT_NE(dynamic_cast<StringColumnVector*>(col.get()), nullptr);
 }
 
 TEST(CreateColumnVectorTest, Binary) {
-  auto col = CreateColumnVector(BinaryType{}, 10);
+  auto col = CreateColumnVector(DataType::kString, 10);
   EXPECT_NE(dynamic_cast<StringColumnVector*>(col.get()), nullptr);
 }
 
@@ -480,15 +469,15 @@ TEST(ValueTest, ToStringString) {
 
 TEST(RecordBatchTest, Construction) {
   std::vector<Field> fields = {
-      Field("id", Int32Type{}),
-      Field("name", StringType{})};
+      Field("id", DataType::kInt32),
+      Field("name", DataType::kString)};
   Schema schema(fields);
 
-  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 10);
+  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 10);
   id_col->Append(1);
   id_col->Append(2);
 
-  auto name_col = std::make_shared<StringColumnVector>(StringType{});
+  auto name_col = std::make_shared<StringColumnVector>(DataType::kString);
   name_col->Append("Alice");
   name_col->Append("Bob");
 
@@ -500,15 +489,15 @@ TEST(RecordBatchTest, Construction) {
 
 TEST(RecordBatchTest, ColumnAccess) {
   std::vector<Field> fields = {
-      Field("a", Int32Type{}),
-      Field("b", Int64Type{})};
+      Field("a", DataType::kInt32),
+      Field("b", DataType::kInt64)};
   Schema schema(fields);
 
-  auto col_a = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 5);
+  auto col_a = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
   col_a->Append(10);
   col_a->Append(20);
 
-  auto col_b = std::make_shared<TypedColumnVector<int64_t>>(Int64Type{}, 5);
+  auto col_b = std::make_shared<TypedColumnVector<int64_t>>(DataType::kInt64, 5);
   col_b->Append(100);
   col_b->Append(200);
 
@@ -523,14 +512,14 @@ TEST(RecordBatchTest, ColumnAccess) {
 
 TEST(RecordBatchTest, ColumnByName) {
   std::vector<Field> fields = {
-      Field("id", Int32Type{}),
-      Field("value", DoubleType{})};
+      Field("id", DataType::kInt32),
+      Field("value", DataType::kDouble)};
   Schema schema(fields);
 
-  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 5);
+  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
   id_col->Append(1);
 
-  auto val_col = std::make_shared<TypedColumnVector<double>>(DoubleType{}, 5);
+  auto val_col = std::make_shared<TypedColumnVector<double>>(DataType::kDouble, 5);
   val_col->Append(3.14);
 
   RecordBatch batch(schema, {id_col, val_col});
@@ -544,10 +533,10 @@ TEST(RecordBatchTest, ColumnByName) {
 }
 
 TEST(RecordBatchTest, FieldAlias) {
-  std::vector<Field> fields = {Field("a", Int32Type{})};
+  std::vector<Field> fields = {Field("a", DataType::kInt32)};
   Schema schema(fields);
 
-  auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 5);
+  auto col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
   col->Append(42);
 
   RecordBatch batch(schema, {col});
@@ -568,15 +557,15 @@ TEST(RecordBatchTest, Empty) {
 
 TEST(RecordBatchTest, ToCSV) {
   std::vector<Field> fields = {
-      Field("id", Int32Type{}),
-      Field("name", StringType{})};
+      Field("id", DataType::kInt32),
+      Field("name", DataType::kString)};
   Schema schema(fields);
 
-  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 5);
+  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
   id_col->Append(1);
   id_col->Append(2);
 
-  auto name_col = std::make_shared<StringColumnVector>(StringType{});
+  auto name_col = std::make_shared<StringColumnVector>(DataType::kString);
   name_col->Append("Alice");
   name_col->Append("Bob");
 
@@ -589,15 +578,15 @@ TEST(RecordBatchTest, ToCSV) {
 
 TEST(RecordBatchTest, ToCSVWithNulls) {
   std::vector<Field> fields = {
-      Field("id", Int32Type{}),
-      Field("name", StringType{}, Repetition::kOptional)};
+      Field("id", DataType::kInt32),
+      Field("name", DataType::kString, Repetition::kOptional)};
   Schema schema(fields);
 
-  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, 5);
+  auto id_col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, 5);
   id_col->Append(1);
   id_col->Append(2);
 
-  auto name_col = std::make_shared<StringColumnVector>(StringType{});
+  auto name_col = std::make_shared<StringColumnVector>(DataType::kString);
   name_col->Append("Alice");
   name_col->AppendNull();
 

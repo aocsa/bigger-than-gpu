@@ -9,6 +9,8 @@
 #include <utility>
 #include <variant>
 
+#include "quest/columnar/column_vector.hpp"
+
 namespace quest::columnar {
 
 namespace {
@@ -153,42 +155,18 @@ Result<RecordBatch> RecordBatchSerializer::DeserializeFromFile(const std::string
   return Deserialize(buffer);
 }
 
-void RecordBatchSerializer::WriteDataType(std::vector<uint8_t>& buffer, const DataType& type) {
-  uint8_t type_index = static_cast<uint8_t>(type.index());
-  WriteValue(buffer, type_index);
-
-  // For FixedLenByteArrayType, write byte_width
-  if (std::holds_alternative<FixedLenByteArrayType>(type)) {
-    const auto& fixed_type = std::get<FixedLenByteArrayType>(type);
-    WriteValue(buffer, fixed_type.byte_width);
-  }
+void RecordBatchSerializer::WriteDataType(std::vector<uint8_t>& buffer, DataType type) {
+  WriteValue(buffer, std::to_underlying(type));
 }
 
 Result<DataType> RecordBatchSerializer::ReadDataType(const std::vector<uint8_t>& buffer,
                                                      size_t& offset) {
-  auto type_index = ReadValue<uint8_t>(buffer, offset);
-  if (!type_index) return std::unexpected(type_index.error());
-
-  switch (*type_index) {
-    case 0: return BoolType{};
-    case 1: return Int8Type{};
-    case 2: return Int16Type{};
-    case 3: return Int32Type{};
-    case 4: return Int64Type{};
-    case 5: return FloatType{};
-    case 6: return DoubleType{};
-    case 7: return StringType{};
-    case 8: return BinaryType{};
-    case 9: return Int96Type{};
-    case 10: {
-      auto byte_width = ReadValue<int32_t>(buffer, offset);
-      if (!byte_width) return std::unexpected(byte_width.error());
-      return FixedLenByteArrayType{*byte_width};
-    }
-    case 11: return Date32Type{};
-    default:
-      return Error::Invalid("Unknown type index");
+  auto tag = ReadValue<std::underlying_type_t<DataType>>(buffer, offset);
+  if (!tag) return std::unexpected(tag.error());
+  if (*tag > std::to_underlying(DataType::kDate32)) {
+    return Error::Invalid("Unknown type index");
   }
+  return static_cast<DataType>(*tag);
 }
 
 Status RecordBatchSerializer::WriteColumn(std::vector<uint8_t>& buffer, const ColumnVector& column,
@@ -212,70 +190,23 @@ Status RecordBatchSerializer::WriteColumn(std::vector<uint8_t>& buffer, const Co
 
 Status RecordBatchSerializer::WriteColumnValues(std::vector<uint8_t>& buffer,
                                                 const ColumnVector& column, size_t num_rows) {
-  const DataType& type = column.GetType();
-
-  return std::visit([&](const auto& t) -> Status {
-    using T = std::decay_t<decltype(t)>;
-
-    if constexpr (std::is_same_v<T, BoolType>) {
-      for (size_t i = 0; i < num_rows; ++i) {
-        bool val = column.IsNull(i) ? false : std::get<bool>(column.GetValue(i));
-        WriteValue(buffer, val);
-      }
-    } else if constexpr (std::is_same_v<T, Int8Type>) {
-      for (size_t i = 0; i < num_rows; ++i) {
-        int8_t val = column.IsNull(i) ? 0 : std::get<int8_t>(column.GetValue(i));
-        WriteValue(buffer, val);
-      }
-    } else if constexpr (std::is_same_v<T, Int16Type>) {
-      for (size_t i = 0; i < num_rows; ++i) {
-        int16_t val = column.IsNull(i) ? 0 : std::get<int16_t>(column.GetValue(i));
-        WriteValue(buffer, val);
-      }
-    } else if constexpr (std::is_same_v<T, Int32Type>) {
-      for (size_t i = 0; i < num_rows; ++i) {
-        int32_t val = column.IsNull(i) ? 0 : std::get<int32_t>(column.GetValue(i));
-        WriteValue(buffer, val);
-      }
-    } else if constexpr (std::is_same_v<T, Int64Type>) {
-      for (size_t i = 0; i < num_rows; ++i) {
-        int64_t val = column.IsNull(i) ? 0 : std::get<int64_t>(column.GetValue(i));
-        WriteValue(buffer, val);
-      }
-    } else if constexpr (std::is_same_v<T, FloatType>) {
-      for (size_t i = 0; i < num_rows; ++i) {
-        float val = column.IsNull(i) ? 0.0f : std::get<float>(column.GetValue(i));
-        WriteValue(buffer, val);
-      }
-    } else if constexpr (std::is_same_v<T, DoubleType>) {
-      for (size_t i = 0; i < num_rows; ++i) {
-        double val = column.IsNull(i) ? 0.0 : std::get<double>(column.GetValue(i));
-        WriteValue(buffer, val);
-      }
-    } else if constexpr (std::is_same_v<T, Date32Type>) {
-      for (size_t i = 0; i < num_rows; ++i) {
-        int32_t val = column.IsNull(i) ? 0 : std::get<Date32>(column.GetValue(i)).days;
-        WriteValue(buffer, val);
-      }
-    } else if constexpr (std::is_same_v<T, StringType> || std::is_same_v<T, BinaryType>) {
-      for (size_t i = 0; i < num_rows; ++i) {
-        std::string val;
-        if (!column.IsNull(i)) {
-          val = std::get<std::string>(column.GetValue(i));
-        }
-        uint32_t len = static_cast<uint32_t>(val.size());
-        WriteValue(buffer, len);
+  return VisitType(column.GetType(), [&]<typename Tag>(Tag) -> Status {
+    using T = ValueOf<typename Tag::CType>;
+    for (size_t i = 0; i < num_rows; ++i) {
+      const T val = column.IsNull(i) ? T{} : std::get<T>(column.GetValue(i));
+      if constexpr (std::same_as<T, std::string>) {
+        WriteValue(buffer, static_cast<uint32_t>(val.size()));
         buffer.insert(buffer.end(), val.begin(), val.end());
+      } else {
+        WriteValue(buffer, val);
       }
-    } else {
-      return Error::TypeError("Unsupported type for serialization");
     }
     return {};
-  }, type);
+  });
 }
 
 Result<std::shared_ptr<ColumnVector>> RecordBatchSerializer::ReadColumn(
-    const std::vector<uint8_t>& buffer, size_t& offset, const DataType& type, size_t num_rows) {
+    const std::vector<uint8_t>& buffer, size_t& offset, DataType type, size_t num_rows) {
   auto bitmap_size = ReadValue<uint32_t>(buffer, offset);
   if (!bitmap_size) return std::unexpected(bitmap_size.error());
   std::vector<uint8_t> null_bitmap(buffer.begin() + offset,
@@ -294,124 +225,33 @@ Result<std::shared_ptr<ColumnVector>> RecordBatchSerializer::ReadColumn(
 Status RecordBatchSerializer::ReadColumnValues(const std::vector<uint8_t>& buffer,
                                                size_t& offset,
                                                ColumnVector& column,
-                                               const DataType& type,
+                                               DataType type,
                                                size_t num_rows,
                                                const std::vector<uint8_t>& null_bitmap) {
-  return std::visit([&](const auto& t) -> Status {
-    using T = std::decay_t<decltype(t)>;
-
-    auto is_null = [&](size_t i) {
-      size_t byte_idx = i / 8;
-      size_t bit_idx = i % 8;
-      return (null_bitmap[byte_idx] & (1 << bit_idx)) == 0;
-    };
-
-    if constexpr (std::is_same_v<T, BoolType>) {
-      auto* typed_col = dynamic_cast<TypedColumnVector<bool>*>(&column);
-      for (size_t i = 0; i < num_rows; ++i) {
-        auto val = ReadValue<bool>(buffer, offset);
-        if (!val) return std::unexpected(val.error());
-        if (is_null(i)) {
-          typed_col->AppendNull();
-        } else {
-          typed_col->Append(*val);
-        }
-      }
-    } else if constexpr (std::is_same_v<T, Int8Type>) {
-      auto* typed_col = dynamic_cast<TypedColumnVector<int8_t>*>(&column);
-      for (size_t i = 0; i < num_rows; ++i) {
-        auto val = ReadValue<int8_t>(buffer, offset);
-        if (!val) return std::unexpected(val.error());
-        if (is_null(i)) {
-          typed_col->AppendNull();
-        } else {
-          typed_col->Append(*val);
-        }
-      }
-    } else if constexpr (std::is_same_v<T, Int16Type>) {
-      auto* typed_col = dynamic_cast<TypedColumnVector<int16_t>*>(&column);
-      for (size_t i = 0; i < num_rows; ++i) {
-        auto val = ReadValue<int16_t>(buffer, offset);
-        if (!val) return std::unexpected(val.error());
-        if (is_null(i)) {
-          typed_col->AppendNull();
-        } else {
-          typed_col->Append(*val);
-        }
-      }
-    } else if constexpr (std::is_same_v<T, Int32Type>) {
-      auto* typed_col = dynamic_cast<TypedColumnVector<int32_t>*>(&column);
-      for (size_t i = 0; i < num_rows; ++i) {
-        auto val = ReadValue<int32_t>(buffer, offset);
-        if (!val) return std::unexpected(val.error());
-        if (is_null(i)) {
-          typed_col->AppendNull();
-        } else {
-          typed_col->Append(*val);
-        }
-      }
-    } else if constexpr (std::is_same_v<T, Int64Type>) {
-      auto* typed_col = dynamic_cast<TypedColumnVector<int64_t>*>(&column);
-      for (size_t i = 0; i < num_rows; ++i) {
-        auto val = ReadValue<int64_t>(buffer, offset);
-        if (!val) return std::unexpected(val.error());
-        if (is_null(i)) {
-          typed_col->AppendNull();
-        } else {
-          typed_col->Append(*val);
-        }
-      }
-    } else if constexpr (std::is_same_v<T, FloatType>) {
-      auto* typed_col = dynamic_cast<TypedColumnVector<float>*>(&column);
-      for (size_t i = 0; i < num_rows; ++i) {
-        auto val = ReadValue<float>(buffer, offset);
-        if (!val) return std::unexpected(val.error());
-        if (is_null(i)) {
-          typed_col->AppendNull();
-        } else {
-          typed_col->Append(*val);
-        }
-      }
-    } else if constexpr (std::is_same_v<T, DoubleType>) {
-      auto* typed_col = dynamic_cast<TypedColumnVector<double>*>(&column);
-      for (size_t i = 0; i < num_rows; ++i) {
-        auto val = ReadValue<double>(buffer, offset);
-        if (!val) return std::unexpected(val.error());
-        if (is_null(i)) {
-          typed_col->AppendNull();
-        } else {
-          typed_col->Append(*val);
-        }
-      }
-    } else if constexpr (std::is_same_v<T, Date32Type>) {
-      auto* typed_col = dynamic_cast<TypedColumnVector<Date32>*>(&column);
-      for (size_t i = 0; i < num_rows; ++i) {
-        auto val = ReadValue<int32_t>(buffer, offset);
-        if (!val) return std::unexpected(val.error());
-        if (is_null(i)) {
-          typed_col->AppendNull();
-        } else {
-          typed_col->Append(Date32{*val});
-        }
-      }
-    } else if constexpr (std::is_same_v<T, StringType> || std::is_same_v<T, BinaryType>) {
-      auto* typed_col = dynamic_cast<StringColumnVector*>(&column);
-      for (size_t i = 0; i < num_rows; ++i) {
+  return VisitType(type, [&]<typename Tag>(Tag) -> Status {
+    using T = ValueOf<typename Tag::CType>;
+    // ReadColumn made @p column with CreateColumnVector(type, ...).
+    auto& typed = static_cast<ColumnOf<typename Tag::CType>&>(column);
+    for (size_t i = 0; i < num_rows; ++i) {
+      T val{};
+      if constexpr (std::same_as<T, std::string>) {
         auto len = ReadValue<uint32_t>(buffer, offset);
         if (!len) return std::unexpected(len.error());
-        std::string val(buffer.begin() + offset, buffer.begin() + offset + *len);
+        val.assign(buffer.begin() + offset, buffer.begin() + offset + *len);
         offset += *len;
-        if (is_null(i)) {
-          typed_col->AppendNull();
-        } else {
-          typed_col->Append(std::move(val));
-        }
+      } else {
+        auto read = ReadValue<T>(buffer, offset);
+        if (!read) return std::unexpected(read.error());
+        val = *read;
       }
-    } else {
-      return Error::TypeError("Unsupported type for deserialization");
+      if ((null_bitmap[i / 8] & (1 << (i % 8))) == 0) {
+        typed.AppendNull();
+      } else {
+        typed.Append(std::move(val));
+      }
     }
     return {};
-  }, type);
+  });
 }
 
 }  // namespace quest::columnar

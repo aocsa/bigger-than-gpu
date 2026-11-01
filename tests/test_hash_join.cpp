@@ -60,19 +60,19 @@ using OptInt = std::optional<std::int64_t>;
       data.push_back(static_cast<std::int32_t>(value.value_or(0)));
     }
     return std::make_shared<plan::physical::MaterializedColumnVector>(
-        plan::physical::ColumnData{std::move(data)}, Int32Type{}, std::move(validity));
+        plan::physical::ColumnData{std::move(data)}, DataType::kInt32, std::move(validity));
   }
   std::vector<std::int64_t> data;
   for (const auto& value : values) {
     data.push_back(value.value_or(0));
   }
   return std::make_shared<plan::physical::MaterializedColumnVector>(
-      plan::physical::ColumnData{std::move(data)}, Int64Type{}, std::move(validity));
+      plan::physical::ColumnData{std::move(data)}, DataType::kInt64, std::move(validity));
 }
 
 [[nodiscard]] std::shared_ptr<ColumnVector> StringColumn(std::vector<std::string> values) {
   return std::make_shared<plan::physical::MaterializedColumnVector>(
-      plan::physical::ColumnData{std::move(values)}, StringType{});
+      plan::physical::ColumnData{std::move(values)}, DataType::kString);
 }
 
 /// @brief Two-column block: an integer key column and a string payload column.
@@ -81,8 +81,8 @@ using OptInt = std::optional<std::int64_t>;
                                            const std::vector<OptInt>& keys,
                                            std::vector<std::string> payloads,
                                            bool key_as_int32 = false) {
-  Schema schema({Field(key_name, key_as_int32 ? DataType{Int32Type{}} : DataType{Int64Type{}}),
-                 Field(payload_name, StringType{})});
+  Schema schema({Field(key_name, key_as_int32 ? DataType{DataType::kInt32} : DataType{DataType::kInt64}),
+                 Field(payload_name, DataType::kString)});
   RecordBatch batch(std::move(schema),
                     {IntColumn(keys, key_as_int32), StringColumn(std::move(payloads))});
   return cache::MakeTrackedHostBlock("test_block", std::move(batch), nullptr);

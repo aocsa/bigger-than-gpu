@@ -62,16 +62,16 @@ template <typename T>
 }
 
 [[nodiscard]] std::shared_ptr<ColumnVector> Int32s(std::vector<std::optional<int32_t>> v) {
-  return MakeColumn<int32_t>(columnar::Int32Type{}, v);
+  return MakeColumn<int32_t>(columnar::DataType::kInt32, v);
 }
 [[nodiscard]] std::shared_ptr<ColumnVector> Int64s(std::vector<std::optional<int64_t>> v) {
-  return MakeColumn<int64_t>(columnar::Int64Type{}, v);
+  return MakeColumn<int64_t>(columnar::DataType::kInt64, v);
 }
 [[nodiscard]] std::shared_ptr<ColumnVector> Doubles(std::vector<std::optional<double>> v) {
-  return MakeColumn<double>(columnar::DoubleType{}, v);
+  return MakeColumn<double>(columnar::DataType::kDouble, v);
 }
 [[nodiscard]] std::shared_ptr<ColumnVector> Strings(std::vector<std::optional<std::string>> v) {
-  return MakeColumn<std::string>(columnar::StringType{}, v);
+  return MakeColumn<std::string>(columnar::DataType::kString, v);
 }
 
 [[nodiscard]] RecordBatch MakeBatch(

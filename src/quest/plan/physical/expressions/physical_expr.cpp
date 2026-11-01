@@ -181,28 +181,15 @@ template <typename T>
   if (!type) {
     return std::unexpected(type.error());
   }
-  auto map = [&]<typename T>() {
-    return MapRows<T>(l, r, n, *type,
-                      [op](const Value& a, const Value& b) { return Arithmetic<T>(op, a, b); });
-  };
-  return std::visit(
-      [&](const auto& tag) -> Result<std::shared_ptr<ColumnVector>> {
-        using Tag = std::decay_t<decltype(tag)>;
-        if constexpr (std::is_same_v<Tag, columnar::Int8Type>) {
-          return map.template operator()<int8_t>();
-        } else if constexpr (std::is_same_v<Tag, columnar::Int16Type>) {
-          return map.template operator()<int16_t>();
-        } else if constexpr (std::is_same_v<Tag, columnar::Int32Type>) {
-          return map.template operator()<int32_t>();
-        } else if constexpr (std::is_same_v<Tag, columnar::Int64Type>) {
-          return map.template operator()<int64_t>();
-        } else if constexpr (std::is_same_v<Tag, columnar::DoubleType>) {
-          return map.template operator()<double>();
-        } else {
-          std::unreachable();  // BinaryResultType yields only these for arithmetic
-        }
-      },
-      *type);
+  return columnar::VisitType(*type, [&]<typename Tag>(Tag) -> Result<std::shared_ptr<ColumnVector>> {
+    using T = typename Tag::CType;
+    if constexpr (std::is_arithmetic_v<T> && !std::same_as<T, bool>) {
+      return MapRows<T>(l, r, n, *type,
+                        [op](const Value& a, const Value& b) { return Arithmetic<T>(op, a, b); });
+    } else {
+      std::unreachable();  // BinaryResultType yields only numeric types for arithmetic
+    }
+  });
 }
 
 /// @brief @p x as @p T; the caller has checked that the types are equal or both numeric.
@@ -350,23 +337,23 @@ Result<std::shared_ptr<ColumnVector>> LiteralExpression::Evaluate(
       [](const auto& val) -> DataType {
         using T = std::decay_t<decltype(val)>;
         if constexpr (std::is_same_v<T, int8_t>) {
-          return columnar::Int8Type{};
+          return columnar::DataType::kInt8;
         } else if constexpr (std::is_same_v<T, int16_t>) {
-          return columnar::Int16Type{};
+          return columnar::DataType::kInt16;
         } else if constexpr (std::is_same_v<T, int32_t>) {
-          return columnar::Int32Type{};
+          return columnar::DataType::kInt32;
         } else if constexpr (std::is_same_v<T, int64_t>) {
-          return columnar::Int64Type{};
+          return columnar::DataType::kInt64;
         } else if constexpr (std::is_same_v<T, float>) {
-          return columnar::FloatType{};
+          return columnar::DataType::kFloat;
         } else if constexpr (std::is_same_v<T, double>) {
-          return columnar::DoubleType{};
+          return columnar::DataType::kDouble;
         } else if constexpr (std::is_same_v<T, bool>) {
-          return columnar::BoolType{};
+          return columnar::DataType::kBool;
         } else if constexpr (std::is_same_v<T, columnar::Date32>) {
-          return columnar::Date32Type{};
+          return columnar::DataType::kDate32;
         } else {
-          return columnar::StringType{};
+          return columnar::DataType::kString;
         }
       },
       value_);
@@ -431,7 +418,7 @@ Result<std::shared_ptr<ColumnVector>> BinaryExpression::Evaluate(
     if (auto type = OperandResultType(op_, l, r); !type) {
       return std::unexpected(type.error());
     }
-    return MapRows<bool>(l, r, n, columnar::BoolType{}, CompareValues<Op>);
+    return MapRows<bool>(l, r, n, columnar::DataType::kBool, CompareValues<Op>);
   };
   switch (op_) {
     case BinaryOp::kEq:
@@ -448,7 +435,7 @@ Result<std::shared_ptr<ColumnVector>> BinaryExpression::Evaluate(
       return compare.template operator()<std::greater_equal<>>();
     case BinaryOp::kAnd:
     case BinaryOp::kOr:
-      return MapRows<bool>(l, r, n, columnar::BoolType{},
+      return MapRows<bool>(l, r, n, columnar::DataType::kBool,
                            [op = op_](const Value& a, const Value& b) { return AndOr(op, a, b); });
     case BinaryOp::kAdd:
     case BinaryOp::kSubtract:
@@ -482,7 +469,7 @@ Result<std::shared_ptr<ColumnVector>> CaseExpression::Evaluate(const RecordBatch
     }
     const DataType condition_type = (*condition)->GetType();
     if (!IsNullLiteral(**condition) &&
-        !std::holds_alternative<columnar::BoolType>(condition_type)) {
+        !(condition_type == columnar::DataType::kBool)) {
       return Error::TypeError("CASE WHEN needs a bool condition, got " +
                               columnar::GetTypeName(condition_type));
     }
@@ -519,33 +506,9 @@ Result<std::shared_ptr<ColumnVector>> CaseExpression::Evaluate(const RecordBatch
   }
 
   const size_t n = input.num_rows();
-  return std::visit(
-      [&](const auto& tag) -> Result<std::shared_ptr<ColumnVector>> {
-        using Tag = std::decay_t<decltype(tag)>;
-        if constexpr (std::is_same_v<Tag, columnar::BoolType>) {
-          return SelectRows<bool>(whens, results, n, *type);
-        } else if constexpr (std::is_same_v<Tag, columnar::Int8Type>) {
-          return SelectRows<int8_t>(whens, results, n, *type);
-        } else if constexpr (std::is_same_v<Tag, columnar::Int16Type>) {
-          return SelectRows<int16_t>(whens, results, n, *type);
-        } else if constexpr (std::is_same_v<Tag, columnar::Int32Type>) {
-          return SelectRows<int32_t>(whens, results, n, *type);
-        } else if constexpr (std::is_same_v<Tag, columnar::Int64Type>) {
-          return SelectRows<int64_t>(whens, results, n, *type);
-        } else if constexpr (std::is_same_v<Tag, columnar::FloatType>) {
-          return SelectRows<float>(whens, results, n, *type);
-        } else if constexpr (std::is_same_v<Tag, columnar::DoubleType>) {
-          return SelectRows<double>(whens, results, n, *type);
-        } else if constexpr (std::is_same_v<Tag, columnar::StringType>) {
-          return SelectRows<std::string>(whens, results, n, *type);
-        } else if constexpr (std::is_same_v<Tag, columnar::Date32Type>) {
-          return SelectRows<columnar::Date32>(whens, results, n, *type);
-        } else {
-          return Error::TypeError("CASE cannot produce " + columnar::GetTypeName(*type) +
-                                  " values");
-        }
-      },
-      *type);
+  return columnar::VisitType(*type, [&]<typename Tag>(Tag) -> Result<std::shared_ptr<ColumnVector>> {
+    return SelectRows<columnar::ValueOf<typename Tag::CType>>(whens, results, n, *type);
+  });
 }
 
 std::string CaseExpression::ToString() const {
@@ -591,7 +554,7 @@ Result<std::shared_ptr<ColumnVector>> SumExpression::Evaluate(
 
   std::vector<double> result{sum};
   return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(result)}, columnar::DoubleType{});
+      ColumnData{std::move(result)}, columnar::DataType::kDouble);
 }
 
 Result<std::shared_ptr<ColumnVector>> AvgExpression::Evaluate(
@@ -616,7 +579,7 @@ Result<std::shared_ptr<ColumnVector>> AvgExpression::Evaluate(
 
   std::vector<double> result{avg};
   return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(result)}, columnar::DoubleType{});
+      ColumnData{std::move(result)}, columnar::DataType::kDouble);
 }
 
 Result<std::shared_ptr<ColumnVector>> CountExpression::Evaluate(
@@ -637,14 +600,14 @@ Result<std::shared_ptr<ColumnVector>> CountExpression::Evaluate(
 
   std::vector<int64_t> result{count};
   return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(result)}, columnar::Int64Type{});
+      ColumnData{std::move(result)}, columnar::DataType::kInt64);
 }
 
 Result<std::shared_ptr<ColumnVector>> CountStarExpression::Evaluate(
     const RecordBatch& input) const {
   std::vector<int64_t> result{static_cast<int64_t>(input.num_rows())};
   return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(result)}, columnar::Int64Type{});
+      ColumnData{std::move(result)}, columnar::DataType::kInt64);
 }
 
 Result<std::shared_ptr<ColumnVector>> MinExpression::Evaluate(
@@ -658,7 +621,7 @@ Result<std::shared_ptr<ColumnVector>> MinExpression::Evaluate(
   if (col.size() == 0) {
     std::vector<double> result{std::numeric_limits<double>::quiet_NaN()};
     return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, columnar::DoubleType{});
+        ColumnData{std::move(result)}, columnar::DataType::kDouble);
   }
 
   double min_val = std::numeric_limits<double>::max();
@@ -680,7 +643,7 @@ Result<std::shared_ptr<ColumnVector>> MinExpression::Evaluate(
 
   std::vector<double> result{min_val};
   return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(result)}, columnar::DoubleType{});
+      ColumnData{std::move(result)}, columnar::DataType::kDouble);
 }
 
 Result<std::shared_ptr<ColumnVector>> MaxExpression::Evaluate(
@@ -694,7 +657,7 @@ Result<std::shared_ptr<ColumnVector>> MaxExpression::Evaluate(
   if (col.size() == 0) {
     std::vector<double> result{std::numeric_limits<double>::quiet_NaN()};
     return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, columnar::DoubleType{});
+        ColumnData{std::move(result)}, columnar::DataType::kDouble);
   }
 
   double max_val = std::numeric_limits<double>::lowest();
@@ -716,7 +679,7 @@ Result<std::shared_ptr<ColumnVector>> MaxExpression::Evaluate(
 
   std::vector<double> result{max_val};
   return std::make_shared<MaterializedColumnVector>(
-      ColumnData{std::move(result)}, columnar::DoubleType{});
+      ColumnData{std::move(result)}, columnar::DataType::kDouble);
 }
 
 }  // namespace quest::plan::physical

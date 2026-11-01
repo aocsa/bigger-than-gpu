@@ -42,10 +42,10 @@ class QueryBuilderTest : public ::testing::Test {
  protected:
   void SetUp() override {
     std::vector<Field> fields = {
-        Field("id", Int32Type{}),
-        Field("name", StringType{}),
-        Field("salary", DoubleType{}),
-        Field("department", StringType{}),
+        Field("id", DataType::kInt32),
+        Field("name", DataType::kString),
+        Field("salary", DataType::kDouble),
+        Field("department", DataType::kString),
     };
     schema_ = Schema(fields);
     data_source_ = std::make_shared<MockDataSource>(schema_);

@@ -25,8 +25,7 @@ namespace quest::columnar {
 //   - For each field:
 //     - Name length (uint32_t)
 //     - Name (variable length string)
-//     - Type index (uint8_t) - index into DataType variant
-//     - Type data (variable, e.g., byte_width for FixedLenByteArrayType)
+//     - Type tag (uint8_t) - the DataType enum value
 //     - Repetition (uint8_t)
 // - Column data section:
 //   - For each column:
@@ -46,7 +45,7 @@ class RecordBatchSerializer {
   [[nodiscard]] static Result<RecordBatch> DeserializeFromFile(const std::string& filename);
 
  private:
-  static void WriteDataType(std::vector<uint8_t>& buffer, const DataType& type);
+  static void WriteDataType(std::vector<uint8_t>& buffer, DataType type);
 
   static Result<DataType> ReadDataType(const std::vector<uint8_t>& buffer, size_t& offset);
 
@@ -56,13 +55,13 @@ class RecordBatchSerializer {
 
   static Result<std::shared_ptr<ColumnVector>> ReadColumn(const std::vector<uint8_t>& buffer,
                                                            size_t& offset,
-                                                           const DataType& type,
+                                                           DataType type,
                                                            size_t num_rows);
 
   static Status ReadColumnValues(const std::vector<uint8_t>& buffer,
                                 size_t& offset,
                                 ColumnVector& column,
-                                const DataType& type,
+                                DataType type,
                                 size_t num_rows,
                                 const std::vector<uint8_t>& null_bitmap);
 };

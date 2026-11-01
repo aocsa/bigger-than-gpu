@@ -60,11 +60,11 @@ class QueryIntegrationTest : public ::testing::Test {
  protected:
   void SetUp() override {
     std::vector<Field> fields = {
-        Field("id", Int32Type{}),
-        Field("name", StringType{}),
-        Field("salary", DoubleType{}),
-        Field("department", StringType{}),
-        Field("active", BoolType{}),
+        Field("id", DataType::kInt32),
+        Field("name", DataType::kString),
+        Field("salary", DataType::kDouble),
+        Field("department", DataType::kString),
+        Field("active", DataType::kBool),
     };
     schema_ = Schema(fields);
 
@@ -74,12 +74,12 @@ class QueryIntegrationTest : public ::testing::Test {
   }
 
   void CreateTestBatch() {
-    auto id_col = std::make_unique<TypedColumnVector<int32_t>>(Int32Type{}, 10);
-    auto name_col = std::make_unique<StringColumnVector>(StringType{}, 10);
+    auto id_col = std::make_unique<TypedColumnVector<int32_t>>(DataType::kInt32, 10);
+    auto name_col = std::make_unique<StringColumnVector>(DataType::kString, 10);
     auto salary_col =
-        std::make_unique<TypedColumnVector<double>>(DoubleType{}, 10);
-    auto dept_col = std::make_unique<StringColumnVector>(StringType{}, 10);
-    auto active_col = std::make_unique<TypedColumnVector<bool>>(BoolType{}, 10);
+        std::make_unique<TypedColumnVector<double>>(DataType::kDouble, 10);
+    auto dept_col = std::make_unique<StringColumnVector>(DataType::kString, 10);
+    auto active_col = std::make_unique<TypedColumnVector<bool>>(DataType::kBool, 10);
 
     id_col->Append(1);
     name_col->Append("Alice");

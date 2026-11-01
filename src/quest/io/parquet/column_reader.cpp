@@ -54,7 +54,7 @@ template <typename T>
 [[nodiscard]] std::shared_ptr<ColumnVector> DecimalToDouble(const TypedColumnVector<T>& unscaled,
                                                             int32_t scale) {
   const double divisor = std::pow(10.0, scale);
-  auto column = std::make_shared<TypedColumnVector<double>>(columnar::DoubleType{}, unscaled.size());
+  auto column = std::make_shared<TypedColumnVector<double>>(columnar::DataType::kDouble, unscaled.size());
   for (size_t i = 0; i < unscaled.size(); ++i) {
     if (unscaled.IsNull(i)) {
       column->AppendNull();
@@ -272,7 +272,7 @@ Status ColumnReader::DecodeValues(Encoding encoding,
       return DecodeBooleanValues(encoding, data, num_values, def_levels,
                                  column);
     case PhysicalType::kInt32:
-      if (std::holds_alternative<columnar::Date32Type>(field_.data_type)) {
+      if (field_.data_type == columnar::DataType::kDate32) {
         return DecodeFixedWidthValues<columnar::Date32>(encoding, data, num_values, def_levels,
                                                         column);
       }

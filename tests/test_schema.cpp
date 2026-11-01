@@ -19,41 +19,41 @@ using namespace quest::columnar;
 // =============================================================================
 
 TEST(FieldTest, Construction) {
-  Field f("id", Int32Type{});
+  Field f("id", DataType::kInt32);
   EXPECT_EQ(f.name, "id");
-  EXPECT_TRUE(std::holds_alternative<Int32Type>(f.data_type));
+  EXPECT_TRUE(f.data_type == DataType::kInt32);
   EXPECT_EQ(f.repetition, Repetition::kRequired);
 }
 
 TEST(FieldTest, NullableField) {
-  Field f("nullable_col", StringType{}, Repetition::kOptional);
+  Field f("nullable_col", DataType::kString, Repetition::kOptional);
   EXPECT_TRUE(f.IsNullable());
 
-  Field f2("required_col", Int32Type{}, Repetition::kRequired);
+  Field f2("required_col", DataType::kInt32, Repetition::kRequired);
   EXPECT_FALSE(f2.IsNullable());
 }
 
 TEST(FieldTest, ToString) {
-  Field f("age", Int32Type{});
+  Field f("age", DataType::kInt32);
   std::string str = f.ToString();
   EXPECT_FALSE(str.empty());
   EXPECT_NE(str.find("age"), std::string::npos);
 }
 
 TEST(FieldTest, AllDataTypes) {
-  EXPECT_NO_THROW(Field("bool_field", BoolType{}));
-  EXPECT_NO_THROW(Field("int8_field", Int8Type{}));
-  EXPECT_NO_THROW(Field("int16_field", Int16Type{}));
-  EXPECT_NO_THROW(Field("int32_field", Int32Type{}));
-  EXPECT_NO_THROW(Field("int64_field", Int64Type{}));
-  EXPECT_NO_THROW(Field("float_field", FloatType{}));
-  EXPECT_NO_THROW(Field("double_field", DoubleType{}));
-  EXPECT_NO_THROW(Field("string_field", StringType{}));
-  EXPECT_NO_THROW(Field("binary_field", BinaryType{}));
+  EXPECT_NO_THROW(Field("bool_field", DataType::kBool));
+  EXPECT_NO_THROW(Field("int8_field", DataType::kInt8));
+  EXPECT_NO_THROW(Field("int16_field", DataType::kInt16));
+  EXPECT_NO_THROW(Field("int32_field", DataType::kInt32));
+  EXPECT_NO_THROW(Field("int64_field", DataType::kInt64));
+  EXPECT_NO_THROW(Field("float_field", DataType::kFloat));
+  EXPECT_NO_THROW(Field("double_field", DataType::kDouble));
+  EXPECT_NO_THROW(Field("string_field", DataType::kString));
+  EXPECT_NO_THROW(Field("binary_field", DataType::kString));
 }
 
 TEST(FieldTest, WithFieldId) {
-  Field f("col", Int32Type{});
+  Field f("col", DataType::kInt32);
   f.field_id = 42;
   EXPECT_TRUE(f.field_id.has_value());
   EXPECT_EQ(*f.field_id, 42);
@@ -71,9 +71,9 @@ TEST(SchemaTest, EmptySchema) {
 
 TEST(SchemaTest, Construction) {
   std::vector<Field> fields = {
-      Field("id", Int32Type{}),
-      Field("name", StringType{}),
-      Field("salary", DoubleType{}),
+      Field("id", DataType::kInt32),
+      Field("name", DataType::kString),
+      Field("salary", DataType::kDouble),
   };
 
   Schema s(fields);
@@ -86,8 +86,8 @@ TEST(SchemaTest, Construction) {
 
 TEST(SchemaTest, FieldAccess) {
   std::vector<Field> fields = {
-      Field("col1", Int32Type{}),
-      Field("col2", StringType{}),
+      Field("col1", DataType::kInt32),
+      Field("col2", DataType::kString),
   };
   Schema s(fields);
 
@@ -97,9 +97,9 @@ TEST(SchemaTest, FieldAccess) {
 
 TEST(SchemaTest, GetFieldIndex) {
   std::vector<Field> fields = {
-      Field("id", Int32Type{}),
-      Field("name", StringType{}),
-      Field("value", DoubleType{}),
+      Field("id", DataType::kInt32),
+      Field("name", DataType::kString),
+      Field("value", DataType::kDouble),
   };
   Schema s(fields);
 
@@ -121,8 +121,8 @@ TEST(SchemaTest, GetFieldIndex) {
 
 TEST(SchemaTest, GetFieldByName) {
   std::vector<Field> fields = {
-      Field("id", Int32Type{}),
-      Field("name", StringType{}),
+      Field("id", DataType::kInt32),
+      Field("name", DataType::kString),
   };
   Schema s(fields);
 
@@ -140,10 +140,10 @@ TEST(SchemaTest, GetFieldByName) {
 
 TEST(SchemaTest, Project) {
   std::vector<Field> fields = {
-      Field("a", Int32Type{}),
-      Field("b", StringType{}),
-      Field("c", DoubleType{}),
-      Field("d", BoolType{}),
+      Field("a", DataType::kInt32),
+      Field("b", DataType::kString),
+      Field("c", DataType::kDouble),
+      Field("d", DataType::kBool),
   };
   Schema s(fields);
 
@@ -156,9 +156,9 @@ TEST(SchemaTest, Project) {
 
 TEST(SchemaTest, ProjectReorder) {
   std::vector<Field> fields = {
-      Field("a", Int32Type{}),
-      Field("b", StringType{}),
-      Field("c", DoubleType{}),
+      Field("a", DataType::kInt32),
+      Field("b", DataType::kString),
+      Field("c", DataType::kDouble),
   };
   Schema s(fields);
 
@@ -172,10 +172,10 @@ TEST(SchemaTest, ProjectReorder) {
 
 TEST(SchemaTest, Select) {
   std::vector<Field> fields = {
-      Field("id", Int32Type{}),
-      Field("name", StringType{}),
-      Field("email", StringType{}),
-      Field("age", Int32Type{}),
+      Field("id", DataType::kInt32),
+      Field("name", DataType::kString),
+      Field("email", DataType::kString),
+      Field("age", DataType::kInt32),
   };
   Schema s(fields);
 
@@ -188,8 +188,8 @@ TEST(SchemaTest, Select) {
 
 TEST(SchemaTest, SelectNonexistent) {
   std::vector<Field> fields = {
-      Field("a", Int32Type{}),
-      Field("b", StringType{}),
+      Field("a", DataType::kInt32),
+      Field("b", DataType::kString),
   };
   Schema s(fields);
 
@@ -200,8 +200,8 @@ TEST(SchemaTest, SelectNonexistent) {
 
 TEST(SchemaTest, ToString) {
   std::vector<Field> fields = {
-      Field("id", Int32Type{}),
-      Field("name", StringType{}),
+      Field("id", DataType::kInt32),
+      Field("name", DataType::kString),
   };
   Schema s(fields);
 
@@ -247,31 +247,12 @@ TEST(ColumnStatisticsTest, OptionalFields) {
 // =============================================================================
 
 TEST(TypeHelpersTest, GetTypeName) {
-  EXPECT_EQ(GetTypeName(BoolType{}), "Bool");
-  EXPECT_EQ(GetTypeName(Int32Type{}), "Int32");
-  EXPECT_EQ(GetTypeName(Int64Type{}), "Int64");
-  EXPECT_EQ(GetTypeName(FloatType{}), "Float");
-  EXPECT_EQ(GetTypeName(DoubleType{}), "Double");
-  EXPECT_EQ(GetTypeName(StringType{}), "String");
-  EXPECT_EQ(GetTypeName(BinaryType{}), "Binary");
-}
-
-TEST(TypeHelpersTest, GetTypeByteWidth) {
-  EXPECT_EQ(GetTypeByteWidth(BoolType{}), 1);
-  EXPECT_EQ(GetTypeByteWidth(Int8Type{}), 1);
-  EXPECT_EQ(GetTypeByteWidth(Int16Type{}), 2);
-  EXPECT_EQ(GetTypeByteWidth(Int32Type{}), 4);
-  EXPECT_EQ(GetTypeByteWidth(Int64Type{}), 8);
-  EXPECT_EQ(GetTypeByteWidth(FloatType{}), 4);
-  EXPECT_EQ(GetTypeByteWidth(DoubleType{}), 8);
-}
-
-TEST(TypeHelpersTest, IsFixedWidth) {
-  EXPECT_TRUE(IsFixedWidth(BoolType{}));
-  EXPECT_TRUE(IsFixedWidth(Int32Type{}));
-  EXPECT_TRUE(IsFixedWidth(DoubleType{}));
-  EXPECT_FALSE(IsFixedWidth(StringType{}));
-  EXPECT_FALSE(IsFixedWidth(BinaryType{}));
+  EXPECT_EQ(GetTypeName(DataType::kBool), "Bool");
+  EXPECT_EQ(GetTypeName(DataType::kInt32), "Int32");
+  EXPECT_EQ(GetTypeName(DataType::kInt64), "Int64");
+  EXPECT_EQ(GetTypeName(DataType::kFloat), "Float");
+  EXPECT_EQ(GetTypeName(DataType::kDouble), "Double");
+  EXPECT_EQ(GetTypeName(DataType::kString), "String");
 }
 
 // =============================================================================
@@ -281,8 +262,8 @@ TEST(TypeHelpersTest, IsFixedWidth) {
 TEST(SchemaEdgeCaseTest, DuplicateFieldNames) {
   // Schema should allow duplicate field names (though not recommended)
   std::vector<Field> fields = {
-      Field("col", Int32Type{}),
-      Field("col", StringType{}),
+      Field("col", DataType::kInt32),
+      Field("col", DataType::kString),
   };
   Schema s(fields);
 
@@ -293,14 +274,14 @@ TEST(SchemaEdgeCaseTest, DuplicateFieldNames) {
 }
 
 TEST(SchemaEdgeCaseTest, EmptyFieldName) {
-  Field f("", Int32Type{});
+  Field f("", DataType::kInt32);
   EXPECT_TRUE(f.name.empty());
 }
 
 TEST(SchemaEdgeCaseTest, LargeSchema) {
   std::vector<Field> fields;
   for (int i = 0; i < 1000; ++i) {
-    fields.emplace_back("col_" + std::to_string(i), Int32Type{});
+    fields.emplace_back("col_" + std::to_string(i), DataType::kInt32);
   }
   Schema s(fields);
 

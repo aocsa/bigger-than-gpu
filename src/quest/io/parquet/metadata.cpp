@@ -86,15 +86,15 @@ DataType LeafDataType(const SchemaElement& elem) {
                        elem.logical_type == LogicalType::kEnum ||
                        elem.logical_type == LogicalType::kJson;
   if (elem.type == PhysicalType::kByteArray && is_text) {
-    return columnar::StringType{};
+    return columnar::DataType::kString;
   }
   if (elem.type == PhysicalType::kInt32 && elem.logical_type == LogicalType::kDate) {
-    return columnar::Date32Type{};
+    return columnar::DataType::kDate32;
   }
   if (IsIntegerDecimal(elem)) {
-    return columnar::DoubleType{};
+    return columnar::DataType::kDouble;
   }
-  return PhysicalTypeToDataType(elem.type, elem.type_length.value_or(0));
+  return PhysicalTypeToDataType(elem.type);
 }
 
 }  // namespace

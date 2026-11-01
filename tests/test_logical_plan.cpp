@@ -250,9 +250,9 @@ class LogicalPlanTest : public ::testing::Test {
  protected:
   void SetUp() override {
     std::vector<Field> fields = {
-        Field("id", Int32Type{}),
-        Field("name", StringType{}),
-        Field("value", DoubleType{}),
+        Field("id", DataType::kInt32),
+        Field("name", DataType::kString),
+        Field("value", DataType::kDouble),
     };
     schema_ = Schema(fields);
     data_source_ = std::make_shared<MockDataSource>(schema_);
@@ -384,7 +384,7 @@ TEST(LogicalExprEdgeCaseTest, LargeIndex) {
 
 TEST_F(LogicalPlanTest, JoinSchemaIsProbeThenBuildColumns) {
   auto other = std::make_shared<MockDataSource>(
-      Schema({Field("o_id", Int64Type{}), Field("priority", StringType{})}));
+      Schema({Field("o_id", DataType::kInt64), Field("priority", DataType::kString)}));
   Join join(std::make_unique<Scan>("orders", other), std::make_unique<Scan>("t", data_source_),
             "o_id", "id");
 
@@ -409,12 +409,12 @@ TEST_F(LogicalPlanTest, AggregateSchemaUsesSqlResultTypes) {
   const auto schema = aggregate.schema();
   ASSERT_EQ(schema.num_fields(), 5U);
   EXPECT_EQ(schema.field(0).name, "name");
-  EXPECT_TRUE(std::holds_alternative<StringType>(schema.field(0).data_type));
+  EXPECT_EQ(schema.field(0).data_type, DataType::kString);
   EXPECT_EQ(schema.field(1).name, "total_id");
-  EXPECT_TRUE(std::holds_alternative<Int64Type>(schema.field(1).data_type));
-  EXPECT_TRUE(std::holds_alternative<DoubleType>(schema.field(2).data_type));
-  EXPECT_TRUE(std::holds_alternative<Int64Type>(schema.field(3).data_type));
-  EXPECT_TRUE(std::holds_alternative<DoubleType>(schema.field(4).data_type));
+  EXPECT_EQ(schema.field(1).data_type, DataType::kInt64);
+  EXPECT_EQ(schema.field(2).data_type, DataType::kDouble);
+  EXPECT_EQ(schema.field(3).data_type, DataType::kInt64);
+  EXPECT_EQ(schema.field(4).data_type, DataType::kDouble);
   EXPECT_EQ(aggregate.ToString(),
             "Aggregate: group by [name], SUM(#id) AS total_id, SUM(#value) AS total_value, "
             "COUNT(*) AS n, MIN(#value) AS lowest");

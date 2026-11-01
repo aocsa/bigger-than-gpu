@@ -21,23 +21,11 @@ using columnar::Value;
 
 enum class NumericClass : std::uint8_t { kInteger, kFloating, kOther };
 
-[[nodiscard]] NumericClass Classify(const DataType& type) {
-  return std::visit(
-      [](const auto& tag) {
-        using T = std::decay_t<decltype(tag)>;
-        if constexpr (std::is_same_v<T, columnar::Int8Type> ||
-                      std::is_same_v<T, columnar::Int16Type> ||
-                      std::is_same_v<T, columnar::Int32Type> ||
-                      std::is_same_v<T, columnar::Int64Type>) {
-          return NumericClass::kInteger;
-        } else if constexpr (std::is_same_v<T, columnar::FloatType> ||
-                             std::is_same_v<T, columnar::DoubleType>) {
-          return NumericClass::kFloating;
-        } else {
-          return NumericClass::kOther;
-        }
-      },
-      type);
+[[nodiscard]] NumericClass Classify(DataType type) {
+  if (columnar::IsInteger(type)) {
+    return NumericClass::kInteger;
+  }
+  return columnar::IsNumeric(type) ? NumericClass::kFloating : NumericClass::kOther;
 }
 
 /// @brief Numeric value of @p value as @p T; only called on values of a column that
@@ -84,17 +72,17 @@ template <typename T>
   switch (kind) {
     case AggregateKind::kCount:
     case AggregateKind::kCountStar:
-      return columnar::Int64Type{};
+      return columnar::DataType::kInt64;
     case AggregateKind::kAvg:
-      return columnar::DoubleType{};
+      return columnar::DataType::kDouble;
     case AggregateKind::kSum:
       if (input_type && Classify(*input_type) == NumericClass::kFloating) {
-        return columnar::DoubleType{};
+        return columnar::DataType::kDouble;
       }
-      return columnar::Int64Type{};
+      return columnar::DataType::kInt64;
     case AggregateKind::kMin:
     case AggregateKind::kMax:
-      return input_type.value_or(columnar::Int64Type{});
+      return input_type.value_or(columnar::DataType::kInt64);
   }
   std::unreachable();
 }
@@ -196,8 +184,7 @@ Status HashAggregateOperator::Sink(cache::DataBlockPtr batch) {
     inputs[i] = std::move(*evaluated);
     classes[i] = Classify(inputs[i]->GetType());
     // DuckDB: SUM(BOOLEAN) counts the true values; AVG(BOOLEAN) is an error.
-    if (spec.kind == AggregateKind::kSum &&
-        std::holds_alternative<columnar::BoolType>(inputs[i]->GetType())) {
+    if (spec.kind == AggregateKind::kSum && inputs[i]->GetType() == DataType::kBool) {
       classes[i] = NumericClass::kInteger;
     }
     if ((spec.kind == AggregateKind::kSum || spec.kind == AggregateKind::kAvg) &&

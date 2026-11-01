@@ -20,10 +20,10 @@ namespace quest::testing {
 inline columnar::RecordBatch MakeTestRecordBatch(size_t num_rows) {
   using namespace quest::columnar;
 
-  std::vector<Field> fields = {Field("value", Int32Type{})};
+  std::vector<Field> fields = {Field("value", DataType::kInt32)};
   Schema schema(fields);
 
-  auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, num_rows);
+  auto col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, num_rows);
   for (size_t i = 0; i < num_rows; ++i) {
     col->Append(static_cast<int32_t>(i));
   }
@@ -39,8 +39,8 @@ inline columnar::RecordBatch MakeTestRecordBatch(size_t num_rows, size_t num_col
   std::vector<std::shared_ptr<ColumnVector>> columns;
 
   for (size_t c = 0; c < num_columns; ++c) {
-    fields.emplace_back("col" + std::to_string(c), Int32Type{});
-    auto col = std::make_shared<TypedColumnVector<int32_t>>(Int32Type{}, num_rows);
+    fields.emplace_back("col" + std::to_string(c), DataType::kInt32);
+    auto col = std::make_shared<TypedColumnVector<int32_t>>(DataType::kInt32, num_rows);
     for (size_t r = 0; r < num_rows; ++r) {
       col->Append(static_cast<int32_t>(r * num_columns + c));
     }

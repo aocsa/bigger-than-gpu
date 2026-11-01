@@ -26,8 +26,8 @@ namespace {
         std::format("HashJoinOperator: {} key column '{}' not found", side, name));
   }
   const auto type = column->GetType();
-  if (!std::holds_alternative<columnar::Int32Type>(type) &&
-      !std::holds_alternative<columnar::Int64Type>(type)) {
+  if (!(type == columnar::DataType::kInt32) &&
+      !(type == columnar::DataType::kInt64)) {
     return Error::TypeError(
         std::format("HashJoinOperator: {} key column '{}' is {}, not an integer", side, name,
                     columnar::GetTypeName(type)));
