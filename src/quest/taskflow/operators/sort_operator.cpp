@@ -76,12 +76,24 @@ Status SortOperator::FinalizeSink() {
     return {};
   }
 
-  auto host = cache::ConcatenateHostBlocks(std::exchange(batches_, {}))
-                  .and_then(cache::EnsureHostBlock);
-  if (!host) {
-    return std::unexpected(host.error());
+  // Not ConcatenateHostBlocks(): each spilled block must be released as soon as it is loaded,
+  // and the loaded inputs must stay tracked until the sorted output exists.
+  std::vector<std::shared_ptr<cache::HostMemoryBlock>> hosts;
+  std::vector<const columnar::RecordBatch*> inputs;
+  for (auto& block : batches_) {
+    auto host = cache::EnsureHostBlock(std::move(block));
+    if (!host) {
+      return std::unexpected(host.error());
+    }
+    inputs.push_back((*host)->record_batch());
+    hosts.push_back(std::move(*host));
   }
-  const columnar::RecordBatch& merged = *(*host)->record_batch();
+  batches_.clear();
+  auto concatenated = columnar::ConcatenateRecordBatches(inputs);
+  if (!concatenated) {
+    return std::unexpected(concatenated.error());
+  }
+  const columnar::RecordBatch& merged = *concatenated;
   const std::size_t num_rows = merged.num_rows();
 
   std::vector<RowOrder> orders;

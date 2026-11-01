@@ -37,14 +37,17 @@ class ProjectOperator : public SimpleOperator {
 
  protected:
   [[nodiscard]] Result<cache::DataBlockPtr> ProcessBatch(cache::DataBlockPtr input) override {
-    return cache::EnsureHostBlock(std::move(input))
-        .and_then([&](std::shared_ptr<cache::HostMemoryBlock> host) {
-          return execution::ProjectRecordBatch(*host->record_batch(), schema_, expressions_);
-        })
-        .transform([&](columnar::RecordBatch projected) -> cache::DataBlockPtr {
-          return cache::MakeTrackedHostBlock(std::format("project_{}", id()),
-                                             std::move(projected), memory_manager_);
-        });
+    // `host` stays alive until the output is tracked: memory accounting sees both at once.
+    auto host = cache::EnsureHostBlock(std::move(input));
+    if (!host) {
+      return std::unexpected(host.error());
+    }
+    auto projected = execution::ProjectRecordBatch(*(*host)->record_batch(), schema_, expressions_);
+    if (!projected) {
+      return std::unexpected(projected.error());
+    }
+    return cache::MakeTrackedHostBlock(std::format("project_{}", id()), std::move(*projected),
+                                       memory_manager_);
   }
 
  private:

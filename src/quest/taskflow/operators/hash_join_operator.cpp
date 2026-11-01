@@ -79,12 +79,17 @@ Status HashJoinOperator::Sink(cache::DataBlockPtr batch) {
 Status HashJoinOperator::FinalizeSink() {
   std::lock_guard lock(sink_mutex_);
   if (!build_blocks_.empty()) {
-    auto merged = cache::ConcatenateHostBlocks(std::exchange(build_blocks_, {}))
-                      .and_then(cache::EnsureHostBlock);
+    std::vector<const columnar::RecordBatch*> batches;
+    batches.reserve(build_blocks_.size());
+    for (const auto& block : build_blocks_) {
+      batches.push_back(block->record_batch());
+    }
+    auto merged = columnar::ConcatenateRecordBatches(batches);
     if (!merged) {
       return std::unexpected(merged.error());
     }
-    build_batch_.emplace(*(*merged)->record_batch());
+    build_blocks_.clear();  // released before the hash table is built
+    build_batch_.emplace(std::move(*merged));
 
     auto key_column = KeyColumn(*build_batch_, build_key_, "build");
     if (!key_column) {
