@@ -35,17 +35,23 @@ namespace {
   return column;
 }
 
-/// @brief The key at @p row widened to int64, or nullopt if it is null.
-[[nodiscard]] std::optional<std::int64_t> KeyAt(const columnar::ColumnVector& column,
-                                                std::size_t row) {
-  const auto value = column.GetValue(row);
-  if (const auto* key = std::get_if<std::int64_t>(&value)) {
-    return *key;
+/// @brief Calls @p f(row, key) for each non-null key of @p column (checked by KeyColumn),
+/// widened to int64.
+template <typename F>
+void ForEachKey(const columnar::ColumnVector& column, F&& f) {
+  auto run = [&]<typename T>() {
+    const auto keys = column.View<T>();
+    for (std::size_t row = 0; row < keys.size(); ++row) {
+      if (!keys.IsNull(row)) {
+        f(row, static_cast<std::int64_t>(keys[row]));
+      }
+    }
+  };
+  if (column.GetType() == columnar::DataType::kInt32) {
+    run.template operator()<std::int32_t>();
+  } else {
+    run.template operator()<std::int64_t>();
   }
-  if (const auto* key = std::get_if<std::int32_t>(&value)) {
-    return *key;
-  }
-  return std::nullopt;
 }
 
 }  // namespace
@@ -94,11 +100,9 @@ Status HashJoinOperator::FinalizeSink() {
     if (!key_column) {
       return std::unexpected(key_column.error());
     }
-    for (std::size_t row = 0; row < build_batch_->num_rows(); ++row) {
-      if (auto key = KeyAt(**key_column, row)) {
-        build_rows_by_key_[*key].push_back(row);
-      }
-    }
+    ForEachKey(**key_column, [this](std::size_t row, std::int64_t key) {
+      build_rows_by_key_[key].push_back(row);
+    });
   }
   finalized_ = true;
   return {};
@@ -124,20 +128,16 @@ Result<cache::DataBlockPtr> HashJoinOperator::ProcessBatch(cache::DataBlockPtr i
 
   std::vector<std::size_t> probe_rows;
   std::vector<std::size_t> build_rows;
-  for (std::size_t row = 0; row < probe->num_rows(); ++row) {
-    auto key = KeyAt(**key_column, row);
-    if (!key) {
-      continue;
-    }
-    auto match = build_rows_by_key_.find(*key);
+  ForEachKey(**key_column, [&](std::size_t row, std::int64_t key) {
+    auto match = build_rows_by_key_.find(key);
     if (match == build_rows_by_key_.end()) {
-      continue;
+      return;
     }
     for (std::size_t build_row : match->second) {
       probe_rows.push_back(row);
       build_rows.push_back(build_row);
     }
-  }
+  });
 
   std::vector<columnar::Field> fields = probe->schema().fields();
   std::vector<columnar::ColumnVectorPtr> columns;

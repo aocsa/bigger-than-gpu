@@ -11,6 +11,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -47,8 +48,12 @@ struct AggregateSpec {
 /// is exactly one row, even for empty input; with GROUP BY, empty input emits nothing.
 /// Groups are emitted in first-appearance order of the Sink() merges.
 ///
-/// When no batch was ever sunk, aggregate input types are unknown, so SUM/MIN/MAX fall
-/// back to an Int64 null column.
+/// When no batch was ever sunk, aggregate input types are unknown; the output then takes
+/// `AggregateSpec::output_type` (the planner's type), or Int64 without one.
+///
+/// A group key is its key cells encoded as bytes (a validity byte, then the value; a String
+/// has a length prefix), so equal keys are equal bytes: -0.0 and 0.0, and every NaN, share a
+/// group. States are arrays indexed by group id, filled from typed views.
 class HashAggregateOperator : public Operator {
  public:
   /// @param group_by Input column names to group by (empty: one global group).
@@ -74,31 +79,45 @@ class HashAggregateOperator : public Operator {
   /// @brief Emits the aggregated batch once, then end-of-stream.
   [[nodiscard]] Result<std::optional<cache::DataBlockPtr>> GetNextBatch() override;
 
+  /// @brief MIN or MAX of one aggregate for every group, in the input's C++ type.
+  class ExtremesBase {
+   public:
+    virtual ~ExtremesBase() = default;
+    /// @brief Folds row r of @p input into group `group_of_row[r]`.
+    virtual void Update(const columnar::ColumnVector& input,
+                        std::span<const std::uint32_t> group_of_row) = 0;
+    /// @brief Folds group g of @p other (same type) into group `remap[g]`.
+    virtual void Merge(const ExtremesBase& other, std::span<const std::uint32_t> remap) = 0;
+    /// @brief One row per group, null for a group that saw no value.
+    [[nodiscard]] virtual columnar::ColumnVectorPtr Finish(columnar::DataType type,
+                                                           std::size_t groups) const = 0;
+  };
+
  private:
-  /// @brief Per-group running state of one aggregate.
-  struct AggregateState {
-    std::int64_t count = 0;  ///< non-null inputs (rows for COUNT(*))
-    std::int64_t int_sum = 0;
-    double double_sum = 0.0;
-    columnar::Value extreme;  ///< MIN/MAX so far; monostate while unset
+
+  /// @brief One aggregate's state for every group, indexed by group id.
+  struct States {
+    std::vector<std::int64_t> count;  ///< non-null inputs (rows for COUNT(*))
+    std::vector<std::int64_t> int_sum;
+    std::vector<double> double_sum;
+    std::unique_ptr<ExtremesBase> extremes;  ///< MIN/MAX, made with the first input
   };
 
-  /// @brief One group: its key values and one state per aggregate.
-  struct Group {
-    std::vector<columnar::Value> key;
-    std::vector<AggregateState> states;
-  };
-
-  /// @brief Hash of a group key (vector of Values).
-  struct KeyHash {
-    [[nodiscard]] std::size_t operator()(const std::vector<columnar::Value>& key) const noexcept;
-  };
-
-  /// @brief Groups in first-appearance order plus a key -> position index.
+  /// @brief Groups in first-appearance order: encoded keys, a key -> id index, the states.
   struct GroupTable {
-    std::vector<Group> groups;
-    std::unordered_map<std::vector<columnar::Value>, std::size_t, KeyHash> index;
+    std::vector<std::string> keys;
+    std::unordered_map<std::string, std::uint32_t> index;
+    std::vector<States> states;  ///< one per aggregate
+
+    /// @brief The id of @p key, adding a group with zeroed states if it is new.
+    std::uint32_t FindOrInsert(const std::string& key);
   };
+
+  [[nodiscard]] static std::unique_ptr<ExtremesBase> MakeExtremes(AggregateKind kind,
+                                                                  columnar::DataType type);
+
+  /// @brief Folds @p local into the shared table; the caller holds the mutex.
+  [[nodiscard]] Status MergeLocked(GroupTable& local);
 
   [[nodiscard]] Result<columnar::RecordBatch> BuildOutput() const;
 

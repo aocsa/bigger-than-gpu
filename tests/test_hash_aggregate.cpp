@@ -361,6 +361,29 @@ TEST(HashAggregateTest, DecimalSumOverflowIsOutOfRange) {
   EXPECT_EQ(status.error().code(), ErrorCode::OutOfRange);
 }
 
+TEST(HashAggregateTest, StringKeysDoNotRunTogether) {
+  std::vector<AggregateSpec> aggs;
+  aggs.push_back(Agg(AggregateKind::kCountStar, nullptr, "n"));
+  HashAggregateOperator op{0, {"a", "b"}, std::move(aggs)};
+  ASSERT_OK_AND_ASSIGN(auto out, Drive(op, {MakeBatch({{"a", Strings({"ab", "a"})},
+                                                       {"b", Strings({"c", "bc"})}})}));
+  ASSERT_TRUE(out.has_value());
+  EXPECT_EQ(out->ToCSV(), "ab,c,1\na,bc,1\n");
+}
+
+TEST(HashAggregateTest, FloatKeysGroupMinusZeroAndNaN) {
+  constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
+  std::vector<AggregateSpec> aggs;
+  aggs.push_back(Agg(AggregateKind::kCountStar, nullptr, "n"));
+  HashAggregateOperator op{0, {"g"}, std::move(aggs)};
+  ASSERT_OK_AND_ASSIGN(auto out,
+                       Drive(op, {MakeBatch({{"g", Doubles({0.0, -0.0, kNaN, -kNaN})}})}));
+  ASSERT_TRUE(out.has_value());
+  ASSERT_EQ(out->num_rows(), 2U);
+  EXPECT_EQ(out->column(1).GetValue(0), columnar::Value{std::int64_t{2}});
+  EXPECT_EQ(out->column(1).GetValue(1), columnar::Value{std::int64_t{2}});
+}
+
 TEST(HashAggregateTest, StringMinMaxCompareBytewise) {
   std::vector<AggregateSpec> aggs;
   aggs.push_back(Agg(AggregateKind::kMin, Col(0), "mn"));

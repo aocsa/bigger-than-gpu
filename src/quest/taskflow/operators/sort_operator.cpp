@@ -7,9 +7,9 @@
 #include <cmath>
 #include <cstddef>
 #include <format>
+#include <functional>
 #include <numeric>
 #include <utility>
-#include <variant>
 
 #include "quest/columnar/record_batch.hpp"
 #include "quest/execution/kernels/batch_kernels.hpp"
@@ -18,14 +18,32 @@ namespace quest::taskflow {
 
 namespace {
 
-[[nodiscard]] bool IsNaN(const columnar::Value& value) {
-  if (const auto* d = std::get_if<double>(&value)) {
-    return std::isnan(*d);
-  }
-  if (const auto* f = std::get_if<float>(&value)) {
-    return std::isnan(*f);
-  }
-  return false;
+/// @brief Orders two rows by one key: below, equal to or above zero.
+using RowOrder = std::function<int(std::size_t, std::size_t)>;
+
+/// @brief The order of @p column's rows: NULLS LAST in both directions, and NaN above every
+/// other number (NaN compares false with everything, which would break the strict weak
+/// ordering stable_sort requires; DuckDB orders NaN this way).
+[[nodiscard]] RowOrder MakeRowOrder(const columnar::ColumnVector& column, bool ascending) {
+  return columnar::VisitType(column.GetType(), [&]<typename Tag>(Tag) -> RowOrder {
+    using T = typename Tag::CType;
+    return [view = column.View<T>(), ascending](std::size_t a, std::size_t b) {
+      const bool a_null = view.IsNull(a);
+      const bool b_null = view.IsNull(b);
+      if (a_null || b_null) {
+        return a_null == b_null ? 0 : (a_null ? 1 : -1);
+      }
+      const T x = view[a];
+      const T y = view[b];
+      int order = x < y ? -1 : (y < x ? 1 : 0);
+      if constexpr (std::is_floating_point_v<T>) {
+        if (std::isnan(x) || std::isnan(y)) {
+          order = std::isnan(x) == std::isnan(y) ? 0 : (std::isnan(x) ? 1 : -1);
+        }
+      }
+      return ascending ? order : -order;
+    };
+  });
 }
 
 }  // namespace
@@ -78,48 +96,23 @@ Status SortOperator::FinalizeSink() {
   }
   const std::size_t num_rows = merged->num_rows();
 
-  std::vector<std::vector<columnar::Value>> key_values;
+  std::vector<RowOrder> orders;
+  orders.reserve(keys_.size());
   for (const auto& key : keys_) {
     auto index = merged->schema().GetFieldIndex(key.column);
     if (!index) {
       return Error::SchemaError(std::format("SortOperator: column '{}' not found", key.column));
     }
-    const auto& column = merged->column(*index);
-    auto& values = key_values.emplace_back();
-    values.reserve(num_rows);
-    for (std::size_t row = 0; row < num_rows; ++row) {
-      values.push_back(column.GetValue(row));
-    }
+    orders.push_back(MakeRowOrder(merged->column(*index), key.ascending));
   }
 
   std::vector<std::size_t> order(num_rows);
   std::iota(order.begin(), order.end(), std::size_t{0});
   std::ranges::stable_sort(order, [&](std::size_t a, std::size_t b) {
-    for (std::size_t k = 0; k < keys_.size(); ++k) {
-      const auto& x = key_values[k][a];
-      const auto& y = key_values[k][b];
-      const bool x_null = std::holds_alternative<std::monostate>(x);
-      const bool y_null = std::holds_alternative<std::monostate>(y);
-      if (x_null || y_null) {
-        if (x_null && y_null) {
-          continue;
-        }
-        return y_null;  // NULLS LAST in both directions
+    for (const auto& by_key : orders) {
+      if (const int c = by_key(a, b); c != 0) {
+        return c < 0;
       }
-      // NaN compares false with everything, which would break the strict weak ordering
-      // stable_sort requires; DuckDB orders NaN above every other number.
-      const bool x_nan = IsNaN(x);
-      const bool y_nan = IsNaN(y);
-      if (x_nan || y_nan) {
-        if (x_nan && y_nan) {
-          continue;
-        }
-        return keys_[k].ascending ? y_nan : x_nan;
-      }
-      if (x == y) {
-        continue;
-      }
-      return keys_[k].ascending ? x < y : y < x;
     }
     return false;
   });
