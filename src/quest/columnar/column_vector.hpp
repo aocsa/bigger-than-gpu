@@ -401,6 +401,15 @@ class Scalar {
   explicit Scalar(const std::string& value) : Scalar(std::string_view(value)) {}
   explicit Scalar(Date32 value) : Scalar(DataType::kDate32, value) {}
   explicit Scalar(Timestamp value) : Scalar(DataType::kTimestamp, value) {}
+  /// @brief Any other integer type as Int64 and any other float as Double, as `Lit(5u)` and
+  /// `Lit(5L)` expect. A 64-bit unsigned value does not fit and stays a compile error.
+  template <typename T>
+    requires((std::is_integral_v<T> && !std::same_as<T, bool> &&
+              !(std::is_unsigned_v<T> && sizeof(T) == 8)) ||
+             std::is_floating_point_v<T>)
+  explicit Scalar(T value)
+      : Scalar(std::is_integral_v<T> ? DataType::kInt64 : DataType::kDouble,
+               std::conditional_t<std::is_integral_v<T>, std::int64_t, double>(value)) {}
 
   /// @brief `unscaled / 10^scale`, typed as DuckDB types the literal: 0.05 is Decimal(3, 2).
   [[nodiscard]] static Scalar Decimal(std::int64_t unscaled, std::uint8_t scale) {
@@ -408,7 +417,8 @@ class Scalar {
     for (auto rest = unscaled; rest >= 10 || rest <= -10; rest /= 10) {
       ++digits;
     }
-    const auto precision = static_cast<std::uint8_t>(std::max<int>(digits, scale + 1));
+    const auto precision = static_cast<std::uint8_t>(
+        std::min<int>(DataType::kMaxDecimalPrecision, std::max<int>(digits, scale + 1)));
     return Scalar(DataType::Decimal(precision, scale), Decimal64{unscaled});
   }
 

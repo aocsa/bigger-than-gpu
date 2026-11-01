@@ -372,13 +372,13 @@ template <typename T>
   });
 }
 
-/// @brief Each row of a numeric @p col as double (a Decimal divided by 10^scale); 0 for a null
-/// row or a non-numeric column.
+/// @brief Each row of a numeric or Bool @p col as double (a Decimal divided by 10^scale); 0 for
+/// a null row or another column type.
 [[nodiscard]] std::vector<double> AsDoubles(const ColumnVector& col) {
   std::vector<double> values(col.size(), 0.0);
   columnar::VisitType(col.GetType(), [&]<typename Tag>(Tag) {
     using T = typename Tag::CType;
-    if constexpr (kIsNumber<T>) {
+    if constexpr (kIsNumber<T> || std::same_as<T, bool>) {  // a Bool counts as 0 or 1
       const auto view = col.View<T>();
       for (size_t i = 0; i < values.size(); ++i) {
         if (!view.IsNull(i)) {

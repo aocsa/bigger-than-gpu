@@ -243,6 +243,15 @@ TEST_F(QueryIntegrationTest, AggregateSum) {
   EXPECT_NEAR(result->Get<double>(0), 365000.0, 0.001);
 }
 
+TEST(AggregateExpressionTest, SumOfBoolCountsTrueValues) {
+  RecordBatch batch(Schema({Field("b", DataType::kBool, Repetition::kOptional)}),
+                    {quest::testing::MakeColumn<bool>(DataType::kBool,
+                                                      {true, false, true, std::nullopt})});
+  SumExpression expr(std::make_unique<ColumnExpression>(0));
+  ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
+  EXPECT_EQ(result->Get<double>(0), 2.0);
+}
+
 TEST_F(QueryIntegrationTest, AggregateAvg) {
   auto input = std::make_unique<ColumnExpression>(2);  // salary
   AvgExpression expr(std::move(input));

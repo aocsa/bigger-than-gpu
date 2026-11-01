@@ -283,3 +283,22 @@ TEST(ConcatenateTest, StringsAcrossBatchesKeepOffsets) {
   EXPECT_EQ(view[2], "");
   EXPECT_EQ(view[3], "cde");
 }
+
+TEST(ScalarTest, TypesLiteralsAsDuckDbDoes) {
+  EXPECT_EQ(Scalar(5).type(), DataType::kInt32);
+  EXPECT_EQ(Scalar(5u).type(), DataType::kInt64);  // other integer types widen to Int64
+  EXPECT_EQ(Scalar(5L).Get<int64_t>(), 5);
+  EXPECT_EQ(Scalar(1.5L).type(), DataType::kDouble);
+  EXPECT_EQ(Scalar("x").type(), DataType::kString);  // not the bool overload
+  EXPECT_EQ(Scalar().type(), DataType::kString);     // the NULL literal
+  EXPECT_TRUE(Scalar().is_null());
+
+  EXPECT_EQ(Scalar::Decimal(5, 2).type(), DataType::Decimal(3, 2));
+  EXPECT_EQ(Scalar::Decimal(0, 2).type(), DataType::Decimal(3, 2));
+  EXPECT_EQ(Scalar::Decimal(-5, 2).type(), DataType::Decimal(3, 2));
+  EXPECT_EQ(Scalar::Decimal(123456, 2).type(), DataType::Decimal(6, 2));
+  EXPECT_EQ(Scalar::Decimal(5, 18).type(), DataType::Decimal(18, 18));  // at most 18 digits
+  EXPECT_EQ(Scalar::Decimal(-5, 2).ToSql(), "-0.05");
+  EXPECT_EQ(Scalar("x").ToSql(), "\"x\"");
+  EXPECT_EQ(Scalar(Date32{0}).ToSql(), "DATE '1970-01-01'");
+}
