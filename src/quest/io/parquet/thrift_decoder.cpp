@@ -92,6 +92,9 @@ Result<uint32_t> ThriftDecoder::ReadUvarint32() noexcept {
     }
 
     shift += 7;
+    if (shift > 28) {
+      return Error::ThriftDecodeError("Uvarint32 too long (exceeds 5 bytes)");
+    }
   }
 
   return result;

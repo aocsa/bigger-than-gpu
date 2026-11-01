@@ -323,6 +323,15 @@ TEST(ParquetCorruptFileTest, ListSizeBeyondBufferIsAnError) {
   EXPECT_FALSE(decoder.ReadListHeader().has_value());
 }
 
+TEST(ParquetCorruptFileTest, UnsignedVarintLongerThanFiveBytesIsAnError) {
+  // Six continuation bytes: a uint32 varint has 5 bytes at most.
+  const std::vector<uint8_t> buf{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01};
+  ThriftDecoder decoder(buf);
+  auto value = decoder.ReadUvarint32();
+  ASSERT_FALSE(value.has_value());
+  EXPECT_EQ(value.error().code(), ErrorCode::ThriftDecodeError);
+}
+
 TEST(ParquetCorruptFileTest, FileReadPastEndIsAnError) {
   const auto path = std::filesystem::path(__FILE__).parent_path().parent_path() / "testdata" /
                     "simple_test.parquet";
