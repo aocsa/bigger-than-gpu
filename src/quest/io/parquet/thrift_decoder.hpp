@@ -129,6 +129,10 @@ class ThriftDecoder {
   [[nodiscard]] Status SkipStruct() noexcept;
 
  private:
+  /// @brief Skips one list, set or map element of type @p type.
+  /// @note Unlike a bool field, whose value is its header's type, a bool element is one byte.
+  [[nodiscard]] Status SkipElement(ThriftType type) noexcept;
+
   /// @brief Reads a length-prefixed run of bytes.
   /// @param too_long The error message when the run passes the end of the data.
   /// @return A view of the bytes in the decoder's buffer, or `ThriftDecodeError`.

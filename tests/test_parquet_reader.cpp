@@ -385,13 +385,48 @@ TEST(ParquetCorruptFileTest, ListSizeBeyondBufferIsAnError) {
 }
 
 TEST(ParquetCorruptFileTest, MapSizeBeyondBufferIsAnError) {
-  // Map size varint 0xFFFFFFFF, key and value types bool; no entries follow. Bool entries read
-  // no bytes, so the skip loop used to run 2^32 times and succeed.
+  // Map size varint 0xFFFFFFFF, key and value types bool; no entries follow.
   const std::vector<uint8_t> buf{0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x11};
   ThriftDecoder decoder(buf);
   auto skipped = decoder.SkipField(ThriftType::kMap);
   ASSERT_FALSE(skipped.has_value());
   EXPECT_EQ(skipped.error().code(), ErrorCode::ThriftDecodeError);
+}
+
+// Skips every field of @p buf's struct but field 2, an i32, and returns it.
+static Result<int32_t> ReadFieldTwoSkippingOthers(const std::vector<uint8_t>& buf) {
+  ThriftDecoder decoder(buf);
+  int32_t field_two = 0;
+  auto status = ReadStruct(decoder, [&](int16_t field_id, ThriftType type) -> Status {
+    if (field_id == 2) {
+      return Read(decoder, field_two);
+    }
+    return decoder.SkipField(type);
+  });
+  return status.transform([&] { return field_two; });
+}
+
+TEST(ThriftSkipTest, BoolListElementsTakeOneByteEach) {
+  const std::vector<uint8_t> buf{
+      0x19,              // field 1: list
+      0x31,              // 3 elements of type bool
+      0x01, 0x02, 0x01,  // true, false, true
+      0x15, 0x54,        // field 2: i32 42
+      0x00};             // stop
+  ASSERT_OK_AND_ASSIGN(auto value, ReadFieldTwoSkippingOthers(buf));
+  EXPECT_EQ(value, 42);
+}
+
+TEST(ThriftSkipTest, BoolMapEntriesTakeOneByteEach) {
+  const std::vector<uint8_t> buf{
+      0x1B,        // field 1: map
+      0x02, 0x11,  // 2 entries, key and value types bool
+      0x01, 0x02,  // true -> false
+      0x02, 0x01,  // false -> true
+      0x15, 0x54,  // field 2: i32 42
+      0x00};       // stop
+  ASSERT_OK_AND_ASSIGN(auto value, ReadFieldTwoSkippingOthers(buf));
+  EXPECT_EQ(value, 42);
 }
 
 TEST(ParquetCorruptFileTest, UnsignedVarintLongerThanFiveBytesIsAnError) {

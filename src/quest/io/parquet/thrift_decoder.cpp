@@ -183,7 +183,7 @@ Status ThriftDecoder::SkipField(ThriftType type) noexcept {
         return std::unexpected(std::move(header).error());
       }
       for (uint32_t i = 0; i < header->size; ++i) {
-        if (auto status = SkipField(header->element_type); !status) {
+        if (auto status = SkipElement(header->element_type); !status) {
           return status;
         }
       }
@@ -201,15 +201,14 @@ Status ThriftDecoder::SkipField(ThriftType type) noexcept {
       if (!types) {
         return std::unexpected(std::move(types).error());
       }
-      // As for lists: a larger count is corrupt, and bool entries read no bytes, so nothing
-      // else would stop the loop below.
+      // As for lists: every entry takes at least one byte, so a larger count is corrupt.
       if (*size > remaining()) {
         return Error::ThriftDecodeError("Map size exceeds remaining buffer");
       }
       const auto key_type = static_cast<ThriftType>((*types >> 4) & 0x0F);
       const auto value_type = static_cast<ThriftType>(*types & 0x0F);
       for (uint32_t i = 0; i < *size; ++i) {
-        auto status = SkipField(key_type).and_then([&] { return SkipField(value_type); });
+        auto status = SkipElement(key_type).and_then([&] { return SkipElement(value_type); });
         if (!status) {
           return status;
         }
@@ -221,6 +220,13 @@ Status ThriftDecoder::SkipField(ThriftType type) noexcept {
     default:
       return Error::ThriftDecodeError("Unknown Thrift type to skip");
   }
+}
+
+Status ThriftDecoder::SkipElement(ThriftType type) noexcept {
+  if (type == ThriftType::kBoolTrue || type == ThriftType::kBoolFalse) {
+    return Skip(1);
+  }
+  return SkipField(type);
 }
 
 Status ThriftDecoder::SkipStruct() noexcept {
