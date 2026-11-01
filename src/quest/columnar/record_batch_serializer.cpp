@@ -101,6 +101,9 @@ Result<RecordBatch> RecordBatchSerializer::Deserialize(const std::vector<uint8_t
   for (uint32_t i = 0; i < *num_columns; ++i) {
     auto name_len = ReadValue<uint32_t>(buffer, offset);
     if (!name_len) return std::unexpected(name_len.error());
+    if (*name_len > buffer.size() - offset) {
+      return Error::Invalid("Buffer overflow during deserialization");
+    }
     std::string name(buffer.begin() + offset, buffer.begin() + offset + *name_len);
     offset += *name_len;
 

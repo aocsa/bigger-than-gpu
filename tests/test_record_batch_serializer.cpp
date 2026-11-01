@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <memory>
@@ -177,6 +178,18 @@ TEST(RecordBatchSerializerTest, TruncatedOrCorruptBuffersAreInvalid) {
   std::vector<uint8_t> bad_offsets = data;
   bad_offsets[bad_offsets.size() - 8] ^= 0x40;
   EXPECT_FALSE(RecordBatchSerializer::Deserialize(bad_offsets).has_value());
+}
+
+TEST(RecordBatchSerializerTest, CorruptFieldNameLengthIsInvalid) {
+  Schema schema({Field("id", DataType::kInt32)});
+  RecordBatch original(schema, {MakeColumn<int32_t>(DataType::kInt32, {1, 2, 3})});
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+
+  // Bytes 20..23 hold the name length of field 0: after magic, version, num_rows, num_columns.
+  std::fill(data.begin() + 20, data.begin() + 24, uint8_t{0xFF});
+  auto batch = RecordBatchSerializer::Deserialize(data);
+  ASSERT_FALSE(batch.has_value());
+  EXPECT_EQ(batch.error().code(), quest::ErrorCode::Invalid);
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeStringWithNulls) {
