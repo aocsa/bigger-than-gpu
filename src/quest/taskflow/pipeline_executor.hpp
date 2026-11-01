@@ -80,15 +80,12 @@ class PipelineExecutor {
 
   /// @brief Drains one pipeline start to finish.
   ///
-  /// If the pipeline's source is a blocking operator not yet in source
-  /// mode (`IsSink() && !IsSource()`) AND this pipeline actually has a
-  /// `FullBarrierProducers()` entry (the Sirius "sink of one pipeline,
-  /// source of the next" invariant — gated on producers existing, not
-  /// just on `IsSink()`, so an operator reporting `IsSink()==true` for
-  /// unrelated reasons on a Pipeline-barrier-only pipeline is untouched),
-  /// flips it via `FinalizeSink()` first; by the time this runs, every
-  /// `FullBarrierProducers()` entry has already finished sinking into it.
-  /// Then loops claim-and-`RunTask` until the source is exhausted.
+  /// Loops claim-and-`RunTask` until the source is exhausted, then, if the
+  /// sink accumulates (`Pipeline::SinkAccumulates()`), calls its
+  /// `FinalizeSink()` exactly once; an error from it fails the pipeline.
+  /// This happens before the pipeline is marked finished, so every
+  /// Full-barrier dependent (a blocking operator's source phase, a hash
+  /// join's probe pipeline) starts on finalized state.
   ///
   /// On every exit path (success or error), marks the pipeline finished
   /// and finishes its sink's output holder(s) — otherwise a
@@ -106,7 +103,7 @@ class PipelineExecutor {
   ///
   /// Three claim paths, in order:
   /// 1. `source_op.IsSource()` — claims via `GetNextBatch()` (a real data
-  ///    source, or a blocking operator already flipped by `FinalizeSink()`).
+  ///    source, or a blocking operator its producer pipeline finalized).
   /// 2. `ordered_inputs` non-empty — drains a fixed ordered list of holders
   ///    sequentially (one to EOS, then the next); `input_cursor` carries the
   ///    position across claims. This covers FOR_EACH partitioned lanes

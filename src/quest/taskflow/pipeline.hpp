@@ -86,6 +86,21 @@ class Pipeline {
     return operators_.empty() ? nullptr : operators_.back();
   }
 
+  /// @brief Marks the sink as streaming its batches into its output holder even
+  ///        though it reports `IsSink()`.
+  ///
+  /// Set when the pipeline reaches its sink through a kFused port (a hash
+  /// join's probe side ending at a barrier edge): that operator accumulates
+  /// only in the pipeline that ends at its kSink port.
+  void MarkStreamingSink() noexcept { streaming_sink_ = true; }
+
+  /// @brief Whether the final batch goes to the sink's `Sink()` (and the sink
+  ///        is finalized when this pipeline finishes) rather than through its
+  ///        `ProcessBatch()` into its output holder.
+  [[nodiscard]] bool SinkAccumulates() const noexcept {
+    return !streaming_sink_ && sink() != nullptr && sink()->IsSink();
+  }
+
   // ===========================================================================
   // Cross-pipeline dependencies
   // ===========================================================================
@@ -194,8 +209,8 @@ class Pipeline {
  private:
   /// @brief Hands the final batch of a push loop to the sink role.
   ///
-  /// If `sink()` is a blocking operator (`IsSink()`), it accumulates state
-  /// via `Sink()`. Otherwise `sink()` is a streaming operator that ends
+  /// If `SinkAccumulates()`, the sink accumulates state via `Sink()`.
+  /// Otherwise `sink()` is a streaming operator that ends
   /// this pipeline only because of an edge barrier: it runs its own
   /// `ProcessBatch`, then the result is published — round-robin across
   /// `output_0…N-1` lanes when the edge is partitioned (FOR_EACH), else to
@@ -204,6 +219,7 @@ class Pipeline {
 
   std::size_t pipeline_id_;
   std::vector<Operator*> operators_;
+  bool streaming_sink_{false};
 
   /// Round-robin cursor for FOR_EACH lane publication.
   std::atomic<std::size_t> publish_lane_{0};

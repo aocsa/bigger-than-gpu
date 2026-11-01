@@ -21,6 +21,9 @@ namespace quest::taskflow {
 /// fuse into the current pipeline; a blocking operator becomes the source
 /// of the current pipeline AND the sink of a child pipeline, built first
 /// (build side before probe side, matching Sirius's recursion order).
+/// Operators with port roles (`Operator::InputPortRole`, e.g. a hash join)
+/// are split per port instead: each kSink port ends a child pipeline at the
+/// operator, and the current pipeline fuses through the kFused port.
 class MetaPipeline {
  public:
   MetaPipeline() = delete;
@@ -39,8 +42,10 @@ class MetaPipeline {
   ///        discovered automatically from graph structure.
   /// @return The pipelines in dependency order, or an error if the graph
   ///         is malformed (an edge referencing an unregistered operator,
-  ///         a cycle, or a blocking operator feeding a multi-input
-  ///         consumer — unsupported until relay pipelines exist).
+  ///         a cycle, a blocking operator feeding a multi-input
+  ///         consumer — unsupported until relay pipelines exist — or a
+  ///         port-role operator with more than one kFused port, no
+  ///         streaming producer on it, or no downstream consumer).
   [[nodiscard]] static Result<std::vector<PipelinePtr>> Build(const Graph& graph);
 };
 

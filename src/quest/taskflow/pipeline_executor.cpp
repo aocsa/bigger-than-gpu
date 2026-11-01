@@ -166,37 +166,21 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
   // Pipeline-barrier consumer already blocked in ClaimNextBatch's
   // holder->Pull() would hang forever once this pipeline stops producing
   // -- Pull() only wakes on new data or Finish(), and nothing else ever
-  // signals it.
+  // signals it. An accumulating sink's output is not this pipeline's to
+  // finish: it publishes nothing there, and a hash join's probe pipeline
+  // still streams into it.
   struct FinishOnExit {
     Pipeline& pipeline;
     ~FinishOnExit() {
-      if (Operator* sink_op = pipeline.sink(); sink_op != nullptr) {
+      if (Operator* sink_op = pipeline.sink(); sink_op != nullptr && !pipeline.SinkAccumulates()) {
         sink_op->output().Finish();
       }
       pipeline.MarkFinished();
     }
   } finish_on_exit{pipeline};
 
-  if (source_op->IsSink() && !source_op->IsSource() &&
-      !pipeline.FullBarrierProducers().empty()) {
-    // Sirius invariant: this operator is the sink of its own (already-
-    // finished, by the runnable check) Full-barrier producer pipeline and
-    // the source of this one. Flip it into source mode exactly once.
-    // Gated on FullBarrierProducers() (not just IsSink()) so an operator
-    // that merely reports IsSink()==true for unrelated reasons -- e.g. a
-    // Pipeline-barrier-only pipeline whose source has no producer at all
-    // -- never gets an unsolicited FinalizeSink() call. (A holder-fed
-    // Full-barrier consumer whose first operator is not a blocking op
-    // also lands here and receives a no-op FinalizeSink(); harmless by
-    // contract -- the default implementation returns OK.)
-    auto finalize_status = source_op->FinalizeSink();
-    if (!finalize_status.has_value()) {
-      return finalize_status;
-    }
-  }
-
-  // A role-based source (IsSource(), including a blocking operator just
-  // flipped above) produced the claimed batch itself, so RunTask must
+  // A role-based source (IsSource(), including a blocking operator its
+  // producer pipeline finalized) produced the claimed batch itself, so RunTask must
   // skip it (start_index 1). A holder-fed source did NOT see the batch --
   // it arrived from the cross-pipeline holder -- so its own ProcessBatch
   // is the first stop (start_index 0). Skipping it would silently drop
@@ -267,6 +251,13 @@ Status PipelineExecutor::DrainPipeline(Pipeline& pipeline) {
     }
   }
 
+  // Every task of this pipeline has run (this worker drained them all), and
+  // FinishOnExit marks it finished only after this returns, so dependents
+  // that consume the sink's accumulated state are scheduled after it is
+  // finalized.
+  if (pipeline.SinkAccumulates()) {
+    return pipeline.sink()->FinalizeSink();
+  }
   return {};
 }
 

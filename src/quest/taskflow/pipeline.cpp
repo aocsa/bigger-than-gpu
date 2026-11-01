@@ -102,9 +102,9 @@ Status Pipeline::PublishOutput(cache::DataBlockPtr batch) {
     return Error::Invalid("Pipeline::PublishOutput: pipeline has no sink");
   }
 
-  if (sink_op->IsSink()) {
-    // Blocking operator: accumulate state. FinalizeSink() (called once the
-    // producer pipeline is drained) flips it into source mode.
+  if (SinkAccumulates()) {
+    // Blocking operator: accumulate state. FinalizeSink() (called once this
+    // pipeline is drained) flips it into source mode.
     return sink_op->Sink(std::move(batch));
   }
 

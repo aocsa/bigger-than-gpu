@@ -25,6 +25,13 @@ class Graph;
 /// @brief Pair type for referencing a specific named port on an operator.
 using OperatorPortPair = std::pair<class Operator*, std::string>;
 
+/// @brief How MetaPipeline::Build treats a producer wired into a named input port.
+enum class PortRole : std::uint8_t {
+  kHolder,  ///< A child pipeline publishes into this port's holder (Union).
+  kSink,    ///< A child pipeline ends at this operator and feeds it via Sink().
+  kFused,   ///< The current pipeline continues upstream; batches reach ProcessBatch().
+};
+
 // =============================================================================
 // Operator Base Class
 // =============================================================================
@@ -58,6 +65,15 @@ class Operator {
   /// Empty means undeclared (any name allowed — legacy behavior).
   /// GraphBuilder::Build() validates edge target port names against this list.
   [[nodiscard]] virtual std::vector<std::string_view> DeclaredInputPorts() const { return {}; }
+
+  /// @brief Pipeline role of the producer wired into `port`.
+  ///
+  /// An operator may have at most one kFused port; one with a kFused port
+  /// must also have a downstream consumer, since it streams rather than
+  /// accumulates on that port.
+  [[nodiscard]] virtual PortRole InputPortRole(std::string_view /*port*/) const {
+    return PortRole::kHolder;
+  }
 
   /// @brief Required EdgeConfig for the given input port (config resolution layer 4).
   ///
@@ -119,7 +135,8 @@ class Operator {
   /// Default returns an error — only sinks may be fed final batches.
   [[nodiscard]] virtual Status Sink(cache::DataBlockPtr batch);
 
-  /// @brief Called exactly once when the producer pipeline completes.
+  /// @brief Called exactly once, by the pipeline this operator is the sink of,
+  ///        after that pipeline's last task and before its dependents start.
   ///
   /// Flips a blocking operator from sink to source mode (e.g. hash table
   /// built → start emitting). Default is a no-op.

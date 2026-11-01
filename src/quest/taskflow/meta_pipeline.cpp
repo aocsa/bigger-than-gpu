@@ -5,10 +5,12 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <set>
-#include <unordered_map>
+#include <string>
+#include <string_view>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -16,6 +18,12 @@
 namespace quest::taskflow {
 
 namespace {
+
+[[nodiscard]] bool HasFusedPort(const Operator& op) {
+  return std::ranges::any_of(op.DeclaredInputPorts(), [&op](std::string_view port) {
+    return op.InputPortRole(port) == PortRole::kFused;
+  });
+}
 
 /// @brief Walk state for one MetaPipeline::Build() call.
 ///
@@ -38,15 +46,22 @@ class MetaPipelineBuilder {
  private:
   /// @brief Returns (or builds and memoizes) the pipeline whose sink is `sink_operator_id`.
   ///
+  /// A non-empty `sink_port` names a kSink port: the pipeline ends at that
+  /// port and walks only its producers. Memoized per (operator, port), since a
+  /// hash join is both the sink of its build pipeline and a fused operator of
+  /// its probe pipeline.
+  ///
   /// `in_progress_` catches cross-pipeline-boundary cycles; a per-walk visited
   /// set catches streaming cycles inside one fuse walk. Both return Invalid
   /// rather than hanging or overflowing the stack.
-  [[nodiscard]] Result<Pipeline*> BuildFrom(std::uint32_t sink_operator_id) {
-    auto memo_it = memo_.find(sink_operator_id);
+  [[nodiscard]] Result<Pipeline*> BuildFrom(std::uint32_t sink_operator_id,
+                                            const std::string& sink_port = {}) {
+    const SinkKey key{sink_operator_id, sink_port};
+    auto memo_it = memo_.find(key);
     if (memo_it != memo_.end()) {
       return memo_it->second;
     }
-    if (in_progress_.contains(sink_operator_id)) {
+    if (in_progress_.contains(key)) {
       return Err(ErrorCode::Invalid,
                  "MetaPipeline::Build: cycle detected in operator graph");
     }
@@ -56,16 +71,40 @@ class MetaPipelineBuilder {
       return Err(ErrorCode::Invalid, "MetaPipeline::Build: unknown operator id");
     }
 
-    in_progress_.insert(sink_operator_id);
+    in_progress_.insert(key);
 
     auto owned_pipeline = std::make_unique<Pipeline>(next_pipeline_id_++);
     Pipeline* pipeline = owned_pipeline.get();
     pipeline->PrependOperator(sink_op);
 
+    if (sink_port.empty() && HasFusedPort(*sink_op)) {
+      // Reached through its fused port, so it streams (ProcessBatch) into a
+      // downstream barrier holder instead of accumulating.
+      if (graph_.GetOutgoingEdges(sink_op).empty()) {
+        return Err(ErrorCode::Invalid,
+                   "MetaPipeline::Build: an operator with a fused input port needs a "
+                   "downstream consumer");
+      }
+      pipeline->MarkStreamingSink();
+    }
+
     std::unordered_set<std::uint32_t> walk_visited{sink_operator_id};
     Operator* cur = sink_op;
     while (true) {
       auto incoming = graph_.GetIncomingEdges(cur);
+      if (cur == sink_op && !sink_port.empty()) {
+        std::erase_if(incoming, [&sink_port](const Edge& edge) {
+          return edge.target_port_name != sink_port;
+        });
+      } else if (std::ranges::any_of(incoming, [cur](const Edge& edge) {
+                   return cur->InputPortRole(edge.target_port_name) != PortRole::kHolder;
+                 })) {
+        auto fused = WalkPortRoleProducers(*cur, incoming, *pipeline);
+        if (!fused.has_value()) {
+          return std::unexpected(fused.error());
+        }
+        incoming = std::move(fused.value());
+      }
       if (incoming.empty()) {
         break;  // cur has no producer: it is a true source.
       }
@@ -96,10 +135,56 @@ class MetaPipelineBuilder {
       break;
     }
 
-    in_progress_.erase(sink_operator_id);
+    if (HasFusedPort(*pipeline->source())) {
+      // Nothing streams into it, so it would have to claim from its input
+      // holders, which no pipeline fills: a missing probe producer, or a
+      // barrier edge on its fused or sink port.
+      return Err(ErrorCode::Invalid,
+                 "MetaPipeline::Build: an operator with a fused input port cannot be a "
+                 "pipeline source; wire a streaming producer into its fused port and "
+                 "its sink ports");
+    }
+
+    in_progress_.erase(key);
     pipelines_.push_back(std::move(owned_pipeline));
-    memo_[sink_operator_id] = pipeline;
+    memo_[key] = pipeline;
     return pipeline;
+  }
+
+  /// @brief Port-role case: builds one child pipeline per kSink port (a Full
+  ///        producer of `pipeline`) and returns the edge on the kFused port,
+  ///        through which `pipeline` keeps walking upstream (empty if none).
+  [[nodiscard]] Result<std::set<Edge>> WalkPortRoleProducers(const Operator& op,
+                                                             const std::set<Edge>& incoming,
+                                                             Pipeline& pipeline) {
+    std::vector<Edge> ordered(incoming.begin(), incoming.end());
+    std::ranges::sort(ordered, {}, &Edge::target_port_name);
+
+    std::set<Edge> fused;
+    for (const auto& edge : ordered) {
+      switch (op.InputPortRole(edge.target_port_name)) {
+        case PortRole::kSink: {
+          auto child = BuildFrom(op.id(), edge.target_port_name);
+          if (!child.has_value()) {
+            return std::unexpected(child.error());
+          }
+          pipeline.AddProducer(child.value(), BarrierType::Full);
+          break;
+        }
+        case PortRole::kFused:
+          if (!fused.empty()) {
+            return Err(ErrorCode::Invalid,
+                       "MetaPipeline::Build: an operator may have at most one fused input");
+          }
+          fused.insert(edge);
+          break;
+        case PortRole::kHolder:
+          return Err(ErrorCode::Invalid,
+                     "MetaPipeline::Build: an operator cannot mix holder ports with sink or "
+                     "fused ports");
+      }
+    }
+    return fused;
   }
 
   /// @brief Single-incoming-edge case.
@@ -185,10 +270,12 @@ class MetaPipelineBuilder {
 
   const Graph& graph_;
   std::vector<PipelinePtr> pipelines_;
-  std::unordered_map<std::uint32_t, Pipeline*> memo_;
+  // (sink operator id, sink port); the port is empty unless it is a kSink port.
+  using SinkKey = std::pair<std::uint32_t, std::string>;
+  std::map<SinkKey, Pipeline*> memo_;
   // Sinks whose BuildFrom() is on the current recursion stack; re-entering
   // one means the graph has a cycle crossing pipeline boundaries.
-  std::unordered_set<std::uint32_t> in_progress_;
+  std::set<SinkKey> in_progress_;
   std::size_t next_pipeline_id_{0};
 };
 
