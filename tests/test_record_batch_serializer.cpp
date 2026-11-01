@@ -399,6 +399,71 @@ TEST(RecordBatchSerializerTest, TruncatedBuffer) {
   EXPECT_EQ(result.error().code(), quest::ErrorCode::Invalid);
 }
 
+namespace {
+
+template <typename T>
+void Append(std::vector<uint8_t>& out, const T& value) {
+  const auto* bytes = reinterpret_cast<const uint8_t*>(&value);
+  out.insert(out.end(), bytes, bytes + sizeof(T));
+}
+
+/// @brief A spill buffer up to the first column's data: one field named "c".
+std::vector<uint8_t> OneColumnHeader(uint64_t num_rows, DataType type, uint8_t repetition = 0) {
+  std::vector<uint8_t> out{'Q', 'R', 'B', 'T'};
+  Append(out, uint32_t{2});
+  Append(out, num_rows);
+  Append(out, uint32_t{1});
+  Append(out, uint32_t{1});
+  out.push_back('c');
+  Append(out, type);
+  out.push_back(repetition);
+  return out;
+}
+
+void ExpectInvalid(const std::vector<uint8_t>& data) {
+  auto result = RecordBatchSerializer::Deserialize(data);
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error().code(), quest::ErrorCode::Invalid);
+}
+
+}  // namespace
+
+TEST(RecordBatchSerializerTest, RowCountWrappingStringOffsetSizeIsAnError) {
+  // (2^61 - 1 + 1) * 8 wraps to 0, so an empty offsets buffer used to pass the size check.
+  auto data = OneColumnHeader((uint64_t{1} << 61) - 1, DataType::kString);
+  for (int part = 0; part < 4; ++part) {  // null count, then empty validity, chars, offsets
+    Append(data, uint64_t{0});
+  }
+  ExpectInvalid(data);
+}
+
+TEST(RecordBatchSerializerTest, RowCountWrappingValueSizeIsAnError) {
+  // 2^61 * sizeof(int64_t) wraps to 0: an empty values buffer for 2^61 rows.
+  auto data = OneColumnHeader(uint64_t{1} << 61, DataType::kInt64);
+  for (int part = 0; part < 4; ++part) {  // null count, then empty validity, values, offsets
+    Append(data, uint64_t{0});
+  }
+  ExpectInvalid(data);
+}
+
+TEST(RecordBatchSerializerTest, ColumnCountBeyondBufferIsAnError) {
+  std::vector<uint8_t> data{'Q', 'R', 'B', 'T'};
+  Append(data, uint32_t{2});
+  Append(data, uint64_t{0});
+  Append(data, uint32_t{0xFFFFFFFF});
+  ExpectInvalid(data);
+}
+
+TEST(RecordBatchSerializerTest, UnknownRepetitionIsAnError) {
+  auto data = OneColumnHeader(1, DataType::kInt32, /*repetition=*/3);
+  Append(data, uint64_t{0});  // null count
+  Append(data, uint64_t{0});  // validity
+  Append(data, uint64_t{sizeof(int32_t)});
+  Append(data, int32_t{7});
+  Append(data, uint64_t{0});  // offsets
+  ExpectInvalid(data);
+}
+
 // =============================================================================
 // Large Data Tests
 // =============================================================================

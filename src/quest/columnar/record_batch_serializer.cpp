@@ -96,6 +96,15 @@ Result<RecordBatch> RecordBatchSerializer::Deserialize(const std::vector<uint8_t
   if (!num_rows) return std::unexpected(num_rows.error());
   auto num_columns = ReadValue<uint32_t>(buffer, offset);
   if (!num_columns) return std::unexpected(num_columns.error());
+  constexpr size_t kMinFieldBytes = sizeof(uint32_t) + sizeof(DataType) + sizeof(uint8_t);
+  if (*num_columns > (buffer.size() - offset) / kMinFieldBytes) {
+    return Error::Invalid("Spilled column count exceeds the buffer");
+  }
+  // Every column stores at least one byte per row (a Bool). Bounding the row count by the
+  // buffer also keeps the byte counts ReadColumn derives from it from overflowing.
+  if (*num_rows > buffer.size() - offset) {
+    return Error::Invalid("Spilled row count exceeds the buffer");
+  }
 
   std::vector<Field> fields;
   fields.reserve(*num_columns);
@@ -115,6 +124,9 @@ Result<RecordBatch> RecordBatchSerializer::Deserialize(const std::vector<uint8_t
 
     auto rep = ReadValue<uint8_t>(buffer, offset);
     if (!rep) return std::unexpected(rep.error());
+    if (*rep > static_cast<uint8_t>(Repetition::kRepeated)) {
+      return Error::Invalid("Unknown repetition");
+    }
     Repetition repetition = static_cast<Repetition>(*rep);
 
     fields.emplace_back(std::move(name), std::move(*data_type), repetition);
