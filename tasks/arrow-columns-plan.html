@@ -648,10 +648,10 @@ l_tax            INT64  DECIMAL         2
 <span class="g">✓</span> <b>2 Buffers</b>    ColumnVector, ColumnBuilder, ColumnView
 <span class="g">✓</span> <b>3 Decimal</b>    DataType with precision and scale,
                Decimal64 arithmetic, SUM, Parquet
-  <b>4 Kernels</b>    Filter, gather, concatenate, spill, size.
-  <b>5 Expressions</b> Cast, compare, arithmetic, CASE on views.
-  <b>6 Operators</b>  Join, aggregate, sort. No GetValue in src/.
-  <b>7 Scalar</b>     Literals; tests use Get&lt;T&gt;. Value goes.
+<span class="g">✓</span> <b>4 Kernels</b>    Filter, gather, concatenate, spill, size.
+<span class="g">✓</span> <b>5 Expressions</b> Cast, compare, arithmetic, CASE on views.
+<span class="g">✓</span> <b>6 Operators</b>  Join, aggregate, sort. No GetValue in src/.
+<span class="g">✓</span> <b>7 Scalar</b>     Literals; tests use Get&lt;T&gt;. Value goes.
 <span class="g">✓</span> <b>8 TPC-H</b>      6 tables at SF 0.01; 1 test per query.
 
 <span class="dim">each step: build -Werror, ctest, Q12 at SF 1</span></template></doc-mock>
@@ -670,6 +670,7 @@ DuckDB  <b>96 · 82 ms</b>           <span class="dim">(threads = 1)</span>
 <span class="dim">$</span> git checkout testdata/tpch
 
 <span class="dim">after: step 0's Sf1MatchesDuckDb, same report</span></template></doc-mock>
+    <doc-note tone="ok"><strong>Done</strong> After step 7: median 431 ms over 10 runs, half the baseline. Same answer.</doc-note>
     <doc-note tone="ok"><strong>Reader fixed</strong> Threads raced on one <code>ifstream</code>. A Snappy page with equal sizes was not decompressed. Q12 now reads the default SF 1 files: 828 to 898 ms.</doc-note>
   </doc-claim>
 
