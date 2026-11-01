@@ -13,12 +13,14 @@
 #include "quest/columnar/column_vector.hpp"
 #include "quest/columnar/schema.hpp"
 #include "quest/common/result.hpp"
+#include "quest/plan/binary_op.hpp"
 
 namespace quest::plan::logical {
 
 class LogicalPlan;
 
 using columnar::DataType;
+using plan::BinaryOp;
 using columnar::Field;
 using columnar::Value;
 
@@ -145,167 +147,44 @@ class Literal : public LogicalExpr {
 // Binary Expressions
 // =============================================================================
 
+/// @brief Binary expression; comparisons and AND/OR yield bool, arithmetic yields the left
+/// operand's type.
 class BinaryExpr : public LogicalExpr {
  public:
-  BinaryExpr(LogicalExprPtr left, LogicalExprPtr right, std::string op)
-      : left_(std::move(left)), right_(std::move(right)), op_(std::move(op)) {}
-
-  [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
-    return Field{left_->ToString() + " " + op_ + " " + right_->ToString(),
-                 columnar::BoolType{}};
-  }
-
-  [[nodiscard]] std::string ToString() const override {
-    return "(" + left_->ToString() + " " + op_ + " " + right_->ToString() + ")";
-  }
-
-  [[nodiscard]] const LogicalExpr& left() const { return *left_; }
-  [[nodiscard]] const LogicalExpr& right() const { return *right_; }
-  [[nodiscard]] const std::string& op() const { return op_; }
-
- protected:
-  LogicalExprPtr left_;
-  LogicalExprPtr right_;
-  std::string op_;
-};
-
-class BooleanBinaryExpr : public BinaryExpr {
- public:
-  using BinaryExpr::BinaryExpr;
-};
-
-// =============================================================================
-// Comparison Operators
-// =============================================================================
-
-class Eq : public BooleanBinaryExpr {
- public:
-  Eq(LogicalExprPtr left, LogicalExprPtr right)
-      : BooleanBinaryExpr(std::move(left), std::move(right), "==") {}
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Eq>(left_->Clone(), right_->Clone());
-  }
-};
-
-class Neq : public BooleanBinaryExpr {
- public:
-  Neq(LogicalExprPtr left, LogicalExprPtr right)
-      : BooleanBinaryExpr(std::move(left), std::move(right), "!=") {}
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Neq>(left_->Clone(), right_->Clone());
-  }
-};
-
-class Gt : public BooleanBinaryExpr {
- public:
-  Gt(LogicalExprPtr left, LogicalExprPtr right)
-      : BooleanBinaryExpr(std::move(left), std::move(right), ">") {}
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Gt>(left_->Clone(), right_->Clone());
-  }
-};
-
-class GtEq : public BooleanBinaryExpr {
- public:
-  GtEq(LogicalExprPtr left, LogicalExprPtr right)
-      : BooleanBinaryExpr(std::move(left), std::move(right), ">=") {}
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<GtEq>(left_->Clone(), right_->Clone());
-  }
-};
-
-class Lt : public BooleanBinaryExpr {
- public:
-  Lt(LogicalExprPtr left, LogicalExprPtr right)
-      : BooleanBinaryExpr(std::move(left), std::move(right), "<") {}
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Lt>(left_->Clone(), right_->Clone());
-  }
-};
-
-class LtEq : public BooleanBinaryExpr {
- public:
-  LtEq(LogicalExprPtr left, LogicalExprPtr right)
-      : BooleanBinaryExpr(std::move(left), std::move(right), "<=") {}
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<LtEq>(left_->Clone(), right_->Clone());
-  }
-};
-
-// =============================================================================
-// Arithmetic Operators
-// =============================================================================
-
-/// @brief Arithmetic binary expression; result type matches the left operand.
-class ArithmeticBinaryExpr : public BinaryExpr {
- public:
-  using BinaryExpr::BinaryExpr;
+  BinaryExpr(BinaryOp op, LogicalExprPtr left, LogicalExprPtr right)
+      : op_(op), left_(std::move(left)), right_(std::move(right)) {}
 
   [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override {
+    std::string name =
+        left_->ToString() + " " + std::string(plan::ToString(op_)) + " " + right_->ToString();
+    if (!IsArithmetic(op_)) {
+      return Field{std::move(name), columnar::BoolType{}};
+    }
     auto left_field = left_->ToField(input);
     if (!left_field.has_value()) {
       return left_field;
     }
     // Use the left operand's type for the result (could be improved with type promotion)
-    return Field{left_->ToString() + " " + op_ + " " + right_->ToString(),
-                 left_field.value().data_type};
+    return Field{std::move(name), left_field.value().data_type};
   }
-};
 
-class Add : public ArithmeticBinaryExpr {
- public:
-  Add(LogicalExprPtr left, LogicalExprPtr right)
-      : ArithmeticBinaryExpr(std::move(left), std::move(right), "+") {}
+  [[nodiscard]] std::string ToString() const override {
+    return "(" + left_->ToString() + " " + std::string(plan::ToString(op_)) + " " +
+           right_->ToString() + ")";
+  }
 
   [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Add>(left_->Clone(), right_->Clone());
+    return std::make_unique<BinaryExpr>(op_, left_->Clone(), right_->Clone());
   }
-};
 
-class Subtract : public ArithmeticBinaryExpr {
- public:
-  Subtract(LogicalExprPtr left, LogicalExprPtr right)
-      : ArithmeticBinaryExpr(std::move(left), std::move(right), "-") {}
+  [[nodiscard]] BinaryOp op() const noexcept { return op_; }
+  [[nodiscard]] const LogicalExpr& left() const { return *left_; }
+  [[nodiscard]] const LogicalExpr& right() const { return *right_; }
 
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Subtract>(left_->Clone(), right_->Clone());
-  }
-};
-
-class Multiply : public ArithmeticBinaryExpr {
- public:
-  Multiply(LogicalExprPtr left, LogicalExprPtr right)
-      : ArithmeticBinaryExpr(std::move(left), std::move(right), "*") {}
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Multiply>(left_->Clone(), right_->Clone());
-  }
-};
-
-class Divide : public ArithmeticBinaryExpr {
- public:
-  Divide(LogicalExprPtr left, LogicalExprPtr right)
-      : ArithmeticBinaryExpr(std::move(left), std::move(right), "/") {}
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Divide>(left_->Clone(), right_->Clone());
-  }
-};
-
-class Modulo : public ArithmeticBinaryExpr {
- public:
-  Modulo(LogicalExprPtr left, LogicalExprPtr right)
-      : ArithmeticBinaryExpr(std::move(left), std::move(right), "%") {}
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Modulo>(left_->Clone(), right_->Clone());
-  }
+ private:
+  BinaryOp op_;
+  LogicalExprPtr left_;
+  LogicalExprPtr right_;
 };
 
 // =============================================================================
@@ -450,30 +329,6 @@ class Max : public AggregateExpr {
 };
 
 // =============================================================================
-// Logical Operators
-// =============================================================================
-
-class And : public BooleanBinaryExpr {
- public:
-  And(LogicalExprPtr left, LogicalExprPtr right)
-      : BooleanBinaryExpr(std::move(left), std::move(right), "AND") {}
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<And>(left_->Clone(), right_->Clone());
-  }
-};
-
-class Or : public BooleanBinaryExpr {
- public:
-  Or(LogicalExprPtr left, LogicalExprPtr right)
-      : BooleanBinaryExpr(std::move(left), std::move(right), "OR") {}
-
-  [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
-    return std::make_unique<Or>(left_->Clone(), right_->Clone());
-  }
-};
-
-// =============================================================================
 // Factory Functions
 // =============================================================================
 
@@ -491,55 +346,55 @@ LogicalExprPtr lit(T value) {
 }
 
 inline LogicalExprPtr eq(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<Eq>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kEq, std::move(left), std::move(right));
 }
 
 inline LogicalExprPtr neq(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<Neq>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kNeq, std::move(left), std::move(right));
 }
 
 inline LogicalExprPtr gt(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<Gt>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kGt, std::move(left), std::move(right));
 }
 
 inline LogicalExprPtr gte(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<GtEq>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kGtEq, std::move(left), std::move(right));
 }
 
 inline LogicalExprPtr lt(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<Lt>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kLt, std::move(left), std::move(right));
 }
 
 inline LogicalExprPtr lte(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<LtEq>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kLtEq, std::move(left), std::move(right));
 }
 
 inline LogicalExprPtr and_expr(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<And>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kAnd, std::move(left), std::move(right));
 }
 
 inline LogicalExprPtr or_expr(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<Or>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kOr, std::move(left), std::move(right));
 }
 
 inline LogicalExprPtr add(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<Add>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kAdd, std::move(left), std::move(right));
 }
 
 inline LogicalExprPtr subtract(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<Subtract>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kSubtract, std::move(left), std::move(right));
 }
 
 inline LogicalExprPtr multiply(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<Multiply>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kMultiply, std::move(left), std::move(right));
 }
 
 inline LogicalExprPtr divide(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<Divide>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kDivide, std::move(left), std::move(right));
 }
 
 inline LogicalExprPtr modulo(LogicalExprPtr left, LogicalExprPtr right) {
-  return std::make_unique<Modulo>(std::move(left), std::move(right));
+  return std::make_unique<BinaryExpr>(BinaryOp::kModulo, std::move(left), std::move(right));
 }
 
 // =============================================================================

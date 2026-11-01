@@ -234,7 +234,7 @@ TEST_F(QueryIntegrationTest, EvaluateColumnExpression) {
 TEST_F(QueryIntegrationTest, EvaluateComparisonExpression) {
   auto left = std::make_unique<ColumnExpression>(2);   // salary
   auto right = std::make_unique<LiteralExpression>(Value{70000.0});
-  GtExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kGt, std::move(left), std::move(right));
 
   const auto& batch = batches_[0];
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -251,7 +251,7 @@ TEST_F(QueryIntegrationTest, EvaluateComparisonExpression) {
 TEST_F(QueryIntegrationTest, EvaluateArithmeticExpression) {
   auto left = std::make_unique<ColumnExpression>(2);  // salary
   auto right = std::make_unique<LiteralExpression>(Value{1.1});
-  MultiplyExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kMultiply, std::move(left), std::move(right));
 
   const auto& batch = batches_[0];
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -328,10 +328,10 @@ TEST_F(QueryIntegrationTest, ComplexArithmeticChain) {
   auto salary = std::make_unique<ColumnExpression>(2);
   auto bonus = std::make_unique<LiteralExpression>(Value{10000.0});
   auto add_expr =
-      std::make_unique<AddExpression>(std::move(salary), std::move(bonus));
+      std::make_unique<BinaryExpression>(BinaryOp::kAdd, std::move(salary), std::move(bonus));
 
   auto multiplier = std::make_unique<LiteralExpression>(Value{1.05});
-  MultiplyExpression final_expr(std::move(add_expr), std::move(multiplier));
+  BinaryExpression final_expr(BinaryOp::kMultiply, std::move(add_expr), std::move(multiplier));
 
   const auto& batch = batches_[0];
   ASSERT_OK_AND_ASSIGN(auto result, final_expr.Evaluate(batch));
@@ -345,14 +345,14 @@ TEST_F(QueryIntegrationTest, ComplexLogicalCondition) {
   auto salary = std::make_unique<ColumnExpression>(2);
   auto threshold = std::make_unique<LiteralExpression>(Value{60000.0});
   auto salary_check =
-      std::make_unique<GtExpression>(std::move(salary), std::move(threshold));
+      std::make_unique<BinaryExpression>(BinaryOp::kGt, std::move(salary), std::move(threshold));
 
   auto active = std::make_unique<ColumnExpression>(4);
   auto true_val = std::make_unique<LiteralExpression>(Value{true});
   auto active_check =
-      std::make_unique<EqExpression>(std::move(active), std::move(true_val));
+      std::make_unique<BinaryExpression>(BinaryOp::kEq, std::move(active), std::move(true_val));
 
-  AndExpression condition(std::move(salary_check), std::move(active_check));
+  BinaryExpression condition(BinaryOp::kAnd, std::move(salary_check), std::move(active_check));
 
   const auto& batch = batches_[0];
   ASSERT_OK_AND_ASSIGN(auto result, condition.Evaluate(batch));

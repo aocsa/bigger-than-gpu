@@ -165,7 +165,7 @@ TEST(ColumnExpressionTest, ToString) {
 TEST(EqExpressionTest, IntEquality) {
   auto left = std::make_unique<ColumnExpression>(0);
   auto right = std::make_unique<LiteralExpression>(Value{30});
-  EqExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kEq, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -181,7 +181,7 @@ TEST(EqExpressionTest, IntEquality) {
 TEST(NeqExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
   auto right = std::make_unique<LiteralExpression>(Value{30});
-  NeqExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kNeq, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -193,7 +193,7 @@ TEST(NeqExpressionTest, Basic) {
 TEST(LtExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
   auto right = std::make_unique<LiteralExpression>(Value{30});
-  LtExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kLt, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -207,7 +207,7 @@ TEST(LtExpressionTest, Basic) {
 TEST(GtExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
   auto right = std::make_unique<LiteralExpression>(Value{30});
-  GtExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kGt, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -225,7 +225,7 @@ TEST(GtExpressionTest, Basic) {
 TEST(AddExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);   // a (int32)
   auto right = std::make_unique<ColumnExpression>(1);  // b (double)
-  AddExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kAdd, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -239,7 +239,7 @@ TEST(AddExpressionTest, Basic) {
 TEST(SubtractExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
   auto right = std::make_unique<LiteralExpression>(Value{5});
-  SubtractExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kSubtract, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -252,7 +252,7 @@ TEST(SubtractExpressionTest, Basic) {
 TEST(MultiplyExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
   auto right = std::make_unique<LiteralExpression>(Value{2});
-  MultiplyExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kMultiply, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -265,7 +265,7 @@ TEST(MultiplyExpressionTest, Basic) {
 TEST(DivideExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
   auto right = std::make_unique<LiteralExpression>(Value{10});
-  DivideExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kDivide, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -278,7 +278,7 @@ TEST(DivideExpressionTest, Basic) {
 TEST(DivideExpressionTest, DivisionByZero) {
   auto left = std::make_unique<LiteralExpression>(Value{10});
   auto right = std::make_unique<LiteralExpression>(Value{0});
-  DivideExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kDivide, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -290,7 +290,7 @@ TEST(DivideExpressionTest, DivisionByZero) {
 TEST(ModuloExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
   auto right = std::make_unique<LiteralExpression>(Value{15});
-  ModuloExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kModulo, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -308,7 +308,7 @@ TEST(AndExpressionTest, Basic) {
   // c AND c (both true where c is true)
   auto left = std::make_unique<ColumnExpression>(2);
   auto right = std::make_unique<ColumnExpression>(2);
-  AndExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kAnd, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -322,7 +322,7 @@ TEST(AndExpressionTest, Basic) {
 TEST(OrExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(2);
   auto right = std::make_unique<LiteralExpression>(Value{false});
-  OrExpression expr(std::move(left), std::move(right));
+  BinaryExpression expr(BinaryOp::kOr, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
@@ -539,32 +539,34 @@ TEST(CreatePhysicalExprTest, ArithmeticOpsRoundTripEvaluate) {
   auto batch = MakeTestBatch();
 
   {
-    Add add_expr(col("a"), lit(5));
+    BinaryExpr add_expr(BinaryOp::kAdd, col("a"), lit(5));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(add_expr, input));
-    ASSERT_NE(dynamic_cast<AddExpression*>(phys.get()), nullptr);
+    const auto* binary = dynamic_cast<BinaryExpression*>(phys.get());
+    ASSERT_NE(binary, nullptr);
+    EXPECT_EQ(binary->op(), BinaryOp::kAdd);
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
     EXPECT_NEAR(std::get<double>(result->GetValue(0)), 15.0, 0.001);
   }
   {
-    Subtract sub_expr(col("a"), lit(5));
+    BinaryExpr sub_expr(BinaryOp::kSubtract, col("a"), lit(5));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(sub_expr, input));
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
     EXPECT_NEAR(std::get<double>(result->GetValue(0)), 5.0, 0.001);
   }
   {
-    Multiply mul_expr(col("a"), lit(2));
+    BinaryExpr mul_expr(BinaryOp::kMultiply, col("a"), lit(2));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(mul_expr, input));
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
     EXPECT_NEAR(std::get<double>(result->GetValue(0)), 20.0, 0.001);
   }
   {
-    Divide div_expr(col("a"), lit(10));
+    BinaryExpr div_expr(BinaryOp::kDivide, col("a"), lit(10));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(div_expr, input));
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
     EXPECT_NEAR(std::get<double>(result->GetValue(0)), 1.0, 0.001);
   }
   {
-    Modulo mod_expr(col("a"), lit(15));
+    BinaryExpr mod_expr(BinaryOp::kModulo, col("a"), lit(15));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(mod_expr, input));
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
     EXPECT_NEAR(std::get<double>(result->GetValue(0)), 10.0, 0.001);

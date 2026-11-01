@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <ranges>
@@ -19,10 +20,12 @@
 #include "quest/columnar/record_batch.hpp"
 #include "quest/columnar/schema.hpp"
 #include "quest/common/result.hpp"
+#include "quest/plan/binary_op.hpp"
 
 namespace quest::plan::physical {
 
 using columnar::ColumnVector;
+using plan::BinaryOp;
 using columnar::DataType;
 using columnar::Field;
 using columnar::RecordBatch;
@@ -199,54 +202,11 @@ class ColumnExpression : public Expression {
 };
 
 // =============================================================================
-// Boolean Expression Base Class
+// Binary Expression
 // =============================================================================
 
-/// @brief Base class for binary boolean expressions.
-class BooleanExpression : public Expression {
- public:
-  BooleanExpression(ExpressionPtr left, ExpressionPtr right)
-      : left_(std::move(left)), right_(std::move(right)) {}
-
-  [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
-      const RecordBatch& input) const override {
-    auto left_result = left_->Evaluate(input);
-    if (!left_result) {
-      return std::unexpected(left_result.error());
-    }
-    auto right_result = right_->Evaluate(input);
-    if (!right_result) {
-      return std::unexpected(right_result.error());
-    }
-
-    auto& left_col = **left_result;
-    auto& right_col = **right_result;
-
-    std::vector<bool> result;
-    result.reserve(input.num_rows());
-
-    for (size_t i = 0; i < input.num_rows(); ++i) {
-      Value left_val = left_col.GetValue(i);
-      Value right_val = right_col.GetValue(i);
-      result.push_back(EvaluatePair(left_val, right_val));
-    }
-
-    return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, columnar::BoolType{});
-  }
-
- protected:
-  [[nodiscard]] virtual bool EvaluatePair(const Value& left,
-                                          const Value& right) const = 0;
-
-  ExpressionPtr left_;
-  ExpressionPtr right_;
-};
-
-// =============================================================================
-// Comparison Helper
-// =============================================================================
-
+/// @brief Compares two values; null or non-numeric mismatched operands compare false, mixed
+/// numeric types compare as double.
 template <typename Op>
 bool CompareValues(const Value& left, const Value& right) {
   return std::visit(
@@ -269,108 +229,15 @@ bool CompareValues(const Value& left, const Value& right) {
       left, right);
 }
 
-// =============================================================================
-// Comparison Expressions
-// =============================================================================
-
-class EqExpression : public BooleanExpression {
+/// @brief Binary expression. Comparisons and AND/OR produce a bool column; arithmetic
+/// produces a double column.
+///
+/// AND/OR are false unless both operands are bool. Arithmetic treats non-numeric values
+/// (including null) as 0.0; division or modulo by zero yields NaN.
+class BinaryExpression : public Expression {
  public:
-  using BooleanExpression::BooleanExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return left_->ToString() + " == " + right_->ToString();
-  }
-
- protected:
-  [[nodiscard]] bool EvaluatePair(const Value& left,
-                                  const Value& right) const override {
-    return CompareValues<std::equal_to<>>(left, right);
-  }
-};
-
-class NeqExpression : public BooleanExpression {
- public:
-  using BooleanExpression::BooleanExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return left_->ToString() + " != " + right_->ToString();
-  }
-
- protected:
-  [[nodiscard]] bool EvaluatePair(const Value& left,
-                                  const Value& right) const override {
-    return CompareValues<std::not_equal_to<>>(left, right);
-  }
-};
-
-class LtExpression : public BooleanExpression {
- public:
-  using BooleanExpression::BooleanExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return left_->ToString() + " < " + right_->ToString();
-  }
-
- protected:
-  [[nodiscard]] bool EvaluatePair(const Value& left,
-                                  const Value& right) const override {
-    return CompareValues<std::less<>>(left, right);
-  }
-};
-
-class LtEqExpression : public BooleanExpression {
- public:
-  using BooleanExpression::BooleanExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return left_->ToString() + " <= " + right_->ToString();
-  }
-
- protected:
-  [[nodiscard]] bool EvaluatePair(const Value& left,
-                                  const Value& right) const override {
-    return CompareValues<std::less_equal<>>(left, right);
-  }
-};
-
-class GtExpression : public BooleanExpression {
- public:
-  using BooleanExpression::BooleanExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return left_->ToString() + " > " + right_->ToString();
-  }
-
- protected:
-  [[nodiscard]] bool EvaluatePair(const Value& left,
-                                  const Value& right) const override {
-    return CompareValues<std::greater<>>(left, right);
-  }
-};
-
-class GtEqExpression : public BooleanExpression {
- public:
-  using BooleanExpression::BooleanExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return left_->ToString() + " >= " + right_->ToString();
-  }
-
- protected:
-  [[nodiscard]] bool EvaluatePair(const Value& left,
-                                  const Value& right) const override {
-    return CompareValues<std::greater_equal<>>(left, right);
-  }
-};
-
-// =============================================================================
-// Arithmetic Expression Base Class
-// =============================================================================
-
-class ArithmeticExpression : public Expression {
- public:
-  ArithmeticExpression(ExpressionPtr left, ExpressionPtr right)
-      : left_(std::move(left)), right_(std::move(right)) {}
+  BinaryExpression(BinaryOp op, ExpressionPtr left, ExpressionPtr right)
+      : op_(op), left_(std::move(left)), right_(std::move(right)) {}
 
   [[nodiscard]] Result<std::shared_ptr<ColumnVector>> Evaluate(
       const RecordBatch& input) const override {
@@ -383,28 +250,85 @@ class ArithmeticExpression : public Expression {
       return std::unexpected(right_result.error());
     }
 
-    auto& left_col = **left_result;
-    auto& right_col = **right_result;
+    const auto& l = **left_result;
+    const auto& r = **right_result;
+    const size_t n = input.num_rows();
 
-    // Use double for all arithmetic operations
-    std::vector<double> result;
-    result.reserve(input.num_rows());
-
-    for (size_t i = 0; i < input.num_rows(); ++i) {
-      Value left_val = left_col.GetValue(i);
-      Value right_val = right_col.GetValue(i);
-      result.push_back(EvaluatePair(left_val, right_val));
+    switch (op_) {
+      case BinaryOp::kEq:
+        return MapRows<bool>(l, r, n, CompareValues<std::equal_to<>>);
+      case BinaryOp::kNeq:
+        return MapRows<bool>(l, r, n, CompareValues<std::not_equal_to<>>);
+      case BinaryOp::kLt:
+        return MapRows<bool>(l, r, n, CompareValues<std::less<>>);
+      case BinaryOp::kLtEq:
+        return MapRows<bool>(l, r, n, CompareValues<std::less_equal<>>);
+      case BinaryOp::kGt:
+        return MapRows<bool>(l, r, n, CompareValues<std::greater<>>);
+      case BinaryOp::kGtEq:
+        return MapRows<bool>(l, r, n, CompareValues<std::greater_equal<>>);
+      case BinaryOp::kAnd:
+        return MapRows<bool>(l, r, n, [](const Value& a, const Value& b) {
+          const auto* lhs = std::get_if<bool>(&a);
+          const auto* rhs = std::get_if<bool>(&b);
+          return lhs && rhs && *lhs && *rhs;
+        });
+      case BinaryOp::kOr:
+        return MapRows<bool>(l, r, n, [](const Value& a, const Value& b) {
+          const auto* lhs = std::get_if<bool>(&a);
+          const auto* rhs = std::get_if<bool>(&b);
+          return lhs && rhs && (*lhs || *rhs);
+        });
+      case BinaryOp::kAdd:
+        return MapRows<double>(
+            l, r, n, [](const Value& a, const Value& b) { return ToDouble(a) + ToDouble(b); });
+      case BinaryOp::kSubtract:
+        return MapRows<double>(
+            l, r, n, [](const Value& a, const Value& b) { return ToDouble(a) - ToDouble(b); });
+      case BinaryOp::kMultiply:
+        return MapRows<double>(
+            l, r, n, [](const Value& a, const Value& b) { return ToDouble(a) * ToDouble(b); });
+      case BinaryOp::kDivide:
+        return MapRows<double>(l, r, n, [](const Value& a, const Value& b) {
+          double d = ToDouble(b);
+          return d == 0.0 ? std::numeric_limits<double>::quiet_NaN() : ToDouble(a) / d;
+        });
+      case BinaryOp::kModulo:
+        return MapRows<double>(l, r, n, [](const Value& a, const Value& b) {
+          double d = ToDouble(b);
+          return d == 0.0 ? std::numeric_limits<double>::quiet_NaN() : std::fmod(ToDouble(a), d);
+        });
     }
-
-    return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, columnar::DoubleType{});
+    std::unreachable();
   }
 
- protected:
-  [[nodiscard]] virtual double EvaluatePair(const Value& left,
-                                            const Value& right) const = 0;
+  /// @brief `l op r`; arithmetic is parenthesized, `(l op r)`.
+  [[nodiscard]] std::string ToString() const override {
+    std::string s =
+        left_->ToString() + " " + std::string(plan::ToString(op_)) + " " + right_->ToString();
+    return IsArithmetic(op_) ? "(" + s + ")" : s;
+  }
 
-  /// @brief Helper to convert Value to double.
+  [[nodiscard]] BinaryOp op() const noexcept { return op_; }
+
+ private:
+  template <typename T, typename Fn>
+  [[nodiscard]] static std::shared_ptr<ColumnVector> MapRows(const ColumnVector& left,
+                                                             const ColumnVector& right,
+                                                             size_t num_rows, Fn fn) {
+    std::vector<T> result;
+    result.reserve(num_rows);
+    for (size_t i = 0; i < num_rows; ++i) {
+      result.push_back(fn(left.GetValue(i), right.GetValue(i)));
+    }
+    DataType type = columnar::DoubleType{};
+    if constexpr (std::is_same_v<T, bool>) {
+      type = columnar::BoolType{};
+    }
+    return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(result)},
+                                                      std::move(type));
+  }
+
   [[nodiscard]] static double ToDouble(const Value& val) {
     return std::visit(
         [](const auto& v) -> double {
@@ -418,139 +342,9 @@ class ArithmeticExpression : public Expression {
         val);
   }
 
+  BinaryOp op_;
   ExpressionPtr left_;
   ExpressionPtr right_;
-};
-
-// =============================================================================
-// Arithmetic Expressions
-// =============================================================================
-
-class AddExpression : public ArithmeticExpression {
- public:
-  using ArithmeticExpression::ArithmeticExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return "(" + left_->ToString() + " + " + right_->ToString() + ")";
-  }
-
- protected:
-  [[nodiscard]] double EvaluatePair(const Value& left,
-                                    const Value& right) const override {
-    return ToDouble(left) + ToDouble(right);
-  }
-};
-
-class SubtractExpression : public ArithmeticExpression {
- public:
-  using ArithmeticExpression::ArithmeticExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return "(" + left_->ToString() + " - " + right_->ToString() + ")";
-  }
-
- protected:
-  [[nodiscard]] double EvaluatePair(const Value& left,
-                                    const Value& right) const override {
-    return ToDouble(left) - ToDouble(right);
-  }
-};
-
-class MultiplyExpression : public ArithmeticExpression {
- public:
-  using ArithmeticExpression::ArithmeticExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return "(" + left_->ToString() + " * " + right_->ToString() + ")";
-  }
-
- protected:
-  [[nodiscard]] double EvaluatePair(const Value& left,
-                                    const Value& right) const override {
-    return ToDouble(left) * ToDouble(right);
-  }
-};
-
-class DivideExpression : public ArithmeticExpression {
- public:
-  using ArithmeticExpression::ArithmeticExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return "(" + left_->ToString() + " / " + right_->ToString() + ")";
-  }
-
- protected:
-  [[nodiscard]] double EvaluatePair(const Value& left,
-                                    const Value& right) const override {
-    double r = ToDouble(right);
-    if (r == 0.0) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    return ToDouble(left) / r;
-  }
-};
-
-class ModuloExpression : public ArithmeticExpression {
- public:
-  using ArithmeticExpression::ArithmeticExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return "(" + left_->ToString() + " % " + right_->ToString() + ")";
-  }
-
- protected:
-  [[nodiscard]] double EvaluatePair(const Value& left,
-                                    const Value& right) const override {
-    double r = ToDouble(right);
-    if (r == 0.0) {
-      return std::numeric_limits<double>::quiet_NaN();
-    }
-    return std::fmod(ToDouble(left), r);
-  }
-};
-
-// =============================================================================
-// Logical Expressions
-// =============================================================================
-
-class AndExpression : public BooleanExpression {
- public:
-  using BooleanExpression::BooleanExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return left_->ToString() + " AND " + right_->ToString();
-  }
-
- protected:
-  [[nodiscard]] bool EvaluatePair(const Value& left,
-                                  const Value& right) const override {
-    auto lhs = std::get_if<bool>(&left);
-    auto rhs = std::get_if<bool>(&right);
-    if (lhs && rhs) {
-      return *lhs && *rhs;
-    }
-    return false;
-  }
-};
-
-class OrExpression : public BooleanExpression {
- public:
-  using BooleanExpression::BooleanExpression;
-
-  [[nodiscard]] std::string ToString() const override {
-    return left_->ToString() + " OR " + right_->ToString();
-  }
-
- protected:
-  [[nodiscard]] bool EvaluatePair(const Value& left,
-                                  const Value& right) const override {
-    auto lhs = std::get_if<bool>(&left);
-    auto rhs = std::get_if<bool>(&right);
-    if (lhs && rhs) {
-      return *lhs || *rhs;
-    }
-    return false;
-  }
 };
 
 // =============================================================================

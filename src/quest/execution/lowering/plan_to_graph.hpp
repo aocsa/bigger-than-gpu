@@ -57,50 +57,8 @@ namespace quest::execution {
       return std::unexpected(right_result.error());
     }
 
-    auto left = std::move(*left_result);
-    auto right = std::move(*right_result);
-
-    if (dynamic_cast<const plan::logical::Eq*>(binary)) {
-      return std::make_unique<plan::physical::EqExpression>(std::move(left), std::move(right));
-    }
-    if (dynamic_cast<const plan::logical::Neq*>(binary)) {
-      return std::make_unique<plan::physical::NeqExpression>(std::move(left), std::move(right));
-    }
-    if (dynamic_cast<const plan::logical::Lt*>(binary)) {
-      return std::make_unique<plan::physical::LtExpression>(std::move(left), std::move(right));
-    }
-    if (dynamic_cast<const plan::logical::LtEq*>(binary)) {
-      return std::make_unique<plan::physical::LtEqExpression>(std::move(left), std::move(right));
-    }
-    if (dynamic_cast<const plan::logical::Gt*>(binary)) {
-      return std::make_unique<plan::physical::GtExpression>(std::move(left), std::move(right));
-    }
-    if (dynamic_cast<const plan::logical::GtEq*>(binary)) {
-      return std::make_unique<plan::physical::GtEqExpression>(std::move(left), std::move(right));
-    }
-    if (dynamic_cast<const plan::logical::And*>(binary)) {
-      return std::make_unique<plan::physical::AndExpression>(std::move(left), std::move(right));
-    }
-    if (dynamic_cast<const plan::logical::Or*>(binary)) {
-      return std::make_unique<plan::physical::OrExpression>(std::move(left), std::move(right));
-    }
-    if (dynamic_cast<const plan::logical::Add*>(binary)) {
-      return std::make_unique<plan::physical::AddExpression>(std::move(left), std::move(right));
-    }
-    if (dynamic_cast<const plan::logical::Subtract*>(binary)) {
-      return std::make_unique<plan::physical::SubtractExpression>(std::move(left),
-                                                                  std::move(right));
-    }
-    if (dynamic_cast<const plan::logical::Multiply*>(binary)) {
-      return std::make_unique<plan::physical::MultiplyExpression>(std::move(left),
-                                                                  std::move(right));
-    }
-    if (dynamic_cast<const plan::logical::Divide*>(binary)) {
-      return std::make_unique<plan::physical::DivideExpression>(std::move(left), std::move(right));
-    }
-    if (dynamic_cast<const plan::logical::Modulo*>(binary)) {
-      return std::make_unique<plan::physical::ModuloExpression>(std::move(left), std::move(right));
-    }
+    return std::make_unique<plan::physical::BinaryExpression>(
+        binary->op(), std::move(*left_result), std::move(*right_result));
   }
 
   return std::unexpected(
