@@ -92,46 +92,9 @@ class Literal : public LogicalExpr {
  public:
   explicit Literal(Value value) : value_(std::move(value)) {}
 
-  [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
-    DataType dtype = std::visit(
-        [](const auto& v) -> DataType {
-          using T = std::decay_t<decltype(v)>;
-          if constexpr (std::is_same_v<T, int32_t>) {
-            return columnar::Int32Type{};
-          } else if constexpr (std::is_same_v<T, int64_t>) {
-            return columnar::Int64Type{};
-          } else if constexpr (std::is_same_v<T, float>) {
-            return columnar::FloatType{};
-          } else if constexpr (std::is_same_v<T, double>) {
-            return columnar::DoubleType{};
-          } else if constexpr (std::is_same_v<T, bool>) {
-            return columnar::BoolType{};
-          } else {
-            return columnar::StringType{};
-          }
-        },
-        value_);
-    return Field{"literal", dtype};
-  }
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override;
 
-  [[nodiscard]] std::string ToString() const override {
-    return std::visit(
-        [](const auto& v) -> std::string {
-          using T = std::decay_t<decltype(v)>;
-          if constexpr (std::is_same_v<T, std::string>) {
-            return "\"" + v + "\"";
-          } else if constexpr (std::is_same_v<T, bool>) {
-            return v ? "true" : "false";
-          } else if constexpr (std::is_same_v<T, std::monostate>) {
-            return "null";
-          } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
-            return "<binary>";
-          } else {
-            return std::to_string(v);
-          }
-        },
-        value_);
-  }
+  [[nodiscard]] std::string ToString() const override;
 
   [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
     return std::make_unique<Literal>(value_);
@@ -154,24 +117,9 @@ class BinaryExpr : public LogicalExpr {
   BinaryExpr(BinaryOp op, LogicalExprPtr left, LogicalExprPtr right)
       : op_(op), left_(std::move(left)), right_(std::move(right)) {}
 
-  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override {
-    std::string name =
-        left_->ToString() + " " + std::string(plan::ToString(op_)) + " " + right_->ToString();
-    if (!IsArithmetic(op_)) {
-      return Field{std::move(name), columnar::BoolType{}};
-    }
-    auto left_field = left_->ToField(input);
-    if (!left_field.has_value()) {
-      return left_field;
-    }
-    // Use the left operand's type for the result (could be improved with type promotion)
-    return Field{std::move(name), left_field.value().data_type};
-  }
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override;
 
-  [[nodiscard]] std::string ToString() const override {
-    return "(" + left_->ToString() + " " + std::string(plan::ToString(op_)) + " " +
-           right_->ToString() + ")";
-  }
+  [[nodiscard]] std::string ToString() const override;
 
   [[nodiscard]] std::unique_ptr<LogicalExpr> Clone() const override {
     return std::make_unique<BinaryExpr>(op_, left_->Clone(), right_->Clone());
@@ -209,14 +157,7 @@ class Sum : public AggregateExpr {
   explicit Sum(LogicalExprPtr input)
       : AggregateExpr(std::move(input), "SUM") {}
 
-  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override {
-    auto input_field = input_->ToField(input);
-    if (!input_field.has_value()) {
-      return input_field;
-    }
-    // SUM returns double for numeric types
-    return Field{"SUM(" + input_->ToString() + ")", columnar::DoubleType{}};
-  }
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override;
 
   [[nodiscard]] std::string ToString() const override {
     return "SUM(" + input_->ToString() + ")";
@@ -287,14 +228,7 @@ class Min : public AggregateExpr {
   explicit Min(LogicalExprPtr input)
       : AggregateExpr(std::move(input), "MIN") {}
 
-  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override {
-    auto input_field = input_->ToField(input);
-    if (!input_field.has_value()) {
-      return input_field;
-    }
-    // MIN preserves input type
-    return Field{"MIN(" + input_->ToString() + ")", input_field.value().data_type};
-  }
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override;
 
   [[nodiscard]] std::string ToString() const override {
     return "MIN(" + input_->ToString() + ")";
@@ -310,14 +244,7 @@ class Max : public AggregateExpr {
   explicit Max(LogicalExprPtr input)
       : AggregateExpr(std::move(input), "MAX") {}
 
-  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override {
-    auto input_field = input_->ToField(input);
-    if (!input_field.has_value()) {
-      return input_field;
-    }
-    // MAX preserves input type
-    return Field{"MAX(" + input_->ToString() + ")", input_field.value().data_type};
-  }
+  [[nodiscard]] Result<Field> ToField(const LogicalPlan& input) const override;
 
   [[nodiscard]] std::string ToString() const override {
     return "MAX(" + input_->ToString() + ")";

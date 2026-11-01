@@ -57,7 +57,11 @@ set(QUEST_SOURCES
     src/quest/io/parquet/page_reader.cpp
     src/quest/io/parquet/column_reader.cpp
     src/quest/io/parquet/file_reader.cpp
+    src/quest/plan/logical/logical_expr.cpp
+    src/quest/plan/logical/logical_plan.cpp
+    src/quest/plan/physical/expressions/physical_expr.cpp
     src/quest/execution/kernels/batch_kernels.cpp
+    src/quest/execution/lowering/plan_to_graph.cpp
     src/quest/columnar/record_batch_serializer.cpp
     src/quest/taskflow/port.cpp
     src/quest/taskflow/operator.cpp

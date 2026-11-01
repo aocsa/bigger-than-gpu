@@ -6,11 +6,9 @@
 /// @file logical_plan.hpp
 /// @brief Logical plan nodes for query execution.
 
-#include <cassert>
 #include <cstddef>
 #include <memory>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,15 +36,7 @@ class LogicalPlan {
   [[nodiscard]] virtual std::string ToString() const = 0;
 
   /// @brief Pretty-prints the full plan subtree with indentation.
-  [[nodiscard]] std::string Pretty(size_t indent = 0) const {
-    std::string indentation(indent * 2, ' ');
-    std::ostringstream result;
-    result << indentation << ToString() << "\n";
-    for (const auto* child : Children()) {
-      result << child->Pretty(indent + 1);
-    }
-    return result.str();
-  }
+  [[nodiscard]] std::string Pretty(size_t indent = 0) const;
 };
 
 using LogicalPlanPtr = std::unique_ptr<LogicalPlan>;
@@ -70,23 +60,7 @@ class Scan : public LogicalPlan {
     return {};
   }
 
-  [[nodiscard]] std::string ToString() const override {
-    std::ostringstream oss;
-    oss << "Scan: " << path_ << "; projection=";
-    if (projection_) {
-      oss << "[";
-      for (size_t i = 0; i < projection_->size(); ++i) {
-        if (i > 0) {
-          oss << ", ";
-        }
-        oss << (*projection_)[i];
-      }
-      oss << "]";
-    } else {
-      oss << "None";
-    }
-    return oss.str();
-  }
+  [[nodiscard]] std::string ToString() const override;
 
   [[nodiscard]] const std::string& path() const { return path_; }
   [[nodiscard]] const std::shared_ptr<DataSource>& data_source() const {
@@ -98,15 +72,7 @@ class Scan : public LogicalPlan {
   }
 
  private:
-  [[nodiscard]] Schema DeriveSchema() const {
-    const auto& source_schema = data_source_->schema();
-    if (projection_) {
-      auto selected = source_schema.Select(*projection_);
-      assert(selected && "Scan projection names a column missing from the source schema");
-      return *std::move(selected);
-    }
-    return source_schema;
-  }
+  [[nodiscard]] Schema DeriveSchema() const;
 
   std::string path_;
   std::shared_ptr<DataSource> data_source_;
@@ -150,33 +116,13 @@ class Projection : public LogicalPlan {
   Projection(LogicalPlanPtr input, std::vector<LogicalExprPtr> expressions)
       : input_(std::move(input)), expressions_(std::move(expressions)) {}
 
-  [[nodiscard]] Schema schema() const override {
-    std::vector<Field> fields;
-    fields.reserve(expressions_.size());
-    for (const auto& expr : expressions_) {
-      auto field_result = expr->ToField(*input_);
-      if (field_result.has_value()) {
-        fields.push_back(field_result.value());
-      }
-    }
-    return Schema(std::move(fields));
-  }
+  [[nodiscard]] Schema schema() const override;
 
   [[nodiscard]] std::vector<const LogicalPlan*> Children() const override {
     return {input_.get()};
   }
 
-  [[nodiscard]] std::string ToString() const override {
-    std::ostringstream oss;
-    oss << "Projection: ";
-    for (size_t i = 0; i < expressions_.size(); ++i) {
-      if (i > 0) {
-        oss << ", ";
-      }
-      oss << expressions_[i]->ToString();
-    }
-    return oss.str();
-  }
+  [[nodiscard]] std::string ToString() const override;
 
   [[nodiscard]] const LogicalPlan& input() const { return *input_; }
   [[nodiscard]] const std::vector<LogicalExprPtr>& expressions() const {
@@ -246,39 +192,6 @@ class Union : public LogicalPlan {
 };
 
 /// @brief Whether two schemas are UNION-compatible (same field count + types).
-[[nodiscard]] inline bool UnionCompatible(const Schema& lhs, const Schema& rhs) {
-  if (lhs.num_fields() != rhs.num_fields()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < lhs.num_fields(); ++i) {
-    if (columnar::GetTypeName(lhs.field(i).data_type) !=
-        columnar::GetTypeName(rhs.field(i).data_type)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// =============================================================================
-// Column/ColumnIndex ToField Implementations
-// =============================================================================
-
-inline Result<Field> Column::ToField(const LogicalPlan& input) const {
-  for (const auto& field : input.schema().fields()) {
-    if (field.name == name_) {
-      return field;
-    }
-  }
-  return std::unexpected(
-      Error::SchemaError("No column named '" + name_ + "' in schema"));
-}
-
-inline Result<Field> ColumnIndex::ToField(const LogicalPlan& input) const {
-  const auto& fields = input.schema().fields();
-  if (index_ >= fields.size()) {
-    return std::unexpected(Error::OutOfRange("Column index out of range"));
-  }
-  return fields[index_];
-}
+[[nodiscard]] bool UnionCompatible(const Schema& lhs, const Schema& rhs);
 
 }  // namespace quest::plan::logical
