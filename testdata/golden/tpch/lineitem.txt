@@ -14,7 +14,7 @@ schema[9]: name="l_shipdate" type=1 type_length=- repetition=0 num_children=0 lo
 schema[10]: name="l_commitdate" type=1 type_length=- repetition=0 num_children=0 logical_type=6 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
 schema[11]: name="l_receiptdate" type=1 type_length=- repetition=0 num_children=0 logical_type=6 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
 schema[12]: name="l_shipmode" type=6 type_length=- repetition=0 num_children=0 logical_type=1 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
-row_group[0]: num_rows=20480 total_byte_size=521738 file_offset=- total_compressed_size=4 ordinal=564
+row_group[0]: num_rows=20480 total_byte_size=521738 file_offset=4 total_compressed_size=328244 ordinal=-
   column[0]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["l_orderkey"] codec=1 num_values=20480 total_uncompressed_size=163863 total_compressed_size=32016 data_page_offset=4 index_page_offset=- dictionary_page_offset=-
     statistics: min=0100000000000000 max=c74f000000000000 null_count=0 distinct_count=- num_values=-
   column[1]: file_path="" file_offset=0 type=2 encodings=[2] path_in_schema=["l_suppkey"] codec=1 num_values=20480 total_uncompressed_size=18840 total_compressed_size=18461 data_page_offset=32451 index_page_offset=- dictionary_page_offset=32020
@@ -39,7 +39,7 @@ row_group[0]: num_rows=20480 total_byte_size=521738 file_offset=- total_compress
     statistics: min=6b1f0000 max=59290000 null_count=0 distinct_count=2510 num_values=-
   column[11]: file_path="" file_offset=0 type=6 encodings=[2] path_in_schema=["l_shipmode"] codec=1 num_values=20480 total_uncompressed_size=7853 total_compressed_size=7855 data_page_offset=320461 index_page_offset=- dictionary_page_offset=320393
     statistics: min=414952 max=545255434b null_count=0 distinct_count=7 num_values=-
-row_group[1]: num_rows=20480 total_byte_size=521545 file_offset=- total_compressed_size=328248 ordinal=275
+row_group[1]: num_rows=20480 total_byte_size=521545 file_offset=328248 total_compressed_size=327955 ordinal=-
   column[0]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["l_orderkey"] codec=1 num_values=20480 total_uncompressed_size=163863 total_compressed_size=31663 data_page_offset=328248 index_page_offset=- dictionary_page_offset=-
     statistics: min=c74f000000000000 max=e79e000000000000 null_count=0 distinct_count=- num_values=-
   column[1]: file_path="" file_offset=0 type=2 encodings=[2] path_in_schema=["l_suppkey"] codec=1 num_values=20480 total_uncompressed_size=18840 total_compressed_size=18461 data_page_offset=360342 index_page_offset=- dictionary_page_offset=359911
@@ -64,7 +64,7 @@ row_group[1]: num_rows=20480 total_byte_size=521545 file_offset=- total_compress
     statistics: min=6f1f0000 max=51290000 null_count=0 distinct_count=2495 num_values=-
   column[11]: file_path="" file_offset=0 type=6 encodings=[2] path_in_schema=["l_shipmode"] codec=1 num_values=20480 total_uncompressed_size=7855 total_compressed_size=7859 data_page_offset=648414 index_page_offset=- dictionary_page_offset=648344
     statistics: min=414952 max=545255434b null_count=0 distinct_count=7 num_values=-
-row_group[2]: num_rows=19215 total_byte_size=493124 file_offset=- total_compressed_size=656203 ordinal=-15757
+row_group[2]: num_rows=19215 total_byte_size=493124 file_offset=656203 total_compressed_size=311923 ordinal=-
   column[0]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["l_orderkey"] codec=1 num_values=19215 total_uncompressed_size=153743 total_compressed_size=30097 data_page_offset=656203 index_page_offset=- dictionary_page_offset=-
     statistics: min=e79e000000000000 max=60ea000000000000 null_count=0 distinct_count=- num_values=-
   column[1]: file_path="" file_offset=0 type=2 encodings=[2] path_in_schema=["l_suppkey"] codec=1 num_values=19215 total_uncompressed_size=17940 total_compressed_size=17561 data_page_offset=686731 index_page_offset=- dictionary_page_offset=686300

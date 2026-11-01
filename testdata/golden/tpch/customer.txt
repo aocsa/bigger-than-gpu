@@ -10,7 +10,7 @@ schema[5]: name="c_phone" type=6 type_length=- repetition=0 num_children=0 logic
 schema[6]: name="c_acctbal" type=2 type_length=- repetition=0 num_children=0 logical_type=5 precision=15 scale=2 field_id=- time_unit=- bit_width=- is_signed=-
 schema[7]: name="c_mktsegment" type=6 type_length=- repetition=0 num_children=0 logical_type=1 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
 schema[8]: name="c_comment" type=6 type_length=- repetition=0 num_children=0 logical_type=1 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
-row_group[0]: num_rows=1500 total_byte_size=246304 file_offset=- total_compressed_size=4 ordinal=-5600
+row_group[0]: num_rows=1500 total_byte_size=246304 file_offset=4 total_compressed_size=125472 ordinal=-
   column[0]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["c_custkey"] codec=1 num_values=1500 total_uncompressed_size=12021 total_compressed_size=6034 data_page_offset=4 index_page_offset=- dictionary_page_offset=-
     statistics: min=0100000000000000 max=dc05000000000000 null_count=0 distinct_count=- num_values=-
   column[1]: file_path="" file_offset=0 type=6 encodings=[0] path_in_schema=["c_name"] codec=1 num_values=1500 total_uncompressed_size=33021 total_compressed_size=7576 data_page_offset=6038 index_page_offset=- dictionary_page_offset=-

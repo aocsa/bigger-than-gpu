@@ -182,9 +182,9 @@ static Status Read(ThriftDecoder& d, RowGroupMetadata& rg) {
       case 1: return Read(d, rg.columns);
       case 2: return Read(d, rg.total_byte_size);
       case 3: return Read(d, rg.num_rows);
-      case 4: return Read(d, rg.file_offset);
-      case 5: return Read(d, rg.total_compressed_size);
-      case 6: return Read(d, rg.ordinal);
+      case 5: return Read(d, rg.file_offset);  // 4 is sorting_columns, skipped
+      case 6: return Read(d, rg.total_compressed_size);
+      case 7: return Read(d, rg.ordinal);
       default: return d.SkipField(type);
     }
   });

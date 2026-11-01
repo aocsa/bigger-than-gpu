@@ -9,7 +9,7 @@ schema[4]: name="u8" type=1 type_length=- repetition=1 num_children=0 logical_ty
 schema[5]: name="u16" type=1 type_length=- repetition=1 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=16 is_signed=0
 schema[6]: name="u32" type=1 type_length=- repetition=1 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=32 is_signed=0
 schema[7]: name="dec32" type=1 type_length=- repetition=1 num_children=0 logical_type=5 precision=9 scale=2 field_id=- time_unit=- bit_width=- is_signed=-
-row_group[0]: num_rows=2 total_byte_size=345 file_offset=- total_compressed_size=4 ordinal=254
+row_group[0]: num_rows=2 total_byte_size=345 file_offset=4 total_compressed_size=254 ordinal=-
   column[0]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["ts_ms"] codec=1 num_values=2 total_uncompressed_size=62 total_compressed_size=38 data_page_offset=4 index_page_offset=- dictionary_page_offset=-
     statistics: min=7cda20c88c010000 max=7cda20c88c010000 null_count=1 distinct_count=- num_values=-
       page[0]: type=0 uncompressed_page_size=45 compressed_page_size=21 crc=0 num_values=2 encoding=0 definition_level_encoding=3 repetition_level_encoding=3 num_nulls=0 num_rows=0 definition_levels_byte_length=0 repetition_levels_byte_length=0 is_compressed=1 num_dict_values=0 dict_encoding=0

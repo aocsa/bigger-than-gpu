@@ -191,6 +191,37 @@ TEST_F(ParquetReaderTest, MetadataAccess) {
   EXPECT_GT(metadata.num_rows, 0);
 }
 
+// RowGroup thrift ids: 4 sorting_columns, 5 file_offset, 6 total_compressed_size, 7 ordinal.
+TEST(ParquetMetadataTest, RowGroupOffsetAndSizeMatchDuckDb) {
+  // Values from DuckDB's parquet_metadata(); 43246 does not fit an i16.
+  const auto path = std::filesystem::path(__FILE__).parent_path().parent_path() / "testdata" /
+                    "employees_uncompressed.parquet";
+  ASSERT_OK_AND_ASSIGN(auto reader, ParquetFileReader::Open(path.string()));
+  ASSERT_GE(reader.metadata().row_groups.size(), 2U);
+  const RowGroupMetadata& rg = reader.metadata().row_groups[1];
+  EXPECT_EQ(rg.file_offset, 43314);
+  EXPECT_EQ(rg.total_compressed_size, 43246);
+}
+
+TEST(ParquetMetadataTest, RowGroupSortingColumnsAreSkippedAndOrdinalIsRead) {
+  // No file under testdata/ writes sorting_columns or ordinal, so the footer is hand-encoded.
+  const std::vector<uint8_t> footer{
+      0x49, 0x1C,        // FileMetadata field 4 row_groups: list of 1 struct
+      0x49, 0x1C,        //   RowGroup field 4 sorting_columns: list of 1 struct
+      0x15, 0x06, 0x00,  //     SortingColumn field 1 column_idx = 3, stop
+      0x16, 0x08,        //   field 5 file_offset = 4
+      0x16, 0xD8, 0x04,  //   field 6 total_compressed_size = 300
+      0x14, 0x04,        //   field 7 ordinal = 2
+      0x00,              //   RowGroup stop
+      0x00};             // FileMetadata stop
+  ASSERT_OK_AND_ASSIGN(auto metadata, MetadataParser::Parse(footer));
+  ASSERT_EQ(metadata.row_groups.size(), 1U);
+  const RowGroupMetadata& rg = metadata.row_groups[0];
+  EXPECT_EQ(rg.file_offset, 4);
+  EXPECT_EQ(rg.total_compressed_size, 300);
+  EXPECT_EQ(rg.ordinal, 2);
+}
+
 TEST_F(ParquetReaderTest, EmptyProjection) {
   if (!std::filesystem::exists(employees_file())) {
     GTEST_SKIP() << "Test file not found: " << employees_file();

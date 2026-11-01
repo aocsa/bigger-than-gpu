@@ -3,7 +3,7 @@ num_rows=1
 created_by="DuckDB version v2.0.0 (build d54cbbe3df)"
 schema[0]: name="duckdb_schema" type=0 type_length=- repetition=0 num_children=1 logical_type=- precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
 schema[1]: name="id" type=7 type_length=16 repetition=0 num_children=0 logical_type=12 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
-row_group[0]: num_rows=1 total_byte_size=33 file_offset=- total_compressed_size=4 ordinal=35
+row_group[0]: num_rows=1 total_byte_size=33 file_offset=4 total_compressed_size=35 ordinal=-
   column[0]: file_path="" file_offset=0 type=7 encodings=[0] path_in_schema=["id"] codec=1 num_values=1 total_uncompressed_size=33 total_compressed_size=35 data_page_offset=4 index_page_offset=- dictionary_page_offset=-
     statistics: min=6d2a1f3e58b04a0c9e5b1f2d3c4b5a69 max=6d2a1f3e58b04a0c9e5b1f2d3c4b5a69 null_count=0 distinct_count=- num_values=-
       page[0]: type=0 uncompressed_page_size=16 compressed_page_size=18 crc=0 num_values=1 encoding=0 definition_level_encoding=3 repetition_level_encoding=3 num_nulls=0 num_rows=0 definition_levels_byte_length=0 repetition_levels_byte_length=0 is_compressed=1 num_dict_values=0 dict_encoding=0

@@ -7,7 +7,7 @@ schema[2]: name="o_custkey" type=2 type_length=- repetition=0 num_children=0 log
 schema[3]: name="o_orderdate" type=1 type_length=- repetition=0 num_children=0 logical_type=6 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
 schema[4]: name="o_orderpriority" type=6 type_length=- repetition=0 num_children=0 logical_type=1 precision=- scale=- field_id=- time_unit=- bit_width=- is_signed=-
 schema[5]: name="o_shippriority" type=1 type_length=- repetition=0 num_children=0 logical_type=9 precision=- scale=- field_id=- time_unit=- bit_width=32 is_signed=1
-row_group[0]: num_rows=15000 total_byte_size=185229 file_offset=- total_compressed_size=4 ordinal=-9972
+row_group[0]: num_rows=15000 total_byte_size=185229 file_offset=4 total_compressed_size=121100 ordinal=-
   column[0]: file_path="" file_offset=0 type=2 encodings=[0] path_in_schema=["o_orderkey"] codec=1 num_values=15000 total_uncompressed_size=120023 total_compressed_size=59861 data_page_offset=4 index_page_offset=- dictionary_page_offset=-
     statistics: min=0100000000000000 max=60ea000000000000 null_count=0 distinct_count=- num_values=-
   column[1]: file_path="" file_offset=0 type=2 encodings=[2] path_in_schema=["o_custkey"] codec=1 num_values=15000 total_uncompressed_size=26979 total_compressed_size=22989 data_page_offset=63885 index_page_offset=- dictionary_page_offset=59865
