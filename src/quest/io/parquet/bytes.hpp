@@ -18,7 +18,7 @@
 #include <span>
 #include <type_traits>
 
-#include "quest/result.hpp"
+#include "quest/common/result.hpp"
 
 namespace quest::datasource::parquet {
 

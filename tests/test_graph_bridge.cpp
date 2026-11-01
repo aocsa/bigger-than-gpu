@@ -14,7 +14,7 @@
 
 #include "quest/builder/query_builder.hpp"
 #include "quest/cache/batch_holder.hpp"
-#include "quest/execution/graph_builder.hpp"
+#include "quest/execution/lowering/plan_to_graph.hpp"
 #include "quest/taskflow/meta_pipeline.hpp"
 #include "support/test_utils.hpp"
 

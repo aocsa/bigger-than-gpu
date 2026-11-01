@@ -11,9 +11,9 @@
 #include <utility>
 #include <vector>
 
+#include "quest/common/result.hpp"
 #include "quest/datasource/data_source.hpp"
-#include "quest/datasource/file_reader.hpp"
-#include "quest/result.hpp"
+#include "quest/io/parquet/file_reader.hpp"
 
 namespace quest::datasource {
 

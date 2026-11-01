@@ -3,7 +3,7 @@
 
 #pragma once
 
-/// @file graph_builder.hpp
+/// @file plan_to_graph.hpp
 /// @brief Sirius-style create_plan gate: LogicalPlan → push-pipeline Graph.
 
 #include <cstdint>
@@ -11,12 +11,11 @@
 #include <utility>
 #include <vector>
 
-#include "quest/logical_plan/logical_expr.hpp"
-#include "quest/logical_plan/logical_plan.hpp"
+#include "quest/common/result.hpp"
 #include "quest/memory/memory_resource.hpp"
-#include "quest/physical_plan/expressions/physical_expr.hpp"
-#include "quest/quest.hpp"
-#include "quest/result.hpp"
+#include "quest/plan/logical/logical_expr.hpp"
+#include "quest/plan/logical/logical_plan.hpp"
+#include "quest/plan/physical/expressions/physical_expr.hpp"
 #include "quest/taskflow/graph.hpp"
 #include "quest/taskflow/graph_builder.hpp"
 #include "quest/taskflow/operators/collector_operator.hpp"
@@ -298,7 +297,9 @@ namespace detail {
     const LogicalPlan& plan,
     std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr) {
   if (!memory_manager) {
-    memory_manager = make_default_memory_manager();
+    memory_manager = std::make_shared<memory::MemoryResourceManager>(
+        std::make_shared<memory::CPUMemoryResource>(),
+        std::make_shared<memory::DiskMemoryResource>());
   }
 
   // TranslateNode wires internal edges as it recurses (branching nodes like

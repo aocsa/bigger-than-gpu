@@ -34,8 +34,8 @@
 #include <vector>
 
 #include "quest/cache/batch_holder.hpp"
+#include "quest/common/result.hpp"
 #include "quest/memory/memory_resource.hpp"
-#include "quest/result.hpp"
 #include "quest/taskflow/edge_config.hpp"
 #include "quest/taskflow/edge_ref.hpp"
 #include "quest/taskflow/operator.hpp"

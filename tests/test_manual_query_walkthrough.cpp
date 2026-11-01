@@ -31,10 +31,11 @@
 #include <vector>
 
 #include "quest/builder/query_builder.hpp"        // the oracle (fluent API)
-#include "quest/datasource/parquet_data_source.hpp"
-#include "quest/execution/graph_builder.hpp"      // CreatePhysicalExpr
-#include "quest/logical_plan/logical_expr.hpp"    // col(), lit(), gt()
-#include "quest/logical_plan/logical_plan.hpp"    // Scan, Selection, Projection
+#include "quest/execution/lowering/plan_to_graph.hpp"  // CreatePhysicalExpr
+#include "quest/io/parquet/parquet_data_source.hpp"
+#include "quest/plan/logical/logical_expr.hpp"    // col(), lit(), gt()
+#include "quest/plan/logical/logical_plan.hpp"    // Scan, Selection, Projection
+#include "quest/quest.hpp"                       // make_default_memory_manager
 #include "quest/taskflow/graph_builder.hpp"       // GraphBuilder (Phase 2.5 D3)
 #include "quest/taskflow/meta_pipeline.hpp"       // MetaPipeline::Build
 #include "quest/taskflow/operators/collector_operator.hpp"

@@ -7,9 +7,9 @@
 #include <string>
 #include <vector>
 
-#include "quest/datasource/record_batch.hpp"
-#include "quest/datasource/schema.hpp"
-#include "quest/result.hpp"
+#include "quest/columnar/record_batch.hpp"
+#include "quest/columnar/schema.hpp"
+#include "quest/common/result.hpp"
 
 namespace quest::datasource {
 

@@ -12,12 +12,12 @@
 #include <string>
 #include <vector>
 
-#include "quest/datasource/column_reader.hpp"
-#include "quest/datasource/parquet/compression.hpp"
-#include "quest/datasource/parquet/metadata.hpp"
-#include "quest/datasource/record_batch.hpp"
-#include "quest/datasource/schema.hpp"
-#include "quest/result.hpp"
+#include "quest/columnar/record_batch.hpp"
+#include "quest/columnar/schema.hpp"
+#include "quest/common/result.hpp"
+#include "quest/io/parquet/column_reader.hpp"
+#include "quest/io/parquet/compression.hpp"
+#include "quest/io/parquet/metadata.hpp"
 
 namespace quest::datasource {
 

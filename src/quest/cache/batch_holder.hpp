@@ -19,8 +19,8 @@
 
 #include "quest/cache/blocking_queue.hpp"
 #include "quest/cache/data_block.hpp"
+#include "quest/common/result.hpp"
 #include "quest/memory/memory_resource.hpp"
-#include "quest/result.hpp"
 
 namespace quest::cache {
 

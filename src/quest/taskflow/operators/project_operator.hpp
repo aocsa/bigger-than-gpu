@@ -13,11 +13,11 @@
 #include <vector>
 
 #include "quest/cache/data_block.hpp"
-#include "quest/datasource/schema.hpp"
-#include "quest/execution/batch_kernels.hpp"
+#include "quest/columnar/schema.hpp"
+#include "quest/common/result.hpp"
+#include "quest/execution/kernels/batch_kernels.hpp"
 #include "quest/memory/memory_resource.hpp"
-#include "quest/physical_plan/expressions/physical_expr.hpp"
-#include "quest/result.hpp"
+#include "quest/plan/physical/expressions/physical_expr.hpp"
 #include "quest/taskflow/operator.hpp"
 
 namespace quest::taskflow {
@@ -37,7 +37,7 @@ class ProjectOperator : public SimpleOperator {
 
  protected:
   [[nodiscard]] Result<cache::DataBlockPtr> ProcessBatch(cache::DataBlockPtr input) override {
-    auto host_result = execution::EnsureHostBlock(std::move(input));
+    auto host_result = cache::EnsureHostBlock(std::move(input));
     if (!host_result) {
       return std::unexpected(host_result.error());
     }
@@ -52,7 +52,7 @@ class ProjectOperator : public SimpleOperator {
       return std::unexpected(projected.error());
     }
 
-    return execution::MakeTrackedHostBlock(std::format("project_{}", id()), std::move(*projected),
+    return cache::MakeTrackedHostBlock(std::format("project_{}", id()), std::move(*projected),
                                            memory_manager_);
   }
 

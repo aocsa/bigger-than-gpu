@@ -17,8 +17,7 @@
 #include <utility>
 
 #include "quest/cache/data_block.hpp"
-#include "quest/execution/batch_kernels.hpp"
-#include "quest/result.hpp"
+#include "quest/common/result.hpp"
 #include "quest/taskflow/operator.hpp"
 
 namespace quest::taskflow {
@@ -36,7 +35,7 @@ class PrintOperator : public Operator {
     if (!batch || batch->num_rows() == 0) {
       return {};
     }
-    auto host = execution::EnsureHostBlock(std::move(batch));
+    auto host = cache::EnsureHostBlock(std::move(batch));
     if (!host) {
       return std::unexpected(host.error());
     }

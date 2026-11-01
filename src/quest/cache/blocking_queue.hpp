@@ -15,7 +15,7 @@
 #include <string_view>
 #include <vector>
 
-#include "quest/result.hpp"
+#include "quest/common/result.hpp"
 
 namespace quest::cache {
 

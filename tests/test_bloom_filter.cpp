@@ -9,7 +9,7 @@
 #include <limits>
 #include <vector>
 
-#include "quest/execution/bloom_filter.hpp"
+#include "quest/execution/kernels/bloom_filter.hpp"
 #include "../examples/bloom_join/tpch_bloom_join.hpp"
 
 namespace {

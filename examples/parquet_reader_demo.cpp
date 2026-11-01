@@ -11,8 +11,7 @@
 #include <string>
 #include <vector>
 
-#include "quest/datasource/parquet/parquet_reader.hpp"
-#include "quest/datasource/parquet_data_source.hpp"
+#include "quest/io/parquet/parquet_data_source.hpp"
 
 using namespace quest::datasource;
 

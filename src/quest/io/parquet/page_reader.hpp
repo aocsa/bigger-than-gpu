@@ -9,10 +9,10 @@
 #include <span>
 #include <vector>
 
-#include "quest/datasource/parquet/encoding.hpp"
-#include "quest/datasource/parquet/thrift_decoder.hpp"
-#include "quest/datasource/types.hpp"
-#include "quest/result.hpp"
+#include "quest/columnar/types.hpp"
+#include "quest/common/result.hpp"
+#include "quest/io/parquet/encoding.hpp"
+#include "quest/io/parquet/thrift_decoder.hpp"
 
 namespace quest::datasource {
 

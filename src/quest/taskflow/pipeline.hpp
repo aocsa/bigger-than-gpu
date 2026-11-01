@@ -22,7 +22,7 @@
 
 #include "quest/cache/batch_holder.hpp"
 #include "quest/cache/data_block.hpp"
-#include "quest/result.hpp"
+#include "quest/common/result.hpp"
 #include "quest/taskflow/edge_config.hpp"
 #include "quest/taskflow/operator.hpp"
 

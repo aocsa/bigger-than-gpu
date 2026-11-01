@@ -1,6 +1,6 @@
 #include "quest/cache/data_block.hpp"
 
-#include "quest/datasource/record_batch_serializer.hpp"
+#include "quest/columnar/record_batch_serializer.hpp"
 
 namespace quest::cache {
 
@@ -206,6 +206,73 @@ void DiskBlock::Release() {
   owns_file_ = false;
   file_path_.clear();
   size_bytes_ = 0;
+}
+
+// =============================================================================
+// Host Block Helpers
+// =============================================================================
+
+Result<std::shared_ptr<HostMemoryBlock>> EnsureHostBlock(DataBlockPtr input) {
+  if (!input) {
+    return Error::Invalid("Null data block");
+  }
+  if (input->tier() == memory::MemoryTier::CPU) {
+    auto host = std::dynamic_pointer_cast<HostMemoryBlock>(input);
+    if (!host) {
+      return Error::Invalid("CPU-tier block is not a HostMemoryBlock");
+    }
+    return host;
+  }
+  return input->ToCpu();
+}
+
+std::shared_ptr<HostMemoryBlock> MakeTrackedHostBlock(
+    std::string block_id, datasource::RecordBatch batch,
+    const std::shared_ptr<memory::MemoryResourceManager>& memory_manager) {
+  std::shared_ptr<memory::CPUMemoryResource> cpu;
+  std::shared_ptr<memory::DiskMemoryResource> disk;
+  if (memory_manager) {
+    cpu = memory_manager->cpu_ptr();
+    disk = memory_manager->disk_ptr();
+  }
+  auto block =
+      std::make_shared<HostMemoryBlock>(std::move(block_id), std::move(batch), std::move(cpu));
+  if (disk) {
+    block->set_disk_resource(std::move(disk));
+  }
+  return block;
+}
+
+Result<DataBlockPtr> ConcatenateHostBlocks(std::vector<DataBlockPtr> blocks) {
+  if (blocks.empty()) {
+    return Error::Invalid("No data blocks to concatenate");
+  }
+  if (blocks.size() == 1) {
+    return std::move(blocks[0]);
+  }
+
+  std::vector<std::shared_ptr<HostMemoryBlock>> hosts;
+  hosts.reserve(blocks.size());
+  std::vector<const datasource::RecordBatch*> batches;
+  batches.reserve(blocks.size());
+  for (auto& block : blocks) {
+    auto host_result = EnsureHostBlock(block);
+    if (!host_result) {
+      return std::unexpected(host_result.error());
+    }
+    auto host = std::move(*host_result);
+    if (!host->record_batch()) {
+      return Error::Invalid("HostMemoryBlock has no record batch");
+    }
+    batches.push_back(host->record_batch());
+    hosts.push_back(std::move(host));
+  }
+
+  auto merged = datasource::ConcatenateRecordBatches(batches);
+  if (!merged) {
+    return std::unexpected(merged.error());
+  }
+  return std::make_shared<HostMemoryBlock>("concatenated", std::move(*merged));
 }
 
 }  // namespace quest::cache

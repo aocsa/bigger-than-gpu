@@ -12,7 +12,7 @@
 #include <string>
 #include <string_view>
 
-#include "quest/result.hpp"
+#include "quest/common/result.hpp"
 
 namespace quest::memory {
 

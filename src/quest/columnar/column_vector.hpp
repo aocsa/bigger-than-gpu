@@ -11,10 +11,12 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
-#include "types.hpp"
+#include "quest/columnar/types.hpp"
+#include "quest/common/result.hpp"
 
 namespace quest::datasource {
 
@@ -219,6 +221,95 @@ inline std::unique_ptr<ColumnVector> CreateColumnVector(const DataType& type,
         }
       },
       type);
+}
+
+/// @brief Append values from @p src onto a typed destination column.
+[[nodiscard]] inline Status AppendColumnValues(ColumnVector& dest, const ColumnVector& src) {
+  return std::visit(
+      [&dest, &src](const auto& type_tag) -> Status {
+        using TypeTag = std::decay_t<decltype(type_tag)>;
+        auto append_one = [&](auto* typed) -> Status {
+          if (!typed) {
+            return Error::Invalid("Concatenate destination type mismatch");
+          }
+          for (size_t i = 0; i < src.size(); ++i) {
+            auto val = src.GetValue(i);
+            if (std::holds_alternative<std::monostate>(val)) {
+              typed->AppendNull();
+              continue;
+            }
+            if constexpr (std::is_same_v<TypeTag, BoolType>) {
+              if (auto* v = std::get_if<bool>(&val)) {
+                typed->Append(*v);
+              } else {
+                return Error::Invalid("Concatenate value type mismatch (bool)");
+              }
+            } else if constexpr (std::is_same_v<TypeTag, Int8Type>) {
+              if (auto* v = std::get_if<int8_t>(&val)) {
+                typed->Append(*v);
+              } else {
+                return Error::Invalid("Concatenate value type mismatch (int8)");
+              }
+            } else if constexpr (std::is_same_v<TypeTag, Int16Type>) {
+              if (auto* v = std::get_if<int16_t>(&val)) {
+                typed->Append(*v);
+              } else {
+                return Error::Invalid("Concatenate value type mismatch (int16)");
+              }
+            } else if constexpr (std::is_same_v<TypeTag, Int32Type>) {
+              if (auto* v = std::get_if<int32_t>(&val)) {
+                typed->Append(*v);
+              } else {
+                return Error::Invalid("Concatenate value type mismatch (int32)");
+              }
+            } else if constexpr (std::is_same_v<TypeTag, Int64Type>) {
+              if (auto* v = std::get_if<int64_t>(&val)) {
+                typed->Append(*v);
+              } else {
+                return Error::Invalid("Concatenate value type mismatch (int64)");
+              }
+            } else if constexpr (std::is_same_v<TypeTag, FloatType>) {
+              if (auto* v = std::get_if<float>(&val)) {
+                typed->Append(*v);
+              } else {
+                return Error::Invalid("Concatenate value type mismatch (float)");
+              }
+            } else if constexpr (std::is_same_v<TypeTag, DoubleType>) {
+              if (auto* v = std::get_if<double>(&val)) {
+                typed->Append(*v);
+              } else {
+                return Error::Invalid("Concatenate value type mismatch (double)");
+              }
+            } else {
+              if (auto* v = std::get_if<std::string>(&val)) {
+                typed->Append(*v);
+              } else {
+                typed->Append(ValueToString(val));
+              }
+            }
+          }
+          return {};
+        };
+
+        if constexpr (std::is_same_v<TypeTag, BoolType>) {
+          return append_one(dynamic_cast<TypedColumnVector<bool>*>(&dest));
+        } else if constexpr (std::is_same_v<TypeTag, Int8Type>) {
+          return append_one(dynamic_cast<TypedColumnVector<int8_t>*>(&dest));
+        } else if constexpr (std::is_same_v<TypeTag, Int16Type>) {
+          return append_one(dynamic_cast<TypedColumnVector<int16_t>*>(&dest));
+        } else if constexpr (std::is_same_v<TypeTag, Int32Type>) {
+          return append_one(dynamic_cast<TypedColumnVector<int32_t>*>(&dest));
+        } else if constexpr (std::is_same_v<TypeTag, Int64Type>) {
+          return append_one(dynamic_cast<TypedColumnVector<int64_t>*>(&dest));
+        } else if constexpr (std::is_same_v<TypeTag, FloatType>) {
+          return append_one(dynamic_cast<TypedColumnVector<float>*>(&dest));
+        } else if constexpr (std::is_same_v<TypeTag, DoubleType>) {
+          return append_one(dynamic_cast<TypedColumnVector<double>*>(&dest));
+        } else {
+          return append_one(dynamic_cast<StringColumnVector*>(&dest));
+        }
+      },
+      src.GetType());
 }
 
 }  // namespace quest::datasource

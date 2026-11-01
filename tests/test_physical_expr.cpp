@@ -10,12 +10,12 @@
 #include <memory>
 #include <vector>
 
-#include "quest/datasource/column_vector.hpp"
-#include "quest/datasource/record_batch.hpp"
-#include "quest/execution/graph_builder.hpp"
-#include "quest/logical_plan/logical_expr.hpp"
-#include "quest/logical_plan/logical_plan.hpp"
-#include "quest/physical_plan/expressions/physical_expr.hpp"
+#include "quest/columnar/column_vector.hpp"
+#include "quest/columnar/record_batch.hpp"
+#include "quest/execution/lowering/plan_to_graph.hpp"
+#include "quest/plan/logical/logical_expr.hpp"
+#include "quest/plan/logical/logical_plan.hpp"
+#include "quest/plan/physical/expressions/physical_expr.hpp"
 #include "support/test_utils.hpp"
 
 using namespace quest;

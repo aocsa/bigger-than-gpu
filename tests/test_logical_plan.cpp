@@ -6,8 +6,8 @@
 
 #include <gtest/gtest.h>
 
-#include "quest/logical_plan/logical_expr.hpp"
-#include "quest/logical_plan/logical_plan.hpp"
+#include "quest/plan/logical/logical_expr.hpp"
+#include "quest/plan/logical/logical_plan.hpp"
 #include "support/test_utils.hpp"
 
 using namespace quest;

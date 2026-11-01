@@ -16,10 +16,10 @@
 #include <string>
 #include <vector>
 
-#include "quest/datasource/column_vector.hpp"
-#include "quest/datasource/parquet/bytes.hpp"
-#include "quest/datasource/types.hpp"
-#include "quest/result.hpp"
+#include "quest/columnar/column_vector.hpp"
+#include "quest/columnar/types.hpp"
+#include "quest/common/result.hpp"
+#include "quest/io/parquet/bytes.hpp"
 
 namespace quest::datasource::parquet {
 

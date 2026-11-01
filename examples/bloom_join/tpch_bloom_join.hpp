@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-#include "quest/execution/bloom_filter.hpp"
+#include "quest/execution/kernels/bloom_filter.hpp"
 
 namespace quest::examples {
 

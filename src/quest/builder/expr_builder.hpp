@@ -17,7 +17,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "quest/logical_plan/logical_expr.hpp"
+#include "quest/plan/logical/logical_expr.hpp"
 
 namespace quest {
 

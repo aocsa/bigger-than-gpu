@@ -9,14 +9,14 @@
 #include <span>
 #include <vector>
 
-#include "quest/datasource/column_vector.hpp"
-#include "quest/datasource/page_reader.hpp"
-#include "quest/datasource/parquet/compression.hpp"
-#include "quest/datasource/parquet/encoding.hpp"
-#include "quest/datasource/parquet/metadata.hpp"
-#include "quest/datasource/schema.hpp"
-#include "quest/datasource/types.hpp"
-#include "quest/result.hpp"
+#include "quest/columnar/column_vector.hpp"
+#include "quest/columnar/schema.hpp"
+#include "quest/columnar/types.hpp"
+#include "quest/common/result.hpp"
+#include "quest/io/parquet/compression.hpp"
+#include "quest/io/parquet/encoding.hpp"
+#include "quest/io/parquet/metadata.hpp"
+#include "quest/io/parquet/page_reader.hpp"
 
 namespace quest::datasource {
 

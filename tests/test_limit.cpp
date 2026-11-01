@@ -14,9 +14,9 @@
 
 #include "quest/builder/query_builder.hpp"
 #include "quest/cache/data_block.hpp"
-#include "quest/execution/batch_kernels.hpp"
-#include "quest/execution/graph_builder.hpp"
-#include "quest/logical_plan/logical_plan.hpp"
+#include "quest/execution/kernels/batch_kernels.hpp"
+#include "quest/execution/lowering/plan_to_graph.hpp"
+#include "quest/plan/logical/logical_plan.hpp"
 #include "quest/taskflow/meta_pipeline.hpp"
 #include "quest/taskflow/operators/limit_operator.hpp"
 #include "quest/taskflow/pipeline.hpp"

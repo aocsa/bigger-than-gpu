@@ -12,10 +12,10 @@
 #include <string>
 #include <vector>
 
-#include "quest/datasource/schema.hpp"
-#include "quest/datasource/types.hpp"
-#include "quest/datasource/parquet/thrift_decoder.hpp"
-#include "quest/result.hpp"
+#include "quest/columnar/schema.hpp"
+#include "quest/columnar/types.hpp"
+#include "quest/io/parquet/thrift_decoder.hpp"
+#include "quest/common/result.hpp"
 
 namespace quest::datasource::parquet {
 

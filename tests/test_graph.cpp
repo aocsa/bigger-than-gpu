@@ -268,7 +268,7 @@ TEST(GraphExecutionTest, ConcatenatingBatchHolder) {
   std::size_t received_count = 0;
   // Multiple source batches: the concatenating holder merges them all into
   // ONE block delivered at Pull (multi-block concat implemented in Phase 1
-  // via execution::ConcatenateHostBlocks).
+  // via cache::ConcatenateHostBlocks).
   SourceOperator source(0, 3);
   SinkOperator sink(1, received_count);
 

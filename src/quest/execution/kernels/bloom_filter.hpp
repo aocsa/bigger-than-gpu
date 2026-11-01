@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "quest/result.hpp"
+#include "quest/common/result.hpp"
 
 namespace quest::execution {
 

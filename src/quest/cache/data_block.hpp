@@ -8,10 +8,11 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <vector>
 
-#include "quest/datasource/record_batch.hpp"
+#include "quest/columnar/record_batch.hpp"
+#include "quest/common/result.hpp"
 #include "quest/memory/memory_resource.hpp"
-#include "quest/result.hpp"
 
 namespace quest::cache {
 
@@ -172,5 +173,27 @@ class DiskBlock final : public DataBlock {
 // =============================================================================
 
 using DataBlockPtr = std::shared_ptr<DataBlock>;
+
+// =============================================================================
+// Host Block Helpers
+// =============================================================================
+
+/// @brief Ensure a DataBlock is resident in CPU and return its HostMemoryBlock.
+[[nodiscard]] Result<std::shared_ptr<HostMemoryBlock>> EnsureHostBlock(DataBlockPtr input);
+
+/// @brief Wrap a RecordBatch in a HostMemoryBlock carrying both memory
+/// resources from @p memory_manager (which may be null).
+///
+/// Every operator that creates output blocks must use this instead of a
+/// bare HostMemoryBlock: without the CPU resource the allocation is
+/// invisible to saturation accounting, and without the disk resource
+/// ToDisk() fails — MaybeSpill then silently keeps the data in RAM, so a
+/// plan with any filter/project before a pipeline break could never spill.
+[[nodiscard]] std::shared_ptr<HostMemoryBlock> MakeTrackedHostBlock(
+    std::string block_id, datasource::RecordBatch batch,
+    const std::shared_ptr<memory::MemoryResourceManager>& memory_manager);
+
+/// @brief Column-wise concatenate of HostMemoryBlock RecordBatches.
+[[nodiscard]] Result<DataBlockPtr> ConcatenateHostBlocks(std::vector<DataBlockPtr> blocks);
 
 }  // namespace quest::cache

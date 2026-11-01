@@ -9,7 +9,7 @@
 
 #include <vector>
 
-#include "quest/result.hpp"
+#include "quest/common/result.hpp"
 #include "quest/taskflow/graph.hpp"
 #include "quest/taskflow/pipeline.hpp"
 

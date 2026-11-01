@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#include "quest/result.hpp"
+#include "quest/common/result.hpp"
 
 namespace quest::datasource::parquet {
 

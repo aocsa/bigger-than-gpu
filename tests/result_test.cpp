@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 
-#include "quest/result.hpp"
+#include "quest/common/result.hpp"
 #include "support/test_utils.hpp"
 
 using namespace quest;

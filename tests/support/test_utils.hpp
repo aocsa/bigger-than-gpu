@@ -4,10 +4,10 @@
 
 #include <utility>
 
-#include "quest/datasource/column_vector.hpp"
-#include "quest/datasource/record_batch.hpp"
-#include "quest/datasource/schema.hpp"
-#include "quest/datasource/types.hpp"
+#include "quest/columnar/column_vector.hpp"
+#include "quest/columnar/record_batch.hpp"
+#include "quest/columnar/schema.hpp"
+#include "quest/columnar/types.hpp"
 
 // Helper macro to generate unique variable names
 #define QUEST_TEST_CONCAT_IMPL(x, y) x##y

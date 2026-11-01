@@ -11,7 +11,7 @@
 
 #include "quest/builder/expr_builder.hpp"
 #include "quest/builder/query_plan.hpp"
-#include "quest/datasource/record_batch.hpp"
+#include "quest/columnar/record_batch.hpp"
 
 using namespace quest;
 using namespace quest::datasource;

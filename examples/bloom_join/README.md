@@ -29,7 +29,7 @@ ctest --test-dir build -R 'BloomFilter|BloomJoin' --output-on-failure
 
 ## Recorrido del código
 
-- `src/quest/execution/bloom_filter.hpp`: bits, mezcla determinista de claves,
+- `src/quest/execution/kernels/bloom_filter.hpp`: bits, mezcla determinista de claves,
   inserción y consulta. Un cero prueba ausencia; todos unos solo indican posibilidad.
 - `tpch_bloom_join.hpp`: `AddBuildBatch` filtra PART por marca y construye el Bloom
   y una tabla exacta de multiplicidades. `FinalizeBuild` cierra la entrada.

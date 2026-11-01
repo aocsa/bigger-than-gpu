@@ -18,9 +18,9 @@
 #include <utility>
 
 #include "quest/cache/data_block.hpp"
-#include "quest/execution/batch_kernels.hpp"
+#include "quest/common/result.hpp"
+#include "quest/execution/kernels/batch_kernels.hpp"
 #include "quest/memory/memory_resource.hpp"
-#include "quest/result.hpp"
 #include "quest/taskflow/operator.hpp"
 
 namespace quest::taskflow {
@@ -51,7 +51,7 @@ class LimitOperator : public SimpleOperator {
 
  protected:
   [[nodiscard]] Result<cache::DataBlockPtr> ProcessBatch(cache::DataBlockPtr input) override {
-    auto host_result = execution::EnsureHostBlock(std::move(input));
+    auto host_result = cache::EnsureHostBlock(std::move(input));
     if (!host_result) {
       return std::unexpected(host_result.error());
     }
@@ -77,7 +77,7 @@ class LimitOperator : public SimpleOperator {
     }
 
     if (take == 0) {
-      return execution::MakeTrackedHostBlock(std::format("limit_{}", id()),
+      return cache::MakeTrackedHostBlock(std::format("limit_{}", id()),
                                              datasource::RecordBatch(batch->schema(), {}),
                                              memory_manager_);
     }
@@ -90,7 +90,7 @@ class LimitOperator : public SimpleOperator {
     if (!truncated) {
       return std::unexpected(truncated.error());
     }
-    return execution::MakeTrackedHostBlock(std::format("limit_{}", id()), std::move(*truncated),
+    return cache::MakeTrackedHostBlock(std::format("limit_{}", id()), std::move(*truncated),
                                            memory_manager_);
   }
 

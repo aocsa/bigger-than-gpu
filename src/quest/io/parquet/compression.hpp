@@ -13,8 +13,8 @@
 
 #include <snappy.h>
 
-#include "quest/datasource/types.hpp"
-#include "quest/result.hpp"
+#include "quest/columnar/types.hpp"
+#include "quest/common/result.hpp"
 
 namespace quest::datasource::parquet {
 

@@ -16,10 +16,9 @@
 #include <vector>
 
 #include "quest/cache/data_block.hpp"
+#include "quest/common/result.hpp"
 #include "quest/datasource/data_source.hpp"
-#include "quest/execution/batch_kernels.hpp"
 #include "quest/memory/memory_resource.hpp"
-#include "quest/result.hpp"
 #include "quest/taskflow/operator.hpp"
 
 namespace quest::taskflow {
@@ -67,7 +66,7 @@ class TableScanOperator : public Operator {
     }
 
     return std::optional<cache::DataBlockPtr>{
-        execution::MakeTrackedHostBlock(std::format("scan_{}_{}", id(), next_batch_id_++),
+        cache::MakeTrackedHostBlock(std::format("scan_{}_{}", id(), next_batch_id_++),
                                         std::move(*batch_result), memory_manager_)};
   }
 

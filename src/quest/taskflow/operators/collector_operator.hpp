@@ -13,8 +13,8 @@
 #include <vector>
 
 #include "quest/cache/data_block.hpp"
-#include "quest/datasource/column_vector.hpp"
-#include "quest/datasource/record_batch.hpp"
+#include "quest/columnar/column_vector.hpp"
+#include "quest/columnar/record_batch.hpp"
 #include "quest/memory/memory_resource.hpp"
 #include "quest/taskflow/operator.hpp"
 

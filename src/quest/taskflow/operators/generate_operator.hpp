@@ -21,13 +21,12 @@
 #include <vector>
 
 #include "quest/cache/data_block.hpp"
-#include "quest/datasource/column_vector.hpp"
-#include "quest/datasource/record_batch.hpp"
-#include "quest/datasource/schema.hpp"
-#include "quest/datasource/types.hpp"
-#include "quest/execution/batch_kernels.hpp"
+#include "quest/columnar/column_vector.hpp"
+#include "quest/columnar/record_batch.hpp"
+#include "quest/columnar/schema.hpp"
+#include "quest/columnar/types.hpp"
+#include "quest/common/result.hpp"
 #include "quest/memory/memory_resource.hpp"
-#include "quest/result.hpp"
 #include "quest/taskflow/operator.hpp"
 
 namespace quest::taskflow {
@@ -72,7 +71,7 @@ class GenerateOperator : public Operator {
 
     next_row_ += rows_per_batch_;
     ++emitted_;
-    return std::optional<cache::DataBlockPtr>{execution::MakeTrackedHostBlock(
+    return std::optional<cache::DataBlockPtr>{cache::MakeTrackedHostBlock(
         std::format("generate_{}_{}", id(), emitted_),
         datasource::RecordBatch(schema_, std::move(columns)), memory_manager_)};
   }

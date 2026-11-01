@@ -8,11 +8,11 @@
 #include <memory>
 #include <vector>
 
-#include "column_vector.hpp"
-#include "record_batch.hpp"
-#include "schema.hpp"
-#include "types.hpp"
-#include "quest/result.hpp"
+#include "quest/columnar/column_vector.hpp"
+#include "quest/columnar/record_batch.hpp"
+#include "quest/columnar/schema.hpp"
+#include "quest/columnar/types.hpp"
+#include "quest/common/result.hpp"
 
 namespace quest::datasource {
 

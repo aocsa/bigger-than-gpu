@@ -7,10 +7,12 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "column_vector.hpp"
-#include "schema.hpp"
+#include "quest/columnar/column_vector.hpp"
+#include "quest/columnar/schema.hpp"
+#include "quest/common/result.hpp"
 
 namespace quest::datasource {
 
@@ -72,5 +74,44 @@ class RecordBatch {
   Schema schema_;
   std::vector<std::shared_ptr<ColumnVector>> columns_;
 };
+
+/// @brief Column-wise concatenate @p batches into one RecordBatch.
+/// @param batches Non-null batches sharing the first batch's field count.
+/// @return The merged batch, or SchemaError if field counts differ.
+[[nodiscard]] inline Result<RecordBatch> ConcatenateRecordBatches(
+    const std::vector<const RecordBatch*>& batches) {
+  if (batches.empty()) {
+    return Error::Invalid("No record batches to concatenate");
+  }
+
+  size_t total_rows = 0;
+  for (const auto* batch : batches) {
+    total_rows += batch->num_rows();
+  }
+
+  const auto& schema = batches[0]->schema();
+  const size_t num_cols = schema.num_fields();
+  for (size_t i = 1; i < batches.size(); ++i) {
+    if (batches[i]->schema().num_fields() != num_cols) {
+      return Error::SchemaError("Concatenate schema mismatch");
+    }
+  }
+
+  std::vector<std::shared_ptr<ColumnVector>> columns;
+  columns.reserve(num_cols);
+  for (size_t c = 0; c < num_cols; ++c) {
+    auto unique_col = CreateColumnVector(schema.field(c).data_type, total_rows);
+    std::shared_ptr<ColumnVector> dest(std::move(unique_col));
+    for (const auto* batch : batches) {
+      auto status = AppendColumnValues(*dest, batch->column(c));
+      if (!status) {
+        return std::unexpected(status.error());
+      }
+    }
+    columns.push_back(std::move(dest));
+  }
+
+  return RecordBatch(schema, std::move(columns));
+}
 
 }  // namespace quest::datasource

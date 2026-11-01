@@ -15,9 +15,9 @@
 #include <utility>
 #include <vector>
 
+#include "quest/common/result.hpp"
 #include "quest/datasource/data_source.hpp"
-#include "quest/logical_plan/logical_expr.hpp"
-#include "quest/result.hpp"
+#include "quest/plan/logical/logical_expr.hpp"
 
 namespace quest {
 

@@ -3,7 +3,7 @@
 /// @file quest.hpp
 /// @brief Convenience umbrella header for the QUEST library.
 
-#include "quest/result.hpp"
+#include "quest/common/result.hpp"
 #include "quest/memory/memory_resource.hpp"
 #include "quest/cache/blocking_queue.hpp"
 #include "quest/cache/data_block.hpp"

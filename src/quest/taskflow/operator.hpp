@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "quest/cache/batch_holder.hpp"
-#include "quest/result.hpp"
+#include "quest/common/result.hpp"
 #include "quest/taskflow/edge_config.hpp"
 #include "quest/taskflow/operator_type.hpp"
 #include "quest/taskflow/port.hpp"

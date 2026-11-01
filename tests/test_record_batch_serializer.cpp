@@ -12,11 +12,11 @@
 #include <string>
 #include <vector>
 
-#include "quest/datasource/column_vector.hpp"
-#include "quest/datasource/record_batch.hpp"
-#include "quest/datasource/record_batch_serializer.hpp"
-#include "quest/datasource/schema.hpp"
-#include "quest/datasource/types.hpp"
+#include "quest/columnar/column_vector.hpp"
+#include "quest/columnar/record_batch.hpp"
+#include "quest/columnar/record_batch_serializer.hpp"
+#include "quest/columnar/schema.hpp"
+#include "quest/columnar/types.hpp"
 #include "support/test_utils.hpp"
 
 using namespace quest::datasource;

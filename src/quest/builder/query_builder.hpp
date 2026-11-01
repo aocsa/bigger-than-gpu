@@ -14,7 +14,7 @@
 
 #include "quest/builder/expr_builder.hpp"
 #include "quest/builder/query_plan.hpp"
-#include "quest/execution/graph_builder.hpp"
+#include "quest/execution/lowering/plan_to_graph.hpp"
 #include "quest/memory/memory_resource.hpp"
 
 namespace quest {

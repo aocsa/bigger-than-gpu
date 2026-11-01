@@ -1,7 +1,5 @@
 #include "quest/cache/batch_holder.hpp"
 
-#include "quest/execution/batch_kernels.hpp"
-
 namespace quest::cache {
 
 // =============================================================================
@@ -258,7 +256,7 @@ Result<std::optional<DataBlockPtr>> ConcatenatingBatchHolder::NextChunk() {
   if (chunk.size() == 1) {
     return std::move(chunk.front());
   }
-  return execution::ConcatenateHostBlocks(std::move(chunk));
+  return ConcatenateHostBlocks(std::move(chunk));
 }
 
 void ConcatenatingBatchHolder::WaitIfSaturated() {
@@ -282,7 +280,7 @@ Result<std::optional<DataBlockPtr>> ConcatenatingBatchHolder::ConcatenateAll() {
   if (blocks.empty()) {
     return std::nullopt;
   }
-  return execution::ConcatenateHostBlocks(std::move(blocks));
+  return ConcatenateHostBlocks(std::move(blocks));
 }
 
 // =============================================================================
