@@ -79,3 +79,19 @@ it against a source. Plausibility is not accuracy for someone else's system.
 exclusive — never draw two modes as one cluster; render them as separate figures the way the
 upstream docs do.
 **Promoted to**: none
+
+## Lesson #4: An expected pipeline or a shared helper can move a resource's lifetime
+**Date**: 2026-11-01
+**What happened**: In the slim-down (3bd73e6) I turned Filter/Project into
+`EnsureHostBlock(...).and_then(...).transform(MakeTrackedHostBlock)` and Sort/HashJoin into
+`ConcatenateHostBlocks()`. Results stayed identical and every test passed, but the input host
+block now died inside the `and_then` lambda before the output was tracked, and the helper freed
+loaded/spilled blocks at different points. CPU peak/used bytes and spill-file deletion changed.
+A diff review caught it; the tests could not.
+**Root cause**: `and_then` passes the value into the lambda by value, so an RAII object (a
+tracked block) ends with that lambda. A helper that owns its inputs decides when they are freed.
+I checked results and error codes, not destruction order.
+**Rule**: When a cleanup moves an RAII value (tracked memory, files, locks) into a lambda or a
+helper, compare its destruction point with the old code before calling it behaviour-neutral.
+Keep such values as named locals when their lifetime is part of the contract.
+**Promoted to**: none
