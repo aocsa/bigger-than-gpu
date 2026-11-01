@@ -14,7 +14,7 @@
 #include "quest/columnar/record_batch.hpp"
 
 using namespace quest;
-using namespace quest::datasource;
+using namespace quest::columnar;
 
 // =============================================================================
 // ExprBuilder Tests

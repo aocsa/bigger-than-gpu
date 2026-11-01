@@ -19,15 +19,11 @@
 #include "quest/io/parquet/compression.hpp"
 #include "quest/io/parquet/metadata.hpp"
 
-namespace quest::datasource {
+namespace quest::io::parquet {
 
-using parquet::CompressionCodec;
-using parquet::CreateCodec;
-using parquet::FileMetadata;
-using parquet::RowGroupMetadata;
-using parquet::ColumnChunkMetadata;
-using parquet::MetadataParser;
-using parquet::BuildSchema;
+using columnar::ColumnVector;
+using columnar::RecordBatch;
+using columnar::Schema;
 
 // =============================================================================
 // Constants
@@ -268,7 +264,7 @@ class ParquetFileReader {
     if (!footer_len_result.has_value()) {
       return std::unexpected(footer_len_result.error());
     }
-    auto footer_length_result = parquet::LoadLE<uint32_t>(footer_len_result.value(), 0);
+    auto footer_length_result = LoadLE<uint32_t>(footer_len_result.value(), 0);
     if (!footer_length_result) {
       return std::unexpected(std::move(footer_length_result).error());
     }
@@ -310,4 +306,4 @@ class ParquetFileReader {
   Schema schema_;
 };
 
-}  // namespace quest::datasource
+}  // namespace quest::io::parquet

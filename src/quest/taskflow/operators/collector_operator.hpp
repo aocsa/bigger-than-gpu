@@ -74,8 +74,8 @@ class CollectorOperator : public Operator {
   [[nodiscard]] std::size_t disk_tier_count() const noexcept { return disk_tier_count_; }
 
   /// @brief Materialize collected blocks as RecordBatches (CPU upgrade if needed).
-  [[nodiscard]] Result<std::vector<datasource::RecordBatch>> CollectBatches() const {
-    std::vector<datasource::RecordBatch> out;
+  [[nodiscard]] Result<std::vector<columnar::RecordBatch>> CollectBatches() const {
+    std::vector<columnar::RecordBatch> out;
     out.reserve(batches_.size());
     for (const auto& block : batches_) {
       auto host = std::dynamic_pointer_cast<cache::HostMemoryBlock>(block);
@@ -91,7 +91,7 @@ class CollectorOperator : public Operator {
       }
       // Copy columns into a new RecordBatch (HostMemoryBlock owns the original).
       const auto& rb = *host->record_batch();
-      std::vector<std::shared_ptr<datasource::ColumnVector>> cols;
+      std::vector<std::shared_ptr<columnar::ColumnVector>> cols;
       cols.reserve(rb.num_columns());
       for (size_t i = 0; i < rb.num_columns(); ++i) {
         cols.push_back(rb.column_ptr(i));

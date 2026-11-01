@@ -79,6 +79,7 @@ tests/support/test_utils.hpp
 ```
 Break the `cache → batch_kernels → physical_expr` include cycle by moving
 `ConcatenateHostBlocks` into `columnar/`. Stop including `quest.hpp` internally.
+Done (2026-10-31): `ConcatenateRecordBatches` went to `columnar/` and `ConcatenateHostBlocks` stayed in `cache/` (it unwraps host blocks); lowering is header-only (`plan_to_graph.cpp` deferred to S7); logical `Scan` keeps its `projection` parameter because `LogicalPlanTest.ScanWithProjection` passes one.
 
 **S7 — C++ quality (by payoff).**
 - Move bodies of the largest headers to `.cpp` (`metadata`, `physical_expr`, `column_reader`,

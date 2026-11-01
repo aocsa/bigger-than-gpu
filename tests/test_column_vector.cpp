@@ -12,7 +12,7 @@
 #include "quest/columnar/column_vector.hpp"
 #include "support/test_utils.hpp"
 
-using namespace quest::datasource;
+using namespace quest::columnar;
 
 // =============================================================================
 // TypedColumnVector<int32_t> Tests

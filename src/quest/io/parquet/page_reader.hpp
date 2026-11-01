@@ -14,13 +14,10 @@
 #include "quest/io/parquet/encoding.hpp"
 #include "quest/io/parquet/thrift_decoder.hpp"
 
-namespace quest::datasource {
+namespace quest::io::parquet {
 
-using parquet::ThriftDecoder;
-using parquet::ThriftType;
-using parquet::RleBitPackingDecoder;
-using parquet::PlainDecoder;
-using parquet::ComputeBitWidth;
+using columnar::Encoding;
+using columnar::PageType;
 
 // =============================================================================
 // Page Header Structure
@@ -384,4 +381,4 @@ class PageReader {
   PageHeader current_header_;
 };
 
-}  // namespace quest::datasource
+}  // namespace quest::io::parquet

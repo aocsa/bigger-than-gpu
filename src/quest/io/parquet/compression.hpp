@@ -16,7 +16,9 @@
 #include "quest/columnar/types.hpp"
 #include "quest/common/result.hpp"
 
-namespace quest::datasource::parquet {
+namespace quest::io::parquet {
+
+using columnar::CompressionType;
 
 class CompressionCodec {
  public:
@@ -104,4 +106,4 @@ class SnappyCodec : public CompressionCodec {
       Error::UnsupportedEncoding("Unknown compression type"));
 }
 
-}  // namespace quest::datasource::parquet
+}  // namespace quest::io::parquet

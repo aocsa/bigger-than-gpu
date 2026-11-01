@@ -22,7 +22,7 @@ using namespace quest;
 using namespace quest::taskflow;
 using namespace quest::cache;
 using namespace quest::execution;
-using namespace quest::datasource;
+using namespace quest::columnar;
 
 namespace {
 

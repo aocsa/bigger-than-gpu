@@ -25,29 +25,29 @@
 #include "quest/taskflow/operators/table_scan_operator.hpp"
 #include "quest/taskflow/operators/union_operator.hpp"
 
-namespace quest {
+namespace quest::execution {
 
 /// @brief Resolve a logical expression against @p input's schema into an
 /// evaluable physical expression.
-[[nodiscard]] inline Result<ExpressionPtr> CreatePhysicalExpr(const LogicalExpr& expr,
-                                                              const LogicalPlan& input) {
-  if (const auto* literal = dynamic_cast<const Literal*>(&expr)) {
-    return std::make_unique<LiteralExpression>(literal->value());
+[[nodiscard]] inline Result<plan::physical::ExpressionPtr> CreatePhysicalExpr(
+    const plan::logical::LogicalExpr& expr, const plan::logical::LogicalPlan& input) {
+  if (const auto* literal = dynamic_cast<const plan::logical::Literal*>(&expr)) {
+    return std::make_unique<plan::physical::LiteralExpression>(literal->value());
   }
 
-  if (const auto* col_idx = dynamic_cast<const ColumnIndex*>(&expr)) {
-    return std::make_unique<ColumnExpression>(col_idx->index());
+  if (const auto* col_idx = dynamic_cast<const plan::logical::ColumnIndex*>(&expr)) {
+    return std::make_unique<plan::physical::ColumnExpression>(col_idx->index());
   }
 
-  if (const auto* col = dynamic_cast<const Column*>(&expr)) {
+  if (const auto* col = dynamic_cast<const plan::logical::Column*>(&expr)) {
     auto index = input.schema().GetFieldIndex(col->name());
     if (!index) {
       return std::unexpected(Error::SchemaError("No column named: " + col->name()));
     }
-    return std::make_unique<ColumnExpression>(*index);
+    return std::make_unique<plan::physical::ColumnExpression>(*index);
   }
 
-  if (const auto* binary = dynamic_cast<const BinaryExpr*>(&expr)) {
+  if (const auto* binary = dynamic_cast<const plan::logical::BinaryExpr*>(&expr)) {
     auto left_result = CreatePhysicalExpr(binary->left(), input);
     if (!left_result) {
       return std::unexpected(left_result.error());
@@ -60,54 +60,52 @@ namespace quest {
     auto left = std::move(*left_result);
     auto right = std::move(*right_result);
 
-    if (dynamic_cast<const Eq*>(binary)) {
-      return std::make_unique<EqExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::Eq*>(binary)) {
+      return std::make_unique<plan::physical::EqExpression>(std::move(left), std::move(right));
     }
-    if (dynamic_cast<const Neq*>(binary)) {
-      return std::make_unique<NeqExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::Neq*>(binary)) {
+      return std::make_unique<plan::physical::NeqExpression>(std::move(left), std::move(right));
     }
-    if (dynamic_cast<const Lt*>(binary)) {
-      return std::make_unique<LtExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::Lt*>(binary)) {
+      return std::make_unique<plan::physical::LtExpression>(std::move(left), std::move(right));
     }
-    if (dynamic_cast<const LtEq*>(binary)) {
-      return std::make_unique<LtEqExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::LtEq*>(binary)) {
+      return std::make_unique<plan::physical::LtEqExpression>(std::move(left), std::move(right));
     }
-    if (dynamic_cast<const Gt*>(binary)) {
-      return std::make_unique<GtExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::Gt*>(binary)) {
+      return std::make_unique<plan::physical::GtExpression>(std::move(left), std::move(right));
     }
-    if (dynamic_cast<const GtEq*>(binary)) {
-      return std::make_unique<GtEqExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::GtEq*>(binary)) {
+      return std::make_unique<plan::physical::GtEqExpression>(std::move(left), std::move(right));
     }
-    if (dynamic_cast<const And*>(binary)) {
-      return std::make_unique<AndExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::And*>(binary)) {
+      return std::make_unique<plan::physical::AndExpression>(std::move(left), std::move(right));
     }
-    if (dynamic_cast<const Or*>(binary)) {
-      return std::make_unique<OrExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::Or*>(binary)) {
+      return std::make_unique<plan::physical::OrExpression>(std::move(left), std::move(right));
     }
-    if (dynamic_cast<const Add*>(binary)) {
-      return std::make_unique<AddExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::Add*>(binary)) {
+      return std::make_unique<plan::physical::AddExpression>(std::move(left), std::move(right));
     }
-    if (dynamic_cast<const Subtract*>(binary)) {
-      return std::make_unique<SubtractExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::Subtract*>(binary)) {
+      return std::make_unique<plan::physical::SubtractExpression>(std::move(left),
+                                                                  std::move(right));
     }
-    if (dynamic_cast<const Multiply*>(binary)) {
-      return std::make_unique<MultiplyExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::Multiply*>(binary)) {
+      return std::make_unique<plan::physical::MultiplyExpression>(std::move(left),
+                                                                  std::move(right));
     }
-    if (dynamic_cast<const Divide*>(binary)) {
-      return std::make_unique<DivideExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::Divide*>(binary)) {
+      return std::make_unique<plan::physical::DivideExpression>(std::move(left), std::move(right));
     }
-    if (dynamic_cast<const Modulo*>(binary)) {
-      return std::make_unique<ModuloExpression>(std::move(left), std::move(right));
+    if (dynamic_cast<const plan::logical::Modulo*>(binary)) {
+      return std::make_unique<plan::physical::ModuloExpression>(std::move(left), std::move(right));
     }
   }
 
   return std::unexpected(
       Error::PhysicalPlanError("Cannot create physical expression from: " + expr.ToString()));
 }
-
-}  // namespace quest
-
-namespace quest::execution {
 
 /// @brief Owns operators + Graph so Operator* edges stay valid for Execute().
 class ExecutableGraph {
@@ -145,14 +143,14 @@ namespace detail {
 /// folded into the scan (read only these columns), but any computation
 /// (arithmetic, literals) must stay a separate ProjectOperator.
 [[nodiscard]] inline std::optional<std::vector<std::string>> TryColumnRefProjection(
-    const Projection& projection, const LogicalPlan& input) {
+    const plan::logical::Projection& projection, const plan::logical::LogicalPlan& input) {
   const auto input_schema = input.schema();
   std::vector<std::string> columns;
   columns.reserve(projection.expressions().size());
   for (const auto& expr : projection.expressions()) {
-    if (const auto* col = dynamic_cast<const Column*>(expr.get())) {
+    if (const auto* col = dynamic_cast<const plan::logical::Column*>(expr.get())) {
       columns.push_back(col->name());
-    } else if (const auto* col_idx = dynamic_cast<const ColumnIndex*>(expr.get())) {
+    } else if (const auto* col_idx = dynamic_cast<const plan::logical::ColumnIndex*>(expr.get())) {
       if (col_idx->index() >= input_schema.num_fields()) {
         return std::nullopt;
       }
@@ -174,11 +172,11 @@ namespace detail {
 /// subtree and wire both roots into their named ports — which is why wiring
 /// lives here rather than in a flat post-pass over @p ops.
 [[nodiscard]] inline Result<taskflow::Operator*> TranslateNode(
-    const LogicalPlan& plan,
+    const plan::logical::LogicalPlan& plan,
     const std::shared_ptr<memory::MemoryResourceManager>& memory_manager,
     std::vector<std::unique_ptr<taskflow::Operator>>& ops, taskflow::GraphBuilder& gb,
     std::uint32_t& next_id) {
-  if (const auto* scan = dynamic_cast<const Scan*>(&plan)) {
+  if (const auto* scan = dynamic_cast<const plan::logical::Scan*>(&plan)) {
     auto op = std::make_unique<taskflow::TableScanOperator>(
         next_id++, scan->data_source(), scan->projection(), memory_manager);
     auto* op_ptr = op.get();
@@ -186,7 +184,7 @@ namespace detail {
     return op_ptr;
   }
 
-  if (const auto* selection = dynamic_cast<const Selection*>(&plan)) {
+  if (const auto* selection = dynamic_cast<const plan::logical::Selection*>(&plan)) {
     auto child = TranslateNode(selection->input(), memory_manager, ops, gb, next_id);
     if (!child) {
       return std::unexpected(child.error());
@@ -203,11 +201,11 @@ namespace detail {
     return op_ptr;
   }
 
-  if (const auto* projection = dynamic_cast<const Projection*>(&plan)) {
+  if (const auto* projection = dynamic_cast<const plan::logical::Projection*>(&plan)) {
     // BindableTableScan fold (F3): Projection(Scan) whose expressions are all
     // pure column references collapses into ONE scan that reads just those
     // columns — the ProjectOperator disappears and fewer columns come off disk.
-    if (const auto* scan = dynamic_cast<const Scan*>(&projection->input())) {
+    if (const auto* scan = dynamic_cast<const plan::logical::Scan*>(&projection->input())) {
       if (auto folded = TryColumnRefProjection(*projection, *scan)) {
         auto op = std::make_unique<taskflow::TableScanOperator>(
             next_id++, scan->data_source(), std::move(*folded), memory_manager);
@@ -223,7 +221,7 @@ namespace detail {
       return std::unexpected(child.error());
     }
 
-    std::vector<ExpressionPtr> exprs;
+    std::vector<plan::physical::ExpressionPtr> exprs;
     exprs.reserve(projection->expressions().size());
     for (const auto& expr : projection->expressions()) {
       auto expr_result = CreatePhysicalExpr(*expr, projection->input());
@@ -233,7 +231,7 @@ namespace detail {
       exprs.push_back(std::move(*expr_result));
     }
 
-    std::vector<datasource::Field> fields;
+    std::vector<columnar::Field> fields;
     fields.reserve(projection->expressions().size());
     for (const auto& expr : projection->expressions()) {
       auto field_result = expr->ToField(projection->input());
@@ -244,14 +242,14 @@ namespace detail {
     }
 
     auto op = std::make_unique<taskflow::ProjectOperator>(
-        next_id++, datasource::Schema(std::move(fields)), std::move(exprs), memory_manager);
+        next_id++, columnar::Schema(std::move(fields)), std::move(exprs), memory_manager);
     auto* op_ptr = op.get();
     ops.push_back(std::move(op));
     gb.Edge(**child, *op_ptr);
     return op_ptr;
   }
 
-  if (const auto* limit = dynamic_cast<const Limit*>(&plan)) {
+  if (const auto* limit = dynamic_cast<const plan::logical::Limit*>(&plan)) {
     auto child = TranslateNode(limit->input(), memory_manager, ops, gb, next_id);
     if (!child) {
       return std::unexpected(child.error());
@@ -263,8 +261,8 @@ namespace detail {
     return op_ptr;
   }
 
-  if (const auto* union_all = dynamic_cast<const Union*>(&plan)) {
-    if (!UnionCompatible(union_all->left().schema(), union_all->right().schema())) {
+  if (const auto* union_all = dynamic_cast<const plan::logical::Union*>(&plan)) {
+    if (!plan::logical::UnionCompatible(union_all->left().schema(), union_all->right().schema())) {
       return std::unexpected(Error::SchemaError("UNION ALL inputs have mismatched schemas"));
     }
     auto left = TranslateNode(union_all->left(), memory_manager, ops, gb, next_id);
@@ -294,7 +292,7 @@ namespace detail {
 /// Supported: Scan, Selection, Projection, Limit, Union (and trees thereof).
 /// Unsupported nodes return an error.
 [[nodiscard]] inline Result<ExecutableGraphPtr> CreateGraph(
-    const LogicalPlan& plan,
+    const plan::logical::LogicalPlan& plan,
     std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr) {
   if (!memory_manager) {
     memory_manager = std::make_shared<memory::MemoryResourceManager>(

@@ -19,7 +19,7 @@
 #include "quest/columnar/types.hpp"
 #include "support/test_utils.hpp"
 
-using namespace quest::datasource;
+using namespace quest::columnar;
 
 // =============================================================================
 // Basic Serialization Tests

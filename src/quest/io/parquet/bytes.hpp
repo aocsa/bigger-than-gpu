@@ -20,7 +20,7 @@
 
 #include "quest/common/result.hpp"
 
-namespace quest::datasource::parquet {
+namespace quest::io::parquet {
 
 /// @brief Returns `data[pos, pos + len)`, or OutOfRange if it does not fit.
 [[nodiscard]] inline Result<std::span<const uint8_t>> Slice(std::span<const uint8_t> data,
@@ -48,4 +48,4 @@ template <typename T>
   return std::bit_cast<T>(raw);
 }
 
-}  // namespace quest::datasource::parquet
+}  // namespace quest::io::parquet

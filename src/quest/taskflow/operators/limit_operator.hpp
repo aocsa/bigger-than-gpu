@@ -78,7 +78,7 @@ class LimitOperator : public SimpleOperator {
 
     if (take == 0) {
       return cache::MakeTrackedHostBlock(std::format("limit_{}", id()),
-                                             datasource::RecordBatch(batch->schema(), {}),
+                                             columnar::RecordBatch(batch->schema(), {}),
                                              memory_manager_);
     }
     if (take == rows) {

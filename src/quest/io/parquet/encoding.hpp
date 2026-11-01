@@ -21,7 +21,7 @@
 #include "quest/common/result.hpp"
 #include "quest/io/parquet/bytes.hpp"
 
-namespace quest::datasource::parquet {
+namespace quest::io::parquet {
 
 // =============================================================================
 // Base Value Decoder
@@ -338,4 +338,4 @@ class RleBitPackingDecoder {
   return std::bit_width(static_cast<unsigned>(max_value));
 }
 
-}  // namespace quest::datasource::parquet
+}  // namespace quest::io::parquet

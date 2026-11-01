@@ -22,19 +22,19 @@
 namespace quest::execution {
 
 /// @brief Gather selected rows from a column into a new materialized column.
-[[nodiscard]] inline std::shared_ptr<datasource::ColumnVector> GatherColumn(
-    const datasource::ColumnVector& col, const std::vector<size_t>& indices) {
-  std::vector<Value> filtered_values;
+[[nodiscard]] inline std::shared_ptr<columnar::ColumnVector> GatherColumn(
+    const columnar::ColumnVector& col, const std::vector<size_t>& indices) {
+  std::vector<columnar::Value> filtered_values;
   filtered_values.reserve(indices.size());
   for (size_t idx : indices) {
     filtered_values.push_back(col.GetValue(idx));
   }
 
   return std::visit(
-      [&filtered_values](const auto& type_tag) -> std::shared_ptr<datasource::ColumnVector> {
+      [&filtered_values](const auto& type_tag) -> std::shared_ptr<columnar::ColumnVector> {
         using TypeTag = std::decay_t<decltype(type_tag)>;
 
-        if constexpr (std::is_same_v<TypeTag, datasource::BoolType>) {
+        if constexpr (std::is_same_v<TypeTag, columnar::BoolType>) {
           std::vector<bool> data;
           data.reserve(filtered_values.size());
           for (const auto& val : filtered_values) {
@@ -44,8 +44,9 @@ namespace quest::execution {
               data.push_back(false);
             }
           }
-          return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)}, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, datasource::Int32Type>) {
+          return std::make_shared<plan::physical::MaterializedColumnVector>(
+              plan::physical::ColumnData{std::move(data)}, type_tag);
+        } else if constexpr (std::is_same_v<TypeTag, columnar::Int32Type>) {
           std::vector<int32_t> data;
           data.reserve(filtered_values.size());
           for (const auto& val : filtered_values) {
@@ -55,8 +56,9 @@ namespace quest::execution {
               data.push_back(0);
             }
           }
-          return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)}, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, datasource::Int64Type>) {
+          return std::make_shared<plan::physical::MaterializedColumnVector>(
+              plan::physical::ColumnData{std::move(data)}, type_tag);
+        } else if constexpr (std::is_same_v<TypeTag, columnar::Int64Type>) {
           std::vector<int64_t> data;
           data.reserve(filtered_values.size());
           for (const auto& val : filtered_values) {
@@ -66,8 +68,9 @@ namespace quest::execution {
               data.push_back(0);
             }
           }
-          return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)}, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, datasource::FloatType>) {
+          return std::make_shared<plan::physical::MaterializedColumnVector>(
+              plan::physical::ColumnData{std::move(data)}, type_tag);
+        } else if constexpr (std::is_same_v<TypeTag, columnar::FloatType>) {
           std::vector<float> data;
           data.reserve(filtered_values.size());
           for (const auto& val : filtered_values) {
@@ -77,8 +80,9 @@ namespace quest::execution {
               data.push_back(0.0f);
             }
           }
-          return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)}, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, datasource::DoubleType>) {
+          return std::make_shared<plan::physical::MaterializedColumnVector>(
+              plan::physical::ColumnData{std::move(data)}, type_tag);
+        } else if constexpr (std::is_same_v<TypeTag, columnar::DoubleType>) {
           std::vector<double> data;
           data.reserve(filtered_values.size());
           for (const auto& val : filtered_values) {
@@ -88,8 +92,9 @@ namespace quest::execution {
               data.push_back(0.0);
             }
           }
-          return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)}, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, datasource::StringType>) {
+          return std::make_shared<plan::physical::MaterializedColumnVector>(
+              plan::physical::ColumnData{std::move(data)}, type_tag);
+        } else if constexpr (std::is_same_v<TypeTag, columnar::StringType>) {
           std::vector<std::string> data;
           data.reserve(filtered_values.size());
           for (const auto& val : filtered_values) {
@@ -99,23 +104,24 @@ namespace quest::execution {
               data.emplace_back();
             }
           }
-          return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)}, type_tag);
+          return std::make_shared<plan::physical::MaterializedColumnVector>(
+              plan::physical::ColumnData{std::move(data)}, type_tag);
         } else {
           std::vector<std::string> data;
           data.reserve(filtered_values.size());
           for (const auto& val : filtered_values) {
-            data.push_back(datasource::ValueToString(val));
+            data.push_back(columnar::ValueToString(val));
           }
-          return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(data)},
-                                                            datasource::StringType{});
+          return std::make_shared<plan::physical::MaterializedColumnVector>(
+              plan::physical::ColumnData{std::move(data)}, columnar::StringType{});
         }
       },
       col.GetType());
 }
 
 /// @brief Apply a boolean mask expression and gather matching rows.
-[[nodiscard]] inline Result<datasource::RecordBatch> FilterRecordBatch(
-    const datasource::RecordBatch& batch, Expression& expr) {
+[[nodiscard]] inline Result<columnar::RecordBatch> FilterRecordBatch(
+    const columnar::RecordBatch& batch, plan::physical::Expression& expr) {
   auto mask_result = expr.Evaluate(batch);
   if (!mask_result) {
     return std::unexpected(mask_result.error());
@@ -134,15 +140,15 @@ namespace quest::execution {
   }
 
   if (indices.empty()) {
-    return datasource::RecordBatch(batch.schema(), {});
+    return columnar::RecordBatch(batch.schema(), {});
   }
 
-  std::vector<std::shared_ptr<datasource::ColumnVector>> new_columns;
+  std::vector<std::shared_ptr<columnar::ColumnVector>> new_columns;
   new_columns.reserve(batch.num_columns());
   for (size_t col_idx = 0; col_idx < batch.num_columns(); ++col_idx) {
     new_columns.push_back(GatherColumn(batch.column(col_idx), indices));
   }
-  return datasource::RecordBatch(batch.schema(), std::move(new_columns));
+  return columnar::RecordBatch(batch.schema(), std::move(new_columns));
 }
 
 /// @brief Truncate a RecordBatch to its first @p n_rows rows via GatherColumn.
@@ -154,10 +160,10 @@ namespace quest::execution {
 /// null bitmap (nulls become type defaults). A Limit whose boundary batch is
 /// truncated therefore drops nulls in that batch while pass-through batches
 /// keep them — resolved when materialized columns track nulls (phase 7).
-[[nodiscard]] inline Result<datasource::RecordBatch> TruncateRecordBatch(
-    const datasource::RecordBatch& batch, std::size_t n_rows) {
+[[nodiscard]] inline Result<columnar::RecordBatch> TruncateRecordBatch(
+    const columnar::RecordBatch& batch, std::size_t n_rows) {
   if (n_rows == 0) {
-    return datasource::RecordBatch(batch.schema(), {});
+    return columnar::RecordBatch(batch.schema(), {});
   }
   const std::size_t take = std::min(n_rows, batch.num_rows());
   std::vector<size_t> indices(take);
@@ -165,19 +171,19 @@ namespace quest::execution {
     indices[i] = i;
   }
 
-  std::vector<std::shared_ptr<datasource::ColumnVector>> new_columns;
+  std::vector<std::shared_ptr<columnar::ColumnVector>> new_columns;
   new_columns.reserve(batch.num_columns());
   for (size_t col_idx = 0; col_idx < batch.num_columns(); ++col_idx) {
     new_columns.push_back(GatherColumn(batch.column(col_idx), indices));
   }
-  return datasource::RecordBatch(batch.schema(), std::move(new_columns));
+  return columnar::RecordBatch(batch.schema(), std::move(new_columns));
 }
 
 /// @brief Evaluate projection expressions into a new RecordBatch.
-[[nodiscard]] inline Result<datasource::RecordBatch> ProjectRecordBatch(
-    const datasource::RecordBatch& batch, const datasource::Schema& schema,
-    const std::vector<ExpressionPtr>& expressions) {
-  std::vector<std::shared_ptr<datasource::ColumnVector>> columns;
+[[nodiscard]] inline Result<columnar::RecordBatch> ProjectRecordBatch(
+    const columnar::RecordBatch& batch, const columnar::Schema& schema,
+    const std::vector<plan::physical::ExpressionPtr>& expressions) {
+  std::vector<std::shared_ptr<columnar::ColumnVector>> columns;
   columns.reserve(expressions.size());
   for (const auto& expr : expressions) {
     auto result = expr->Evaluate(batch);
@@ -189,7 +195,7 @@ namespace quest::execution {
   if (columns.size() != expressions.size()) {
     return Error::ExpressionError("Projection produced fewer columns than expressions");
   }
-  return datasource::RecordBatch(schema, std::move(columns));
+  return columnar::RecordBatch(schema, std::move(columns));
 }
 
 }  // namespace quest::execution

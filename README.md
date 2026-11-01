@@ -64,12 +64,20 @@ For detailed architecture, class diagrams, and design patterns: [`docs/dev/ARCHI
 
 ```
 src/quest/
+├── quest.hpp       # Umbrella header for users (not included inside src/)
 ├── builder/        # QueryBuilder, ExprBuilder
-├── logical_plan/   # Scan, Selection, Projection nodes
-├── physical_plan/  # Physical expressions evaluated by operators
-├── taskflow/       # Graph, Operator, Port, DSL (>>, +=)
+├── common/         # Result / Status / Error
+├── columnar/       # Types, schema, column vectors, record batches, serializer
+├── datasource/     # DataSource interface (partition-indexed scan)
+├── io/parquet/     # Parquet reader and ParquetDataSource
+├── plan/
+│   ├── logical/    # Logical plan nodes and expressions
+│   └── physical/   # Physical expressions evaluated by operators
+├── execution/
+│   ├── kernels/    # Batch filter/project/truncate kernels, bloom filter
+│   └── lowering/   # plan_to_graph: LogicalPlan → taskflow Graph
+├── taskflow/       # Graph, Operator, Port, pipelines, operators/
 ├── cache/          # BatchHolder, DataBlock, BlockingQueue
-├── datasource/     # Parquet reader, column vectors, schema
 └── memory/         # CPU/Disk memory resources
 ```
 

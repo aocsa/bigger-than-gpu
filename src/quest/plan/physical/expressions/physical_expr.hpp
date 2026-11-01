@@ -20,14 +20,14 @@
 #include "quest/columnar/schema.hpp"
 #include "quest/common/result.hpp"
 
-namespace quest {
+namespace quest::plan::physical {
 
-using datasource::ColumnVector;
-using datasource::DataType;
-using datasource::Field;
-using datasource::RecordBatch;
-using datasource::Schema;
-using datasource::Value;
+using columnar::ColumnVector;
+using columnar::DataType;
+using columnar::Field;
+using columnar::RecordBatch;
+using columnar::Schema;
+using columnar::Value;
 
 // =============================================================================
 // Column Data Type (for expression evaluation)
@@ -131,17 +131,17 @@ class LiteralExpression : public Expression {
         [](const auto& val) -> DataType {
           using T = std::decay_t<decltype(val)>;
           if constexpr (std::is_same_v<T, int32_t>) {
-            return datasource::Int32Type{};
+            return columnar::Int32Type{};
           } else if constexpr (std::is_same_v<T, int64_t>) {
-            return datasource::Int64Type{};
+            return columnar::Int64Type{};
           } else if constexpr (std::is_same_v<T, float>) {
-            return datasource::FloatType{};
+            return columnar::FloatType{};
           } else if constexpr (std::is_same_v<T, double>) {
-            return datasource::DoubleType{};
+            return columnar::DoubleType{};
           } else if constexpr (std::is_same_v<T, bool>) {
-            return datasource::BoolType{};
+            return columnar::BoolType{};
           } else {
-            return datasource::StringType{};
+            return columnar::StringType{};
           }
         },
         value_);
@@ -232,7 +232,7 @@ class BooleanExpression : public Expression {
     }
 
     return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, datasource::BoolType{});
+        ColumnData{std::move(result)}, columnar::BoolType{});
   }
 
  protected:
@@ -397,7 +397,7 @@ class ArithmeticExpression : public Expression {
     }
 
     return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, datasource::DoubleType{});
+        ColumnData{std::move(result)}, columnar::DoubleType{});
   }
 
  protected:
@@ -602,7 +602,7 @@ class SumExpression : public AggregateExpression {
 
     std::vector<double> result{sum};
     return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, datasource::DoubleType{});
+        ColumnData{std::move(result)}, columnar::DoubleType{});
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -636,7 +636,7 @@ class AvgExpression : public AggregateExpression {
 
     std::vector<double> result{avg};
     return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, datasource::DoubleType{});
+        ColumnData{std::move(result)}, columnar::DoubleType{});
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -667,7 +667,7 @@ class CountExpression : public AggregateExpression {
 
     std::vector<int64_t> result{count};
     return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, datasource::Int64Type{});
+        ColumnData{std::move(result)}, columnar::Int64Type{});
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -684,7 +684,7 @@ class CountStarExpression : public Expression {
       const RecordBatch& input) const override {
     std::vector<int64_t> result{static_cast<int64_t>(input.num_rows())};
     return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, datasource::Int64Type{});
+        ColumnData{std::move(result)}, columnar::Int64Type{});
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -707,7 +707,7 @@ class MinExpression : public AggregateExpression {
     if (col.size() == 0) {
       std::vector<double> result{std::numeric_limits<double>::quiet_NaN()};
       return std::make_shared<MaterializedColumnVector>(
-          ColumnData{std::move(result)}, datasource::DoubleType{});
+          ColumnData{std::move(result)}, columnar::DoubleType{});
     }
 
     double min_val = std::numeric_limits<double>::max();
@@ -729,7 +729,7 @@ class MinExpression : public AggregateExpression {
 
     std::vector<double> result{min_val};
     return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, datasource::DoubleType{});
+        ColumnData{std::move(result)}, columnar::DoubleType{});
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -752,7 +752,7 @@ class MaxExpression : public AggregateExpression {
     if (col.size() == 0) {
       std::vector<double> result{std::numeric_limits<double>::quiet_NaN()};
       return std::make_shared<MaterializedColumnVector>(
-          ColumnData{std::move(result)}, datasource::DoubleType{});
+          ColumnData{std::move(result)}, columnar::DoubleType{});
     }
 
     double max_val = std::numeric_limits<double>::lowest();
@@ -774,7 +774,7 @@ class MaxExpression : public AggregateExpression {
 
     std::vector<double> result{max_val};
     return std::make_shared<MaterializedColumnVector>(
-        ColumnData{std::move(result)}, datasource::DoubleType{});
+        ColumnData{std::move(result)}, columnar::DoubleType{});
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -782,4 +782,4 @@ class MaxExpression : public AggregateExpression {
   }
 };
 
-}  // namespace quest
+}  // namespace quest::plan::physical

@@ -18,14 +18,17 @@
 #include "quest/io/parquet/metadata.hpp"
 #include "quest/io/parquet/page_reader.hpp"
 
-namespace quest::datasource {
+namespace quest::io::parquet {
 
-using parquet::ColumnChunkMetadata;
-using parquet::CompressionCodec;
-using parquet::ComputeBitWidth;
-using parquet::PlainDecoder;
-using parquet::PlainBinaryDecoder;
-using parquet::RleBitPackingDecoder;
+using columnar::ColumnVector;
+using columnar::CompressionType;
+using columnar::CreateColumnVector;
+using columnar::Encoding;
+using columnar::Field;
+using columnar::PageType;
+using columnar::PhysicalType;
+using columnar::StringColumnVector;
+using columnar::TypedColumnVector;
 
 class ParquetFileReader;
 
@@ -150,13 +153,13 @@ class ColumnReader {
     std::vector<int32_t> def_levels;
     if (max_def_level > 0) {
       // Definition levels are prefixed with their byte length.
-      auto def_level_length = parquet::LoadLE<uint32_t>(data, pos);
+      auto def_level_length = LoadLE<uint32_t>(data, pos);
       if (!def_level_length) {
         return std::unexpected(std::move(def_level_length).error());
       }
       pos += 4;
 
-      auto def_data = parquet::Slice(data, pos, *def_level_length);
+      auto def_data = Slice(data, pos, *def_level_length);
       if (!def_data) {
         return std::unexpected(std::move(def_data).error());
       }
@@ -188,7 +191,7 @@ class ColumnReader {
     std::vector<int32_t> def_levels;
     int max_def_level = field_.IsNullable() ? 1 : 0;
     if (max_def_level > 0 && header.definition_levels_byte_length > 0) {
-      auto def_data = parquet::Slice(data, pos, header.definition_levels_byte_length);
+      auto def_data = Slice(data, pos, header.definition_levels_byte_length);
       if (!def_data) {
         return std::unexpected(std::move(def_data).error());
       }
@@ -547,4 +550,4 @@ class ColumnReader {
   std::vector<uint8_t> decompression_buffer_;
 };
 
-}  // namespace quest::datasource
+}  // namespace quest::io::parquet

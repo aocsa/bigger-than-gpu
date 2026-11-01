@@ -12,7 +12,7 @@
 #include "quest/columnar/schema.hpp"
 #include "support/test_utils.hpp"
 
-using namespace quest::datasource;
+using namespace quest::columnar;
 
 // =============================================================================
 // Field Tests

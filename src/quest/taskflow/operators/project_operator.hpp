@@ -27,8 +27,8 @@ class ProjectOperator : public SimpleOperator {
  public:
   /// @param memory_manager Stamped onto output blocks so they stay visible
   ///        to saturation accounting and spillable at pipeline breaks.
-  ProjectOperator(std::uint32_t operator_id, datasource::Schema schema,
-                  std::vector<ExpressionPtr> expressions,
+  ProjectOperator(std::uint32_t operator_id, columnar::Schema schema,
+                  std::vector<plan::physical::ExpressionPtr> expressions,
                   std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr)
       : SimpleOperator(operator_id, "Project", OperatorType::Project),
         schema_(std::move(schema)),
@@ -57,8 +57,8 @@ class ProjectOperator : public SimpleOperator {
   }
 
  private:
-  datasource::Schema schema_;
-  std::vector<ExpressionPtr> expressions_;
+  columnar::Schema schema_;
+  std::vector<plan::physical::ExpressionPtr> expressions_;
   std::shared_ptr<memory::MemoryResourceManager> memory_manager_;
 };
 

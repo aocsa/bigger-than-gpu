@@ -18,7 +18,7 @@
 #include "quest/columnar/types.hpp"
 #include "quest/common/result.hpp"
 
-namespace quest::datasource {
+namespace quest::columnar {
 
 using Value = std::variant<std::monostate,  // null
                            bool, int8_t, int16_t, int32_t, int64_t, float,
@@ -312,4 +312,4 @@ inline std::unique_ptr<ColumnVector> CreateColumnVector(const DataType& type,
       src.GetType());
 }
 
-}  // namespace quest::datasource
+}  // namespace quest::columnar

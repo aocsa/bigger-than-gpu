@@ -14,7 +14,7 @@
 #include "quest/columnar/schema.hpp"
 #include "quest/common/result.hpp"
 
-namespace quest::datasource {
+namespace quest::columnar {
 
 // Batch of data organized in columns (similar to Arrow RecordBatch)
 class RecordBatch {
@@ -114,4 +114,4 @@ class RecordBatch {
   return RecordBatch(schema, std::move(columns));
 }
 
-}  // namespace quest::datasource
+}  // namespace quest::columnar

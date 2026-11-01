@@ -15,7 +15,10 @@
 #include "quest/datasource/data_source.hpp"
 #include "quest/io/parquet/file_reader.hpp"
 
-namespace quest::datasource {
+namespace quest::io::parquet {
+
+using columnar::RecordBatch;
+using columnar::Schema;
 
 // =============================================================================
 // Parquet Data Source
@@ -39,7 +42,7 @@ namespace quest::datasource {
 ///     }
 ///   }
 /// @endcode
-class ParquetDataSource : public DataSource {
+class ParquetDataSource : public datasource::DataSource {
  public:
   [[nodiscard]] static Result<ParquetDataSource> Open(
       const std::string& filename) {
@@ -88,4 +91,4 @@ class ParquetDataSource : public DataSource {
   ParquetFileReader reader_;
 };
 
-}  // namespace quest::datasource
+}  // namespace quest::io::parquet

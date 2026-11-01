@@ -8,7 +8,7 @@
 #include <string>
 #include <variant>
 
-namespace quest::datasource {
+namespace quest::columnar {
 
 // Parquet physical types as defined in the specification
 enum class PhysicalType : int8_t {
@@ -189,4 +189,4 @@ inline bool IsFixedWidth(const DataType& type) {
   return GetTypeByteWidth(type) > 0;
 }
 
-}  // namespace quest::datasource
+}  // namespace quest::columnar

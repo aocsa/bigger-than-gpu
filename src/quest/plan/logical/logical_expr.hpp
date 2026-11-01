@@ -14,13 +14,13 @@
 #include "quest/columnar/schema.hpp"
 #include "quest/common/result.hpp"
 
-namespace quest {
+namespace quest::plan::logical {
 
 class LogicalPlan;
 
-using datasource::DataType;
-using datasource::Field;
-using datasource::Value;
+using columnar::DataType;
+using columnar::Field;
+using columnar::Value;
 
 // =============================================================================
 // Abstract Base Class
@@ -95,17 +95,17 @@ class Literal : public LogicalExpr {
         [](const auto& v) -> DataType {
           using T = std::decay_t<decltype(v)>;
           if constexpr (std::is_same_v<T, int32_t>) {
-            return datasource::Int32Type{};
+            return columnar::Int32Type{};
           } else if constexpr (std::is_same_v<T, int64_t>) {
-            return datasource::Int64Type{};
+            return columnar::Int64Type{};
           } else if constexpr (std::is_same_v<T, float>) {
-            return datasource::FloatType{};
+            return columnar::FloatType{};
           } else if constexpr (std::is_same_v<T, double>) {
-            return datasource::DoubleType{};
+            return columnar::DoubleType{};
           } else if constexpr (std::is_same_v<T, bool>) {
-            return datasource::BoolType{};
+            return columnar::BoolType{};
           } else {
-            return datasource::StringType{};
+            return columnar::StringType{};
           }
         },
         value_);
@@ -152,7 +152,7 @@ class BinaryExpr : public LogicalExpr {
 
   [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
     return Field{left_->ToString() + " " + op_ + " " + right_->ToString(),
-                 datasource::BoolType{}};
+                 columnar::BoolType{}};
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -336,7 +336,7 @@ class Sum : public AggregateExpr {
       return input_field;
     }
     // SUM returns double for numeric types
-    return Field{"SUM(" + input_->ToString() + ")", datasource::DoubleType{}};
+    return Field{"SUM(" + input_->ToString() + ")", columnar::DoubleType{}};
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -355,7 +355,7 @@ class Avg : public AggregateExpr {
 
   [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
     // AVG always returns double
-    return Field{"AVG(" + input_->ToString() + ")", datasource::DoubleType{}};
+    return Field{"AVG(" + input_->ToString() + ")", columnar::DoubleType{}};
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -374,7 +374,7 @@ class Count : public AggregateExpr {
 
   [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
     // COUNT always returns Int64
-    return Field{"COUNT(" + input_->ToString() + ")", datasource::Int64Type{}};
+    return Field{"COUNT(" + input_->ToString() + ")", columnar::Int64Type{}};
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -391,7 +391,7 @@ class CountStar : public LogicalExpr {
   CountStar() = default;
 
   [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override {
-    return Field{"COUNT(*)", datasource::Int64Type{}};
+    return Field{"COUNT(*)", columnar::Int64Type{}};
   }
 
   [[nodiscard]] std::string ToString() const override {
@@ -570,4 +570,4 @@ inline LogicalExprPtr max(LogicalExprPtr input) {
   return std::make_unique<Max>(std::move(input));
 }
 
-}  // namespace quest
+}  // namespace quest::plan::logical

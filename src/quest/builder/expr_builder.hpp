@@ -43,7 +43,7 @@ concept LiteralValue = std::is_arithmetic_v<T> || std::same_as<T, std::string> |
 class ExprBuilder {
  public:
   /// @brief Construct from a logical expression (takes ownership).
-  explicit ExprBuilder(LogicalExprPtr expr) noexcept : expr_(std::move(expr)) {}
+  explicit ExprBuilder(plan::logical::LogicalExprPtr expr) noexcept : expr_(std::move(expr)) {}
 
   // Rule of Five: Default move, deep-clone copy
   ExprBuilder(ExprBuilder&&) noexcept = default;
@@ -125,15 +125,15 @@ class ExprBuilder {
   // Build Methods
   // ===========================================================================
 
-  [[nodiscard]] LogicalExprPtr Build() const { return expr_->Clone(); }
+  [[nodiscard]] plan::logical::LogicalExprPtr Build() const { return expr_->Clone(); }
 
-  [[nodiscard]] const LogicalExpr& GetExpr() const noexcept { return *expr_; }
+  [[nodiscard]] const plan::logical::LogicalExpr& GetExpr() const noexcept { return *expr_; }
 
   /// @brief Check if the expression is valid (non-null).
   [[nodiscard]] explicit operator bool() const noexcept { return expr_ != nullptr; }
 
  private:
-  LogicalExprPtr expr_;
+  plan::logical::LogicalExprPtr expr_;
 };
 
 // =============================================================================
@@ -141,12 +141,12 @@ class ExprBuilder {
 // =============================================================================
 
 [[nodiscard]] inline ExprBuilder Col(const std::string& name) {
-  return ExprBuilder(col(name));
+  return ExprBuilder(plan::logical::col(name));
 }
 
 template <LiteralValue T>
 [[nodiscard]] ExprBuilder Lit(T value) {
-  return ExprBuilder(lit(std::move(value)));
+  return ExprBuilder(plan::logical::lit(std::move(value)));
 }
 
 }  // namespace quest

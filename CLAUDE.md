@@ -9,19 +9,25 @@ Static library `quest` (`quest::quest`), built from the `.cpp` files listed in r
 Toolchain is pinned via Pixi (`pixi.toml`, see `docs/dev/cpp26-pixi-setup.md`). Options:
 `QUEST_BUILD_TESTS`, `QUEST_BUILD_EXAMPLES`, `QUEST_SANITIZERS` (asan/tsan/ubsan). Default build type: Debug.
 
-Source lives in `src/quest/`; umbrella header is `quest.hpp`, error type is `result.hpp`.
+Source lives in `src/quest/`; namespaces follow directories (`quest::columnar`, `quest::io::parquet`,
+`quest::plan::logical`, ...). `quest.hpp` is the user-facing umbrella header and is never included
+inside `src/`; the error type is `common/result.hpp` (namespace `quest`).
 
 | Dir | Role |
 |---|---|
-| `builder/` | User-facing fluent API: `QueryBuilder`, `ExprBuilder`, `QueryPlan` |
-| `logical_plan/` | Logical plan nodes and expressions |
-| `physical_plan/` | Physical expressions: `expressions/physical_expr.hpp` |
-| `taskflow/` | Execution engine: `Graph`, `GraphBuilder`, `Pipeline`, `MetaPipeline`, `PipelineExecutor`, `PreparedQuery`, `Port`, `Operator`, `OperatorType` |
+| `builder/` | User-facing fluent API: `QueryBuilder`, `ExprBuilder`, `QueryPlan` (`quest`) |
+| `common/` | `Result`, `Status`, `Error` (`quest`) |
+| `columnar/` | Types, schema, column vectors, record batches + serializer, `ConcatenateRecordBatches` (`quest::columnar`) |
+| `datasource/` | `DataSource` interface: `schema()`, `num_partitions()`, `ReadPartition()` (`quest::datasource`) |
+| `io/parquet/` | Parquet file/page/column readers, encoding, thrift, metadata, compression, `ParquetDataSource` (`quest::io::parquet`) |
+| `plan/logical/` | Logical plan nodes and expressions (`quest::plan::logical`) |
+| `plan/physical/` | Physical expressions: `expressions/physical_expr.hpp` (`quest::plan::physical`) |
+| `execution/kernels/` | Batch filter/project/truncate kernels, bloom filter (`quest::execution`) |
+| `execution/lowering/` | `plan_to_graph.hpp`: `CreateGraph`, `CreatePhysicalExpr` (`quest::execution`) |
+| `taskflow/` | Execution engine: `Graph`, `GraphBuilder`, `Pipeline`, `MetaPipeline`, `PipelineExecutor`, `PreparedQuery`, `Port`, `Operator`, `OperatorType` (`quest::taskflow`) |
 | `taskflow/operators/` | Concrete operators: TableScan, Generate, Filter, Project, Limit, Union, Print, Collector |
-| `cache/` | `DataBlock`, `BatchHolder` (CPU/Disk tiers, spill), `BlockingQueue` |
-| `memory/` | `MemoryResourceManager` |
-| `datasource/` | `DataSource`, schema, column vectors, record batches + serializer; `parquet/` reader |
-| `execution/` | Batch kernels, bloom filter, `graph_builder.hpp` (`CreateGraph`, `CreatePhysicalExpr`) |
+| `cache/` | `DataBlock`, `BatchHolder` (CPU/Disk tiers, spill), `BlockingQueue`, host-block helpers (`quest::cache`) |
+| `memory/` | `MemoryResourceManager` (`quest::memory`) |
 
 Query flow: `QueryBuilder::ExecuteOnGraph` -> logical plan -> `execution::CreateGraph` -> `Graph` of
 `Operator`s split into `Pipeline`s by `MetaPipeline` -> `PipelineExecutor` runs them
@@ -53,7 +59,7 @@ Other dirs: `tests/` (one `test_*.cpp` per area, GTest), `examples/`, `docs/`, `
 - Files: snake_case (`batch_holder.hpp`, `operator_type.hpp`)
 - Type aliases: PascalCase + Ptr/Type suffix (`LogicalPlanPtr`, `DataBlockPtr`)
 - Constants: `k`-prefix PascalCase (`kGraphEntryPointId`)
-- Enum values: PascalCase for execution layer, `k`-prefix for Parquet/datasource layer
+- Enum values: PascalCase for execution layer, `k`-prefix for Parquet/columnar layer
 
 ### Code Format & Quality
 - Style: `.clang-format` (Google-based, 100 col, 2-space indent)

@@ -19,7 +19,10 @@
 #include "support/test_utils.hpp"
 
 using namespace quest;
+using namespace quest::columnar;
 using namespace quest::datasource;
+using namespace quest::plan::logical;
+using namespace quest::plan::physical;
 
 // =============================================================================
 // In-Memory DataSource for Testing

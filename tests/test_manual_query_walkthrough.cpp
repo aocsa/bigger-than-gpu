@@ -47,7 +47,11 @@
 
 using namespace quest;
 using namespace quest::taskflow;
-using namespace quest::datasource;
+using namespace quest::columnar;
+using namespace quest::io::parquet;
+using namespace quest::plan::logical;
+using namespace quest::plan::physical;
+using namespace quest::execution;
 
 namespace {
 

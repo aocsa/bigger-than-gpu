@@ -64,7 +64,7 @@ class DataBlock {
 class HostMemoryBlock final : public DataBlock {
  public:
   explicit HostMemoryBlock(
-      std::string id, datasource::RecordBatch record_batch,
+      std::string id, columnar::RecordBatch record_batch,
       std::shared_ptr<memory::CPUMemoryResource> memory_resource = nullptr);
 
   ~HostMemoryBlock() override;
@@ -88,15 +88,15 @@ class HostMemoryBlock final : public DataBlock {
   [[nodiscard]] Result<std::shared_ptr<DiskBlock>> ToDisk() override;
   void Release() override;
 
-  [[nodiscard]] const datasource::RecordBatch* record_batch() const noexcept {
+  [[nodiscard]] const columnar::RecordBatch* record_batch() const noexcept {
     return record_batch_.get();
   }
 
-  [[nodiscard]] datasource::RecordBatch* record_batch() noexcept {
+  [[nodiscard]] columnar::RecordBatch* record_batch() noexcept {
     return record_batch_.get();
   }
 
-  [[nodiscard]] datasource::RecordBatch* mutable_record_batch() noexcept {
+  [[nodiscard]] columnar::RecordBatch* mutable_record_batch() noexcept {
     return record_batch_.get();
   }
 
@@ -107,7 +107,7 @@ class HostMemoryBlock final : public DataBlock {
 
  private:
   std::string id_;
-  std::unique_ptr<datasource::RecordBatch> record_batch_;
+  std::unique_ptr<columnar::RecordBatch> record_batch_;
   bool valid_{true};
   std::shared_ptr<memory::CPUMemoryResource> cpu_resource_;
   std::shared_ptr<memory::DiskMemoryResource> disk_resource_;
@@ -190,7 +190,7 @@ using DataBlockPtr = std::shared_ptr<DataBlock>;
 /// ToDisk() fails — MaybeSpill then silently keeps the data in RAM, so a
 /// plan with any filter/project before a pipeline break could never spill.
 [[nodiscard]] std::shared_ptr<HostMemoryBlock> MakeTrackedHostBlock(
-    std::string block_id, datasource::RecordBatch batch,
+    std::string block_id, columnar::RecordBatch batch,
     const std::shared_ptr<memory::MemoryResourceManager>& memory_manager);
 
 /// @brief Column-wise concatenate of HostMemoryBlock RecordBatches.

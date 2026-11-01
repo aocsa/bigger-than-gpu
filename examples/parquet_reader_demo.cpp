@@ -13,7 +13,8 @@
 
 #include "quest/io/parquet/parquet_data_source.hpp"
 
-using namespace quest::datasource;
+using namespace quest::columnar;
+using namespace quest::io::parquet;
 
 void PrintSchema(const Schema& schema) {
   std::cout << "Schema:\n";

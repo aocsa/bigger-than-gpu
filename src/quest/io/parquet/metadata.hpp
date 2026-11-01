@@ -17,7 +17,18 @@
 #include "quest/io/parquet/thrift_decoder.hpp"
 #include "quest/common/result.hpp"
 
-namespace quest::datasource::parquet {
+namespace quest::io::parquet {
+
+using columnar::ColumnStatistics;
+using columnar::CompressionType;
+using columnar::DataType;
+using columnar::Encoding;
+using columnar::Field;
+using columnar::LogicalType;
+using columnar::PhysicalType;
+using columnar::PhysicalTypeToDataType;
+using columnar::Repetition;
+using columnar::Schema;
 
 // =============================================================================
 // Metadata Structures
@@ -802,4 +813,4 @@ inline Schema BuildSchema(const FileMetadata& metadata) {
   return Schema(std::move(fields));
 }
 
-}  // namespace quest::datasource::parquet
+}  // namespace quest::io::parquet

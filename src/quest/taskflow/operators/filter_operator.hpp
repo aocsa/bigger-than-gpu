@@ -25,7 +25,7 @@ class FilterOperator : public SimpleOperator {
  public:
   /// @param memory_manager Stamped onto output blocks so they stay visible
   ///        to saturation accounting and spillable at pipeline breaks.
-  FilterOperator(std::uint32_t operator_id, ExpressionPtr predicate,
+  FilterOperator(std::uint32_t operator_id, plan::physical::ExpressionPtr predicate,
                  std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr)
       : SimpleOperator(operator_id, "Filter", OperatorType::Filter),
         predicate_(std::move(predicate)),
@@ -53,7 +53,7 @@ class FilterOperator : public SimpleOperator {
   }
 
  private:
-  ExpressionPtr predicate_;
+  plan::physical::ExpressionPtr predicate_;
   std::shared_ptr<memory::MemoryResourceManager> memory_manager_;
 };
 

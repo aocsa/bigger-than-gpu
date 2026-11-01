@@ -18,7 +18,8 @@
 #include "support/test_utils.hpp"
 
 using namespace quest;
-using namespace quest::datasource;
+using namespace quest::columnar;
+using namespace quest::io::parquet;
 
 // =============================================================================
 // Test Fixture
@@ -238,17 +239,17 @@ TEST_F(ParquetReaderTest, InvalidColumnProjection) {
 
 TEST(ParquetBytesTest, SliceAndLoadRejectOutOfBounds) {
   const std::vector<uint8_t> buf{0x01, 0x02, 0x03, 0x04, 0x05};
-  ASSERT_OK_AND_ASSIGN(auto value, parquet::LoadLE<uint32_t>(buf, 1));
+  ASSERT_OK_AND_ASSIGN(auto value, LoadLE<uint32_t>(buf, 1));
   EXPECT_EQ(value, 0x05040302U);
-  EXPECT_FALSE(parquet::LoadLE<uint32_t>(buf, 2).has_value());
-  EXPECT_FALSE(parquet::Slice(buf, 3, 3).has_value());
-  EXPECT_FALSE(parquet::Slice(buf, 6, 0).has_value());
-  EXPECT_FALSE(parquet::Slice(buf, 1, SIZE_MAX).has_value());
+  EXPECT_FALSE(LoadLE<uint32_t>(buf, 2).has_value());
+  EXPECT_FALSE(Slice(buf, 3, 3).has_value());
+  EXPECT_FALSE(Slice(buf, 6, 0).has_value());
+  EXPECT_FALSE(Slice(buf, 1, SIZE_MAX).has_value());
 }
 
 TEST(ParquetBytesTest, BinaryDecoderRejectsLengthPastBuffer) {
   const std::vector<uint8_t> buf{0xFF, 0xFF, 0xFF, 0x7F, 'a', 'b'};
-  parquet::PlainBinaryDecoder decoder;
+  PlainBinaryDecoder decoder;
   decoder.SetData(buf);
   EXPECT_FALSE(decoder.ReadValue().has_value());
 }
@@ -256,7 +257,7 @@ TEST(ParquetBytesTest, BinaryDecoderRejectsLengthPastBuffer) {
 TEST(ParquetBytesTest, RleDecoderRejectsTruncatedBitPackedRun) {
   // Header 0x03: one bit-packed group of 8 values at bit width 8 needs 8 bytes; 2 are present.
   const std::vector<uint8_t> buf{0x03, 0x01, 0x02};
-  parquet::RleBitPackingDecoder decoder(8);
+  RleBitPackingDecoder decoder(8);
   decoder.SetData(buf, 8);
   ASSERT_OK_AND_ASSIGN(auto first, decoder.ReadValue());
   EXPECT_EQ(first, 1);
@@ -267,7 +268,7 @@ TEST(ParquetBytesTest, RleDecoderRejectsTruncatedBitPackedRun) {
 
 TEST(ParquetBytesTest, RleDecoderRejectsInvalidBitWidth) {
   const std::vector<uint8_t> buf{0x02, 0x01};
-  parquet::RleBitPackingDecoder decoder(40);
+  RleBitPackingDecoder decoder(40);
   decoder.SetData(buf, 1);
   EXPECT_FALSE(decoder.ReadValue().has_value());
 }

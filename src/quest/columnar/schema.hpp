@@ -13,7 +13,7 @@
 #include "quest/columnar/types.hpp"
 #include "quest/common/result.hpp"
 
-namespace quest::datasource {
+namespace quest::columnar {
 
 struct ColumnStatistics {
   std::optional<std::vector<uint8_t>> min_value;
@@ -124,4 +124,4 @@ class Schema {
   std::vector<Field> fields_;
 };
 
-}  // namespace quest::datasource
+}  // namespace quest::columnar

@@ -9,11 +9,11 @@ namespace quest::cache {
 // =============================================================================
 
 HostMemoryBlock::HostMemoryBlock(
-    std::string id, datasource::RecordBatch record_batch,
+    std::string id, columnar::RecordBatch record_batch,
     std::shared_ptr<memory::CPUMemoryResource> memory_resource)
     : id_(std::move(id)),
       record_batch_(
-          std::make_unique<datasource::RecordBatch>(std::move(record_batch))),
+          std::make_unique<columnar::RecordBatch>(std::move(record_batch))),
       cpu_resource_(std::move(memory_resource)) {
   if (cpu_resource_) {
     cpu_resource_->record_allocation(size_in_bytes());
@@ -76,7 +76,7 @@ Result<std::shared_ptr<DiskBlock>> HostMemoryBlock::ToDisk() {
 
   auto file_path = disk_resource_->generate_cache_path("cpu_spill");
 
-  if (auto status = datasource::RecordBatchSerializer::SerializeToFile(*record_batch_,
+  if (auto status = columnar::RecordBatchSerializer::SerializeToFile(*record_batch_,
                                                                        file_path.string());
       !status) {
     return std::unexpected(status.error());
@@ -174,7 +174,7 @@ Result<std::shared_ptr<HostMemoryBlock>> DiskBlock::ToCpu() {
   }
 
   auto record_batch =
-      datasource::RecordBatchSerializer::DeserializeFromFile(file_path_.string());
+      columnar::RecordBatchSerializer::DeserializeFromFile(file_path_.string());
   if (!record_batch) {
     return std::unexpected(record_batch.error());
   }
@@ -227,7 +227,7 @@ Result<std::shared_ptr<HostMemoryBlock>> EnsureHostBlock(DataBlockPtr input) {
 }
 
 std::shared_ptr<HostMemoryBlock> MakeTrackedHostBlock(
-    std::string block_id, datasource::RecordBatch batch,
+    std::string block_id, columnar::RecordBatch batch,
     const std::shared_ptr<memory::MemoryResourceManager>& memory_manager) {
   std::shared_ptr<memory::CPUMemoryResource> cpu;
   std::shared_ptr<memory::DiskMemoryResource> disk;
@@ -253,7 +253,7 @@ Result<DataBlockPtr> ConcatenateHostBlocks(std::vector<DataBlockPtr> blocks) {
 
   std::vector<std::shared_ptr<HostMemoryBlock>> hosts;
   hosts.reserve(blocks.size());
-  std::vector<const datasource::RecordBatch*> batches;
+  std::vector<const columnar::RecordBatch*> batches;
   batches.reserve(blocks.size());
   for (auto& block : blocks) {
     auto host_result = EnsureHostBlock(block);
@@ -268,7 +268,7 @@ Result<DataBlockPtr> ConcatenateHostBlocks(std::vector<DataBlockPtr> blocks) {
     hosts.push_back(std::move(host));
   }
 
-  auto merged = datasource::ConcatenateRecordBatches(batches);
+  auto merged = columnar::ConcatenateRecordBatches(batches);
   if (!merged) {
     return std::unexpected(merged.error());
   }

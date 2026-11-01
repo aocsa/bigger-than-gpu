@@ -58,7 +58,7 @@ class QueryBuilder {
   }
 
   /// @brief Start with a generic data source.
-  [[nodiscard]] static QueryBuilder From(std::shared_ptr<DataSource> source,
+  [[nodiscard]] static QueryBuilder From(std::shared_ptr<datasource::DataSource> source,
                                          const std::string& name) {
     return QueryBuilder(QueryPlan::From(std::move(source), name));
   }
@@ -97,7 +97,9 @@ class QueryBuilder {
   // Plan Building
   // ===========================================================================
 
-  [[nodiscard]] LogicalPlanPtr BuildLogicalPlan() && { return std::move(plan_).BuildLogicalPlan(); }
+  [[nodiscard]] plan::logical::LogicalPlanPtr BuildLogicalPlan() && {
+    return std::move(plan_).BuildLogicalPlan();
+  }
 
   // ===========================================================================
   // Execution
@@ -109,7 +111,7 @@ class QueryBuilder {
   ///
   /// @param memory_manager Optional memory manager (spill budget).
   /// @return Collected RecordBatches, or the lowering/execution error.
-  [[nodiscard]] Result<std::vector<datasource::RecordBatch>> ExecuteOnGraph(
+  [[nodiscard]] Result<std::vector<columnar::RecordBatch>> ExecuteOnGraph(
       std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr) && {
     auto graph_result = execution::CreateGraph(plan_.plan(), std::move(memory_manager));
     if (!graph_result) {
@@ -131,7 +133,7 @@ class QueryBuilder {
 
   [[nodiscard]] explicit operator bool() const noexcept { return static_cast<bool>(plan_); }
 
-  [[nodiscard]] datasource::Schema schema() const { return plan_.schema(); }
+  [[nodiscard]] columnar::Schema schema() const { return plan_.schema(); }
 
  private:
   explicit QueryBuilder(QueryPlan plan) noexcept : plan_(std::move(plan)) {}

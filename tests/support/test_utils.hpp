@@ -17,8 +17,8 @@
 namespace quest::testing {
 
 /// @brief Single int32 column named "value"; values are 0, 1, 2, …
-inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows) {
-  using namespace quest::datasource;
+inline columnar::RecordBatch MakeTestRecordBatch(size_t num_rows) {
+  using namespace quest::columnar;
 
   std::vector<Field> fields = {Field("value", Int32Type{})};
   Schema schema(fields);
@@ -32,8 +32,8 @@ inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows) {
 }
 
 /// @brief Multiple int32 columns named "col0", "col1", etc.
-inline datasource::RecordBatch MakeTestRecordBatch(size_t num_rows, size_t num_columns) {
-  using namespace quest::datasource;
+inline columnar::RecordBatch MakeTestRecordBatch(size_t num_rows, size_t num_columns) {
+  using namespace quest::columnar;
 
   std::vector<Field> fields;
   std::vector<std::shared_ptr<ColumnVector>> columns;

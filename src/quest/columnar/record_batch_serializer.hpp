@@ -14,7 +14,7 @@
 #include "quest/columnar/types.hpp"
 #include "quest/common/result.hpp"
 
-namespace quest::datasource {
+namespace quest::columnar {
 
 // Binary format serializer for RecordBatch
 // Format:
@@ -420,4 +420,4 @@ class RecordBatchSerializer {
   }
 };
 
-}  // namespace quest::datasource
+}  // namespace quest::columnar

@@ -21,7 +21,7 @@
 using namespace quest;
 using namespace quest::taskflow;
 using namespace quest::execution;
-using namespace quest::datasource;
+using namespace quest::columnar;
 using namespace quest::testing;
 
 namespace {

@@ -19,10 +19,10 @@
 #include "quest/datasource/data_source.hpp"
 #include "quest/plan/logical/logical_expr.hpp"
 
-namespace quest {
+namespace quest::plan::logical {
 
 using datasource::DataSource;
-using datasource::Schema;
+using columnar::Schema;
 
 // =============================================================================
 // Abstract Base Class
@@ -251,8 +251,8 @@ class Union : public LogicalPlan {
     return false;
   }
   for (std::size_t i = 0; i < lhs.num_fields(); ++i) {
-    if (datasource::GetTypeName(lhs.field(i).data_type) !=
-        datasource::GetTypeName(rhs.field(i).data_type)) {
+    if (columnar::GetTypeName(lhs.field(i).data_type) !=
+        columnar::GetTypeName(rhs.field(i).data_type)) {
       return false;
     }
   }
@@ -281,4 +281,4 @@ inline Result<Field> ColumnIndex::ToField(const LogicalPlan& input) const {
   return fields[index_];
 }
 
-}  // namespace quest
+}  // namespace quest::plan::logical
