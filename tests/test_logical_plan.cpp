@@ -263,7 +263,7 @@ class LogicalPlanTest : public ::testing::Test {
 };
 
 TEST_F(LogicalPlanTest, ScanPlan) {
-  Scan scan("test.parquet", data_source_, std::nullopt);
+  Scan scan("test.parquet", data_source_);
 
   EXPECT_EQ(scan.path(), "test.parquet");
   EXPECT_EQ(scan.schema().num_fields(), 3U);
@@ -271,16 +271,21 @@ TEST_F(LogicalPlanTest, ScanPlan) {
 }
 
 TEST_F(LogicalPlanTest, ScanWithProjection) {
-  std::vector<std::string> projection = {"id", "name"};
-  Scan scan("test.parquet", data_source_, projection);
+  ASSERT_OK_AND_ASSIGN(auto scan, Scan::WithProjection("test.parquet", data_source_, {"id", "name"}));
 
-  EXPECT_EQ(scan.schema().num_fields(), 2U);
-  EXPECT_EQ(scan.schema().field(0).name, "id");
-  EXPECT_EQ(scan.schema().field(1).name, "name");
+  EXPECT_EQ(scan->schema().num_fields(), 2U);
+  EXPECT_EQ(scan->schema().field(0).name, "id");
+  EXPECT_EQ(scan->schema().field(1).name, "name");
+}
+
+TEST_F(LogicalPlanTest, ScanWithUnknownProjectionColumnIsAnError) {
+  auto scan = Scan::WithProjection("test.parquet", data_source_, {"id", "missing"});
+  ASSERT_FALSE(scan.has_value());
+  EXPECT_EQ(scan.error().code(), ErrorCode::SchemaError);
 }
 
 TEST_F(LogicalPlanTest, SelectionPlan) {
-  auto scan = std::make_unique<Scan>("test.parquet", data_source_, std::nullopt);
+  auto scan = std::make_unique<Scan>("test.parquet", data_source_);
   auto condition = gt(col("value"), lit(0.0));
 
   Selection selection(std::move(scan), std::move(condition));
@@ -290,7 +295,7 @@ TEST_F(LogicalPlanTest, SelectionPlan) {
 }
 
 TEST_F(LogicalPlanTest, ProjectionPlan) {
-  auto scan = std::make_unique<Scan>("test.parquet", data_source_, std::nullopt);
+  auto scan = std::make_unique<Scan>("test.parquet", data_source_);
 
   std::vector<LogicalExprPtr> exprs;
   exprs.push_back(col("id"));
@@ -302,7 +307,7 @@ TEST_F(LogicalPlanTest, ProjectionPlan) {
 }
 
 TEST_F(LogicalPlanTest, PlanToString) {
-  auto scan = std::make_unique<Scan>("test.parquet", data_source_, std::nullopt);
+  auto scan = std::make_unique<Scan>("test.parquet", data_source_);
   auto str = scan->ToString();
 
   EXPECT_FALSE(str.empty());
@@ -310,7 +315,7 @@ TEST_F(LogicalPlanTest, PlanToString) {
 }
 
 TEST_F(LogicalPlanTest, PlanPrettyPrint) {
-  auto scan = std::make_unique<Scan>("test.parquet", data_source_, std::nullopt);
+  auto scan = std::make_unique<Scan>("test.parquet", data_source_);
   auto condition = eq(col("id"), lit(1));
   auto selection =
       std::make_unique<Selection>(std::move(scan), std::move(condition));

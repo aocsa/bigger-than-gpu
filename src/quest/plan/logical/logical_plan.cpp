@@ -3,7 +3,6 @@
 
 #include "quest/plan/logical/logical_plan.hpp"
 
-#include <cassert>
 #include <sstream>
 
 namespace quest::plan::logical {
@@ -36,14 +35,15 @@ std::string Scan::ToString() const {
   return oss.str();
 }
 
-Schema Scan::DeriveSchema() const {
-  const auto& source_schema = data_source_->schema();
-  if (projection_) {
-    auto selected = source_schema.Select(*projection_);
-    assert(selected && "Scan projection names a column missing from the source schema");
-    return *std::move(selected);
+Result<std::unique_ptr<Scan>> Scan::WithProjection(std::string path,
+                                                   std::shared_ptr<DataSource> data_source,
+                                                   std::vector<std::string> columns) {
+  auto schema = data_source->schema().Select(columns);
+  if (!schema) {
+    return std::unexpected(std::move(schema).error());
   }
-  return source_schema;
+  return std::make_unique<Scan>(Validated{}, std::move(path), std::move(data_source),
+                                std::move(columns), *std::move(schema));
 }
 
 Schema Projection::schema() const {

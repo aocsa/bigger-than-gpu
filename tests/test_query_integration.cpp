@@ -131,25 +131,25 @@ class QueryIntegrationTest : public ::testing::Test {
 // =============================================================================
 
 TEST_F(QueryIntegrationTest, BuildScanPlan) {
-  Scan scan("employees", data_source_, std::nullopt);
+  Scan scan("employees", data_source_);
 
   EXPECT_EQ(scan.schema().num_fields(), 5U);
   EXPECT_EQ(scan.path(), "employees");
 }
 
 TEST_F(QueryIntegrationTest, BuildScanWithProjection) {
-  std::vector<std::string> projection = {"id", "name", "salary"};
-  Scan scan("employees", data_source_, projection);
+  ASSERT_OK_AND_ASSIGN(auto scan,
+                       Scan::WithProjection("employees", data_source_, {"id", "name", "salary"}));
 
-  EXPECT_EQ(scan.schema().num_fields(), 3U);
-  EXPECT_EQ(scan.schema().field(0).name, "id");
-  EXPECT_EQ(scan.schema().field(1).name, "name");
-  EXPECT_EQ(scan.schema().field(2).name, "salary");
+  EXPECT_EQ(scan->schema().num_fields(), 3U);
+  EXPECT_EQ(scan->schema().field(0).name, "id");
+  EXPECT_EQ(scan->schema().field(1).name, "name");
+  EXPECT_EQ(scan->schema().field(2).name, "salary");
 }
 
 TEST_F(QueryIntegrationTest, BuildSelectionPlan) {
   auto scan =
-      std::make_unique<Scan>("employees", data_source_, std::nullopt);
+      std::make_unique<Scan>("employees", data_source_);
   auto condition = gt(col("salary"), lit(70000.0));
 
   Selection selection(std::move(scan), std::move(condition));
@@ -160,7 +160,7 @@ TEST_F(QueryIntegrationTest, BuildSelectionPlan) {
 
 TEST_F(QueryIntegrationTest, BuildProjectionPlan) {
   auto scan =
-      std::make_unique<Scan>("employees", data_source_, std::nullopt);
+      std::make_unique<Scan>("employees", data_source_);
 
   std::vector<LogicalExprPtr> exprs;
   exprs.push_back(col("id"));
@@ -375,7 +375,7 @@ TEST_F(QueryIntegrationTest, ComplexLogicalCondition) {
 
 TEST_F(QueryIntegrationTest, PlanPrettyPrint) {
   auto scan =
-      std::make_unique<Scan>("employees", data_source_, std::nullopt);
+      std::make_unique<Scan>("employees", data_source_);
   auto condition =
       and_expr(gt(col("salary"), lit(50000.0)), eq(col("active"), lit(true)));
   auto selection =

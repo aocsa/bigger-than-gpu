@@ -3,6 +3,7 @@
 
 #include "quest/io/parquet/page_reader.hpp"
 
+#include "quest/io/parquet/bytes.hpp"
 #include "quest/io/parquet/thrift_decoder.hpp"
 
 namespace quest::io::parquet {
@@ -304,13 +305,14 @@ Result<PageHeader> PageReader::ReadPageHeader() {
 }
 
 Result<std::span<const uint8_t>> PageReader::GetPageData() {
-  size_t page_size = current_header_.compressed_page_size;
-  if (pos_ + page_size > data_.size()) {
-    return std::unexpected(
-        Error::PageDecodeError("Page data exceeds buffer size"));
+  if (current_header_.compressed_page_size < 0) {
+    return Error::PageDecodeError("Negative compressed page size");
   }
-  auto result = data_.subspan(pos_, page_size);
-  pos_ += page_size;
+  auto result = Slice(data_, pos_, static_cast<size_t>(current_header_.compressed_page_size));
+  if (!result) {
+    return std::unexpected(Error::PageDecodeError("Page data exceeds buffer size"));
+  }
+  pos_ += result->size();
   return result;
 }
 

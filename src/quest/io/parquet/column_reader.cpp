@@ -50,6 +50,9 @@ template <typename ReadFn, typename AppendFn, typename AppendNullFn>
 }  // namespace
 
 Result<std::shared_ptr<ColumnVector>> ColumnReader::ReadAll() {
+  if (column_meta_.num_values < 0) {
+    return Error::ColumnDecodeError("Negative column chunk value count");
+  }
   size_t total_values = column_meta_.num_values;
   auto column = CreateColumnVector(field_.data_type, total_values);
 
@@ -59,6 +62,10 @@ Result<std::shared_ptr<ColumnVector>> ColumnReader::ReadAll() {
       return std::unexpected(header_result.error());
     }
     auto header = header_result.value();
+    if (header.num_values < 0 || header.num_dict_values < 0 ||
+        header.uncompressed_page_size < 0) {
+      return Error::PageDecodeError("Negative count in page header");
+    }
 
     auto page_data_result = page_reader_.GetPageData();
     if (!page_data_result.has_value()) {

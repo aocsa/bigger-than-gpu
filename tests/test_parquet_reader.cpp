@@ -14,6 +14,9 @@
 
 #include "quest/io/parquet/bytes.hpp"
 #include "quest/io/parquet/encoding.hpp"
+#include "quest/io/parquet/file_reader.hpp"
+#include "quest/io/parquet/page_reader.hpp"
+#include "quest/io/parquet/thrift_decoder.hpp"
 #include "quest/io/parquet/parquet_data_source.hpp"
 #include "support/test_utils.hpp"
 
@@ -284,4 +287,29 @@ TEST(ParquetCorruptFileTest, FooterLengthPastFileStartIsAnError) {
   auto result = ParquetDataSource::Open(path.string());
   EXPECT_FALSE(result.has_value());
   std::filesystem::remove(path);
+}
+
+TEST(ParquetCorruptFileTest, NegativeCompressedPageSizeIsAnError) {
+  // Compact-thrift PageHeader: type=DATA_PAGE, uncompressed_page_size=10,
+  // compressed_page_size=-1 (zigzag 0x01), stop.
+  const std::vector<uint8_t> page{0x15, 0x00, 0x15, 0x14, 0x15, 0x01, 0x00, 0xAA, 0xBB};
+  PageReader reader(page);
+  ASSERT_OK(reader.ReadPageHeader());
+  EXPECT_FALSE(reader.GetPageData().has_value());
+}
+
+TEST(ParquetCorruptFileTest, ListSizeBeyondBufferIsAnError) {
+  // List header: size nibble 0xF -> varint size 0x7FFFFFFF, element type i32; no elements follow.
+  const std::vector<uint8_t> buf{0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x07};
+  ThriftDecoder decoder(buf);
+  EXPECT_FALSE(decoder.ReadListHeader().has_value());
+}
+
+TEST(ParquetCorruptFileTest, FileReadPastEndIsAnError) {
+  const auto path = std::filesystem::path(__FILE__).parent_path().parent_path() / "testdata" /
+                    "simple_test.parquet";
+  ASSERT_OK_AND_ASSIGN(auto file, FileHandle::Open(path.string()));
+  EXPECT_FALSE(file.Read(file.size() - 1, 2).has_value());
+  EXPECT_FALSE(file.Read(SIZE_MAX, 1).has_value());
+  EXPECT_FALSE(file.Read(0, SIZE_MAX).has_value());
 }

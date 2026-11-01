@@ -47,12 +47,15 @@ using LogicalPlanPtr = std::unique_ptr<LogicalPlan>;
 
 class Scan : public LogicalPlan {
  public:
-  Scan(std::string path, std::shared_ptr<DataSource> data_source,
-       std::optional<std::vector<std::string>> projection = std::nullopt)
+  Scan(std::string path, std::shared_ptr<DataSource> data_source)
       : path_(std::move(path)),
         data_source_(std::move(data_source)),
-        projection_(std::move(projection)),
-        schema_(DeriveSchema()) {}
+        schema_(data_source_->schema()) {}
+
+  /// @brief Scan reading only `columns`; SchemaError if one is not in the source.
+  [[nodiscard]] static Result<std::unique_ptr<Scan>> WithProjection(
+      std::string path, std::shared_ptr<DataSource> data_source,
+      std::vector<std::string> columns);
 
   [[nodiscard]] Schema schema() const override { return schema_; }
 
@@ -72,8 +75,20 @@ class Scan : public LogicalPlan {
   }
 
  private:
-  [[nodiscard]] Schema DeriveSchema() const;
+  // Passkey: only WithProjection can build a projected Scan, after validating the columns.
+  struct Validated {
+    explicit Validated() = default;
+  };
 
+ public:
+  Scan(Validated, std::string path, std::shared_ptr<DataSource> data_source,
+       std::vector<std::string> columns, Schema schema)
+      : path_(std::move(path)),
+        data_source_(std::move(data_source)),
+        projection_(std::move(columns)),
+        schema_(std::move(schema)) {}
+
+ private:
   std::string path_;
   std::shared_ptr<DataSource> data_source_;
   std::optional<std::vector<std::string>> projection_;

@@ -193,6 +193,11 @@ Result<ThriftDecoder::ListHeader> ThriftDecoder::ReadListHeader() noexcept {
     }
     size = size_result.value();
   }
+  // Every compact-protocol element takes at least one byte; a larger count is corrupt and
+  // would otherwise drive a huge reserve() in the caller.
+  if (size > remaining()) {
+    return Error::ThriftDecodeError("List size exceeds remaining buffer");
+  }
 
   return ListHeader{elem_type, size};
 }

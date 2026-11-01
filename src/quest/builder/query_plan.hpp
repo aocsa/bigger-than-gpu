@@ -50,12 +50,12 @@ class QueryPlan {
     }
     auto source = std::make_shared<io::parquet::ParquetDataSource>(std::move(*source_result));
     return QueryPlan(
-        std::make_unique<plan::logical::Scan>(filename, std::move(source), std::nullopt));
+        std::make_unique<plan::logical::Scan>(filename, std::move(source)));
   }
 
   [[nodiscard]] static QueryPlan From(std::shared_ptr<datasource::DataSource> source,
                                       const std::string& name) {
-    return QueryPlan(std::make_unique<plan::logical::Scan>(name, std::move(source), std::nullopt));
+    return QueryPlan(std::make_unique<plan::logical::Scan>(name, std::move(source)));
   }
 
   // ===========================================================================

@@ -26,6 +26,9 @@ Result<FileHandle> FileHandle::Open(const std::string& path) {
 
 Status FileHandle::Read(size_t offset, size_t length,
                         std::vector<uint8_t>& buffer) {
+  if (offset > file_size_ || length > file_size_ - offset) {
+    return Error::OutOfRange("Read past end of file");
+  }
   buffer.resize(length);
   stream_.seekg(static_cast<std::streamoff>(offset));
   stream_.read(reinterpret_cast<char*>(buffer.data()),
