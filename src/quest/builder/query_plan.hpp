@@ -110,6 +110,29 @@ class QueryPlan {
         std::make_unique<plan::logical::Union>(std::move(plan_), std::move(other.plan_)));
   }
 
+  /// @brief Inner join: this plan is the probe side, @p build the hashed side.
+  [[nodiscard]] QueryPlan Join(QueryPlan build, std::string probe_key, std::string build_key) && {
+    return QueryPlan(std::make_unique<plan::logical::Join>(
+        std::move(plan_), std::move(build.plan_), std::move(probe_key), std::move(build_key)));
+  }
+
+  /// @brief GROUP BY @p group_by; each aggregate is (output name, aggregate expression).
+  [[nodiscard]] QueryPlan Aggregate(
+      std::vector<std::string> group_by,
+      const std::vector<std::pair<std::string, ExprBuilder>>& aggregates) && {
+    std::vector<plan::logical::NamedAggregate> named;
+    named.reserve(aggregates.size());
+    for (const auto& [name, expr] : aggregates) {
+      named.push_back({name, expr.Build()});
+    }
+    return QueryPlan(std::make_unique<plan::logical::Aggregate>(
+        std::move(plan_), std::move(group_by), std::move(named)));
+  }
+
+  [[nodiscard]] QueryPlan OrderBy(std::vector<plan::logical::SortKey> keys) && {
+    return QueryPlan(std::make_unique<plan::logical::Sort>(std::move(plan_), std::move(keys)));
+  }
+
   // ===========================================================================
   // Plan Building
   // ===========================================================================

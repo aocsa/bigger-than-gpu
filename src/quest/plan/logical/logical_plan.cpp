@@ -58,6 +58,53 @@ Schema Projection::schema() const {
   return Schema(std::move(fields));
 }
 
+Schema Join::schema() const {
+  std::vector<Field> fields = probe_->schema().fields();
+  const Schema build_schema = build_->schema();
+  fields.insert(fields.end(), build_schema.fields().begin(), build_schema.fields().end());
+  return Schema(std::move(fields));
+}
+
+Schema Aggregate::schema() const {
+  const auto input_schema = input_->schema();
+  std::vector<Field> fields;
+  fields.reserve(group_by_.size() + aggregates_.size());
+  for (const auto& name : group_by_) {
+    if (auto index = input_schema.GetFieldIndex(name)) {
+      fields.push_back(input_schema.field(*index));
+    }
+  }
+  for (const auto& aggregate : aggregates_) {
+    if (auto field = aggregate.expr->ToField(*input_)) {
+      field->name = aggregate.name;
+      fields.push_back(*std::move(field));
+    }
+  }
+  return Schema(std::move(fields));
+}
+
+std::string Aggregate::ToString() const {
+  std::ostringstream oss;
+  oss << "Aggregate: group by [";
+  for (size_t i = 0; i < group_by_.size(); ++i) {
+    oss << (i > 0 ? ", " : "") << group_by_[i];
+  }
+  oss << "]";
+  for (const auto& aggregate : aggregates_) {
+    oss << ", " << aggregate.expr->ToString() << " AS " << aggregate.name;
+  }
+  return oss.str();
+}
+
+std::string Sort::ToString() const {
+  std::ostringstream oss;
+  oss << "Sort: ";
+  for (size_t i = 0; i < keys_.size(); ++i) {
+    oss << (i > 0 ? ", " : "") << keys_[i].column << (keys_[i].ascending ? " ASC" : " DESC");
+  }
+  return oss.str();
+}
+
 std::string Projection::ToString() const {
   std::ostringstream oss;
   oss << "Projection: ";

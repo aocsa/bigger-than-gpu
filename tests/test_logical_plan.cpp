@@ -377,3 +377,58 @@ TEST(LogicalExprEdgeCaseTest, LargeIndex) {
   auto expr = col_idx(999999);
   EXPECT_EQ(expr->ToString(), "#999999");
 }
+
+// =============================================================================
+// Join / Aggregate / Sort
+// =============================================================================
+
+TEST_F(LogicalPlanTest, JoinSchemaIsProbeThenBuildColumns) {
+  auto other = std::make_shared<MockDataSource>(
+      Schema({Field("o_id", Int64Type{}), Field("priority", StringType{})}));
+  Join join(std::make_unique<Scan>("orders", other), std::make_unique<Scan>("t", data_source_),
+            "o_id", "id");
+
+  const auto schema = join.schema();
+  ASSERT_EQ(schema.num_fields(), 5U);
+  EXPECT_EQ(schema.field(0).name, "o_id");
+  EXPECT_EQ(schema.field(1).name, "priority");
+  EXPECT_EQ(schema.field(2).name, "id");
+  EXPECT_EQ(schema.field(4).name, "value");
+  EXPECT_EQ(join.ToString(), "Inner Join: o_id = id");
+  EXPECT_EQ(join.Children().size(), 2U);
+}
+
+TEST_F(LogicalPlanTest, AggregateSchemaUsesSqlResultTypes) {
+  std::vector<NamedAggregate> aggregates;
+  aggregates.push_back({"total_id", sum(col("id"))});
+  aggregates.push_back({"total_value", sum(col("value"))});
+  aggregates.push_back({"n", count_star()});
+  aggregates.push_back({"lowest", min(col("value"))});
+  Aggregate aggregate(std::make_unique<Scan>("t", data_source_), {"name"}, std::move(aggregates));
+
+  const auto schema = aggregate.schema();
+  ASSERT_EQ(schema.num_fields(), 5U);
+  EXPECT_EQ(schema.field(0).name, "name");
+  EXPECT_TRUE(std::holds_alternative<StringType>(schema.field(0).data_type));
+  EXPECT_EQ(schema.field(1).name, "total_id");
+  EXPECT_TRUE(std::holds_alternative<Int64Type>(schema.field(1).data_type));
+  EXPECT_TRUE(std::holds_alternative<DoubleType>(schema.field(2).data_type));
+  EXPECT_TRUE(std::holds_alternative<Int64Type>(schema.field(3).data_type));
+  EXPECT_TRUE(std::holds_alternative<DoubleType>(schema.field(4).data_type));
+  EXPECT_EQ(aggregate.ToString(),
+            "Aggregate: group by [name], SUM(#id) AS total_id, SUM(#value) AS total_value, "
+            "COUNT(*) AS n, MIN(#value) AS lowest");
+}
+
+TEST_F(LogicalPlanTest, SumOfStringIsATypeError) {
+  Scan scan("t", data_source_);
+  auto field = sum(col("name"))->ToField(scan);
+  ASSERT_FALSE(field.has_value());
+  EXPECT_EQ(field.error().code(), ErrorCode::TypeError);
+}
+
+TEST_F(LogicalPlanTest, SortKeepsSchemaAndPrintsKeys) {
+  Sort sort(std::make_unique<Scan>("t", data_source_), {{"name", true}, {"value", false}});
+  EXPECT_EQ(sort.schema().num_fields(), 3U);
+  EXPECT_EQ(sort.ToString(), "Sort: name ASC, value DESC");
+}

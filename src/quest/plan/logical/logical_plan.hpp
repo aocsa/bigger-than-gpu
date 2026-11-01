@@ -206,6 +206,115 @@ class Union : public LogicalPlan {
   LogicalPlanPtr right_;
 };
 
+// =============================================================================
+// Join Node
+// =============================================================================
+
+/// @brief Inner equi-join on one key column from each side.
+///
+/// The build side is materialized into a hash table; the probe side streams.
+/// Output schema: the probe columns, then the build columns.
+class Join : public LogicalPlan {
+ public:
+  Join(LogicalPlanPtr probe, LogicalPlanPtr build, std::string probe_key, std::string build_key)
+      : probe_(std::move(probe)),
+        build_(std::move(build)),
+        probe_key_(std::move(probe_key)),
+        build_key_(std::move(build_key)) {}
+
+  [[nodiscard]] Schema schema() const override;
+
+  [[nodiscard]] std::vector<const LogicalPlan*> Children() const override {
+    return {probe_.get(), build_.get()};
+  }
+
+  [[nodiscard]] std::string ToString() const override {
+    return "Inner Join: " + probe_key_ + " = " + build_key_;
+  }
+
+  [[nodiscard]] const LogicalPlan& probe() const { return *probe_; }
+  [[nodiscard]] const LogicalPlan& build() const { return *build_; }
+  [[nodiscard]] const std::string& probe_key() const noexcept { return probe_key_; }
+  [[nodiscard]] const std::string& build_key() const noexcept { return build_key_; }
+
+ private:
+  LogicalPlanPtr probe_;
+  LogicalPlanPtr build_;
+  std::string probe_key_;
+  std::string build_key_;
+};
+
+// =============================================================================
+// Aggregate Node
+// =============================================================================
+
+/// @brief One output column of an Aggregate: an aggregate expression and its name.
+struct NamedAggregate {
+  std::string name;
+  LogicalExprPtr expr;  ///< SUM / COUNT / COUNT(*) / MIN / MAX / AVG.
+};
+
+/// @brief GROUP BY: one output row per distinct key. Output schema: the group
+///        columns, then one column per aggregate.
+class Aggregate : public LogicalPlan {
+ public:
+  Aggregate(LogicalPlanPtr input, std::vector<std::string> group_by,
+            std::vector<NamedAggregate> aggregates)
+      : input_(std::move(input)),
+        group_by_(std::move(group_by)),
+        aggregates_(std::move(aggregates)) {}
+
+  [[nodiscard]] Schema schema() const override;
+
+  [[nodiscard]] std::vector<const LogicalPlan*> Children() const override {
+    return {input_.get()};
+  }
+
+  [[nodiscard]] std::string ToString() const override;
+
+  [[nodiscard]] const LogicalPlan& input() const { return *input_; }
+  [[nodiscard]] const std::vector<std::string>& group_by() const noexcept { return group_by_; }
+  [[nodiscard]] const std::vector<NamedAggregate>& aggregates() const noexcept {
+    return aggregates_;
+  }
+
+ private:
+  LogicalPlanPtr input_;
+  std::vector<std::string> group_by_;
+  std::vector<NamedAggregate> aggregates_;
+};
+
+// =============================================================================
+// Sort Node
+// =============================================================================
+
+struct SortKey {
+  std::string column;
+  bool ascending = true;
+};
+
+/// @brief ORDER BY: a stable sort on @p keys; NULLs sort last for ASC, first for DESC.
+class Sort : public LogicalPlan {
+ public:
+  Sort(LogicalPlanPtr input, std::vector<SortKey> keys)
+      : input_(std::move(input)), keys_(std::move(keys)) {}
+
+  [[nodiscard]] Schema schema() const override { return input_->schema(); }
+
+  [[nodiscard]] std::vector<const LogicalPlan*> Children() const override {
+    return {input_.get()};
+  }
+
+  [[nodiscard]] std::string ToString() const override;
+
+  [[nodiscard]] const LogicalPlan& input() const { return *input_; }
+  [[nodiscard]] const std::vector<SortKey>& keys() const noexcept { return keys_; }
+
+ private:
+  LogicalPlanPtr input_;
+  std::vector<SortKey> keys_;
+};
+
 /// @brief Whether two schemas are UNION-compatible (same field count + types).
 [[nodiscard]] bool UnionCompatible(const Schema& lhs, const Schema& rhs);
 

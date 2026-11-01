@@ -110,8 +110,21 @@ Result<Field> Sum::ToField(const LogicalPlan& input) const {
   if (!input_field.has_value()) {
     return input_field;
   }
-  // SUM returns double for numeric types
-  return Field{"SUM(" + input_->ToString() + ")", columnar::DoubleType{}};
+  // SQL: SUM of an integer type is BIGINT, of a floating type DOUBLE.
+  const auto& type = input_field->data_type;
+  const bool is_integral = std::holds_alternative<columnar::BoolType>(type) ||
+                           std::holds_alternative<columnar::Int8Type>(type) ||
+                           std::holds_alternative<columnar::Int16Type>(type) ||
+                           std::holds_alternative<columnar::Int32Type>(type) ||
+                           std::holds_alternative<columnar::Int64Type>(type);
+  const bool is_floating = std::holds_alternative<columnar::FloatType>(type) ||
+                           std::holds_alternative<columnar::DoubleType>(type);
+  if (!is_integral && !is_floating) {
+    return Error::TypeError("SUM needs a numeric input, got " + columnar::GetTypeName(type));
+  }
+  return Field{"SUM(" + input_->ToString() + ")",
+               is_integral ? columnar::DataType{columnar::Int64Type{}}
+                           : columnar::DataType{columnar::DoubleType{}}};
 }
 
 Result<Field> Min::ToField(const LogicalPlan& input) const {

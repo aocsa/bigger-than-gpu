@@ -149,4 +149,27 @@ template <LiteralValue T>
   return ExprBuilder(plan::logical::lit(std::move(value)));
 }
 
+/// @brief Aggregate functions for `GroupBy(...).Aggregate(...)`. A namespace,
+///        because the logical plan already has classes named Sum, Count, ...
+namespace agg {
+
+[[nodiscard]] inline ExprBuilder Sum(const ExprBuilder& input) {
+  return ExprBuilder(plan::logical::sum(input.Build()));
+}
+[[nodiscard]] inline ExprBuilder Avg(const ExprBuilder& input) {
+  return ExprBuilder(plan::logical::avg(input.Build()));
+}
+[[nodiscard]] inline ExprBuilder Count(const ExprBuilder& input) {
+  return ExprBuilder(plan::logical::count(input.Build()));
+}
+[[nodiscard]] inline ExprBuilder CountStar() { return ExprBuilder(plan::logical::count_star()); }
+[[nodiscard]] inline ExprBuilder Min(const ExprBuilder& input) {
+  return ExprBuilder(plan::logical::min(input.Build()));
+}
+[[nodiscard]] inline ExprBuilder Max(const ExprBuilder& input) {
+  return ExprBuilder(plan::logical::max(input.Build()));
+}
+
+}  // namespace agg
+
 }  // namespace quest
