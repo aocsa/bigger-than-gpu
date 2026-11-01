@@ -7,6 +7,15 @@
 
 namespace quest::plan::logical {
 
+namespace {
+
+[[nodiscard]] bool IsNullLiteral(const LogicalExpr& expr) {
+  const auto* lit = dynamic_cast<const Literal*>(&expr);
+  return lit != nullptr && std::holds_alternative<std::monostate>(lit->value());
+}
+
+}  // namespace
+
 Result<Field> Column::ToField(const LogicalPlan& input) const {
   for (const auto& field : input.schema().fields()) {
     if (field.name == name_) {
@@ -29,7 +38,11 @@ Result<Field> Literal::ToField(const LogicalPlan& /*input*/) const {
   DataType dtype = std::visit(
       [](const auto& v) -> DataType {
         using T = std::decay_t<decltype(v)>;
-        if constexpr (std::is_same_v<T, int32_t>) {
+        if constexpr (std::is_same_v<T, int8_t>) {
+          return columnar::Int8Type{};
+        } else if constexpr (std::is_same_v<T, int16_t>) {
+          return columnar::Int16Type{};
+        } else if constexpr (std::is_same_v<T, int32_t>) {
           return columnar::Int32Type{};
         } else if constexpr (std::is_same_v<T, int64_t>) {
           return columnar::Int64Type{};
@@ -67,17 +80,24 @@ std::string Literal::ToString() const {
 }
 
 Result<Field> BinaryExpr::ToField(const LogicalPlan& input) const {
-  std::string name =
-      left_->ToString() + " " + std::string(plan::ToString(op_)) + " " + right_->ToString();
-  if (!IsArithmetic(op_)) {
-    return Field{std::move(name), columnar::BoolType{}};
-  }
   auto left_field = left_->ToField(input);
-  if (!left_field.has_value()) {
+  if (!left_field) {
     return left_field;
   }
-  // Use the left operand's type for the result (could be improved with type promotion)
-  return Field{std::move(name), left_field.value().data_type};
+  auto right_field = right_->ToField(input);
+  if (!right_field) {
+    return right_field;
+  }
+  const DataType& lt = left_field->data_type;
+  const DataType& rt = right_field->data_type;
+  auto type = BinaryResultType(op_, IsNullLiteral(*left_) ? rt : lt,
+                               IsNullLiteral(*right_) ? lt : rt);
+  if (!type) {
+    return std::unexpected(type.error());
+  }
+  return Field{
+      left_->ToString() + " " + std::string(plan::ToString(op_)) + " " + right_->ToString(),
+      std::move(*type)};
 }
 
 std::string BinaryExpr::ToString() const {

@@ -6,12 +6,15 @@
 
 #include <gtest/gtest.h>
 
-#include <cmath>
+#include <cstdint>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "quest/columnar/column_vector.hpp"
 #include "quest/columnar/record_batch.hpp"
+#include "quest/execution/kernels/batch_kernels.hpp"
 #include "quest/execution/lowering/plan_to_graph.hpp"
 #include "quest/plan/logical/logical_expr.hpp"
 #include "quest/plan/logical/logical_plan.hpp"
@@ -244,9 +247,9 @@ TEST(SubtractExpressionTest, Basic) {
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
-  // a - 5: [5, 15, 25, 35, 45]
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 5.0, 0.001);
-  EXPECT_NEAR(std::get<double>(result->GetValue(4)), 45.0, 0.001);
+  // a - 5: [5, 15, 25, 35, 45]; int32 - int32 stays int32
+  EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 5);
+  EXPECT_EQ(std::get<int32_t>(result->GetValue(4)), 45);
 }
 
 TEST(MultiplyExpressionTest, Basic) {
@@ -258,8 +261,8 @@ TEST(MultiplyExpressionTest, Basic) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // a * 2: [20, 40, 60, 80, 100]
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 20.0, 0.001);
-  EXPECT_NEAR(std::get<double>(result->GetValue(4)), 100.0, 0.001);
+  EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 20);
+  EXPECT_EQ(std::get<int32_t>(result->GetValue(4)), 100);
 }
 
 TEST(DivideExpressionTest, Basic) {
@@ -283,8 +286,8 @@ TEST(DivideExpressionTest, DivisionByZero) {
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
-  // Should return NaN
-  EXPECT_TRUE(std::isnan(std::get<double>(result->GetValue(0))));
+  // Division by zero is null, as in DuckDB.
+  EXPECT_TRUE(result->IsNull(0));
 }
 
 TEST(ModuloExpressionTest, Basic) {
@@ -296,8 +299,8 @@ TEST(ModuloExpressionTest, Basic) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // a % 15: [10, 5, 0, 10, 5]
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 10.0, 0.001);
-  EXPECT_NEAR(std::get<double>(result->GetValue(2)), 0.0, 0.001);
+  EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 10);
+  EXPECT_EQ(std::get<int32_t>(result->GetValue(2)), 0);
 }
 
 // =============================================================================
@@ -545,19 +548,19 @@ TEST(CreatePhysicalExprTest, ArithmeticOpsRoundTripEvaluate) {
     ASSERT_NE(binary, nullptr);
     EXPECT_EQ(binary->op(), BinaryOp::kAdd);
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
-    EXPECT_NEAR(std::get<double>(result->GetValue(0)), 15.0, 0.001);
+    EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 15);
   }
   {
     BinaryExpr sub_expr(BinaryOp::kSubtract, col("a"), lit(5));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(sub_expr, input));
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
-    EXPECT_NEAR(std::get<double>(result->GetValue(0)), 5.0, 0.001);
+    EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 5);
   }
   {
     BinaryExpr mul_expr(BinaryOp::kMultiply, col("a"), lit(2));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(mul_expr, input));
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
-    EXPECT_NEAR(std::get<double>(result->GetValue(0)), 20.0, 0.001);
+    EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 20);
   }
   {
     BinaryExpr div_expr(BinaryOp::kDivide, col("a"), lit(10));
@@ -569,6 +572,258 @@ TEST(CreatePhysicalExprTest, ArithmeticOpsRoundTripEvaluate) {
     BinaryExpr mod_expr(BinaryOp::kModulo, col("a"), lit(15));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(mod_expr, input));
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
-    EXPECT_NEAR(std::get<double>(result->GetValue(0)), 10.0, 0.001);
+    EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 10);
   }
+}
+
+// =============================================================================
+// SQL null semantics
+// =============================================================================
+
+namespace {
+
+/// Two nullable bool columns "l", "r" covering all nine {true, false, null} pairs.
+RecordBatch MakeTruthTableBatch() {
+  const std::optional<bool> kVals[] = {true, false, std::nullopt};
+  auto l = std::make_shared<TypedColumnVector<bool>>(BoolType{}, 9);
+  auto r = std::make_shared<TypedColumnVector<bool>>(BoolType{}, 9);
+  for (auto lv : kVals) {
+    for (auto rv : kVals) {
+      lv ? l->Append(*lv) : l->AppendNull();
+      rv ? r->Append(*rv) : r->AppendNull();
+    }
+  }
+  Schema schema({Field("l", BoolType{}, Repetition::kOptional),
+                 Field("r", BoolType{}, Repetition::kOptional)});
+  return RecordBatch(schema, {l, r});
+}
+
+/// Expects @p col to hold exactly @p expected, with std::nullopt meaning SQL null.
+template <typename T>
+void ExpectColumn(const ColumnVector& col, const std::vector<std::optional<T>>& expected) {
+  ASSERT_EQ(col.size(), expected.size());
+  for (size_t i = 0; i < expected.size(); ++i) {
+    Value v = col.GetValue(i);
+    if (!expected[i]) {
+      EXPECT_TRUE(col.IsNull(i)) << "row " << i;
+      EXPECT_TRUE(std::holds_alternative<std::monostate>(v)) << "row " << i;
+      continue;
+    }
+    EXPECT_FALSE(col.IsNull(i)) << "row " << i;
+    ASSERT_TRUE(std::holds_alternative<T>(v)) << "row " << i << " holds index " << v.index();
+    EXPECT_EQ(std::get<T>(v), *expected[i]) << "row " << i;
+  }
+}
+
+ExpressionPtr Col(size_t i) { return std::make_unique<ColumnExpression>(i); }
+ExpressionPtr Lit(Value v) { return std::make_unique<LiteralExpression>(std::move(v)); }
+
+}  // namespace
+
+TEST(SqlNullTest, AndTruthTable) {
+  auto batch = MakeTruthTableBatch();
+  BinaryExpression expr(BinaryOp::kAnd, Col(0), Col(1));
+  ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
+  // l x r over {true, false, null}: false dominates, otherwise null is contagious.
+  ExpectColumn<bool>(*result, {true, false, std::nullopt,
+                               false, false, false,
+                               std::nullopt, false, std::nullopt});
+}
+
+TEST(SqlNullTest, OrTruthTable) {
+  auto batch = MakeTruthTableBatch();
+  BinaryExpression expr(BinaryOp::kOr, Col(0), Col(1));
+  ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
+  // true dominates, otherwise null is contagious.
+  ExpectColumn<bool>(*result, {true, true, true,
+                               true, false, std::nullopt,
+                               true, std::nullopt, std::nullopt});
+}
+
+TEST(SqlNullTest, AndOrWithNullLiteral) {
+  auto batch = MakeTestBatch();  // c: [true, false, true, false, true]
+  BinaryExpression and_expr(BinaryOp::kAnd, Col(2), Lit(std::monostate{}));
+  ASSERT_OK_AND_ASSIGN(auto and_result, and_expr.Evaluate(batch));
+  ExpectColumn<bool>(*and_result, {std::nullopt, false, std::nullopt, false, std::nullopt});
+
+  BinaryExpression or_expr(BinaryOp::kOr, Col(2), Lit(std::monostate{}));
+  ASSERT_OK_AND_ASSIGN(auto or_result, or_expr.Evaluate(batch));
+  ExpectColumn<bool>(*or_result, {true, std::nullopt, true, std::nullopt, true});
+}
+
+TEST(SqlNullTest, AndOrRejectNonBoolOperand) {
+  auto batch = MakeTestBatch();
+  BinaryExpression expr(BinaryOp::kAnd, Col(2), Col(0));  // c AND a (int32)
+  EXPECT_FALSE(expr.Evaluate(batch).has_value());
+}
+
+TEST(SqlNullTest, ComparisonWithNullOperandIsNull) {
+  auto batch = MakeNullableBatch();  // a: [10, null, 30, null, 50]
+  const BinaryOp kOps[] = {BinaryOp::kEq, BinaryOp::kNeq, BinaryOp::kLt,
+                           BinaryOp::kLtEq, BinaryOp::kGt, BinaryOp::kGtEq};
+  for (auto op : kOps) {
+    SCOPED_TRACE(std::string(plan::ToString(op)));
+    BinaryExpression expr(op, Col(0), Lit(Value{20}));
+    ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
+    EXPECT_TRUE(result->IsNull(1));
+    EXPECT_TRUE(result->IsNull(3));
+    EXPECT_FALSE(result->IsNull(0));
+  }
+
+  BinaryExpression gt(BinaryOp::kGt, Col(0), Lit(Value{20}));
+  ASSERT_OK_AND_ASSIGN(auto result, gt.Evaluate(batch));
+  ExpectColumn<bool>(*result, {false, std::nullopt, true, std::nullopt, true});
+}
+
+TEST(SqlNullTest, ComparisonWithNullLiteralIsNull) {
+  auto batch = MakeTestBatch();
+  // NULL = NULL is null too, not true.
+  BinaryExpression null_eq_null(BinaryOp::kEq, Lit(std::monostate{}), Lit(std::monostate{}));
+  ASSERT_OK_AND_ASSIGN(auto r1, null_eq_null.Evaluate(batch));
+  ExpectColumn<bool>(*r1, std::vector<std::optional<bool>>(5, std::nullopt));
+
+  BinaryExpression a_neq_null(BinaryOp::kNeq, Col(0), Lit(std::monostate{}));
+  ASSERT_OK_AND_ASSIGN(auto r2, a_neq_null.Evaluate(batch));
+  ExpectColumn<bool>(*r2, std::vector<std::optional<bool>>(5, std::nullopt));
+}
+
+TEST(SqlNullTest, ArithmeticWithNullIsNull) {
+  auto batch = MakeNullableBatch();  // a: [10, null, 30, null, 50]
+  BinaryExpression add(BinaryOp::kAdd, Col(0), Lit(Value{1}));
+  ASSERT_OK_AND_ASSIGN(auto result, add.Evaluate(batch));
+  ExpectColumn<int32_t>(*result, {11, std::nullopt, 31, std::nullopt, 51});
+
+  BinaryExpression add_null(BinaryOp::kAdd, Col(0), Lit(std::monostate{}));
+  ASSERT_OK_AND_ASSIGN(auto all_null, add_null.Evaluate(batch));
+  EXPECT_TRUE(std::holds_alternative<Int32Type>(all_null->GetType()));
+  ExpectColumn<int32_t>(*all_null, std::vector<std::optional<int32_t>>(5, std::nullopt));
+}
+
+TEST(SqlNullTest, IntArithmeticStaysIntegral) {
+  auto batch = MakeTestBatch();  // a: int32 [10..50], b: double [1..5]
+  struct Case {
+    BinaryOp op;
+    ExpressionPtr left;
+    ExpressionPtr right;
+    DataType type;
+    Value first;
+  };
+  Case cases[] = {
+      {BinaryOp::kAdd, Col(0), Col(0), Int32Type{}, Value{int32_t{20}}},
+      {BinaryOp::kSubtract, Col(0), Lit(Value{5}), Int32Type{}, Value{int32_t{5}}},
+      {BinaryOp::kMultiply, Col(0), Lit(Value{int64_t{3}}), Int64Type{}, Value{int64_t{30}}},
+      {BinaryOp::kModulo, Col(0), Lit(Value{3}), Int32Type{}, Value{int32_t{1}}},
+      // int / int is real division, as in DuckDB.
+      {BinaryOp::kDivide, Col(0), Lit(Value{4}), DoubleType{}, Value{2.5}},
+      {BinaryOp::kAdd, Col(0), Col(1), DoubleType{}, Value{11.0}},
+  };
+  for (auto& c : cases) {
+    BinaryExpression expr(c.op, std::move(c.left), std::move(c.right));
+    SCOPED_TRACE(expr.ToString());
+    ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
+    EXPECT_EQ(result->GetType().index(), c.type.index());
+    EXPECT_EQ(result->GetValue(0), c.first);
+  }
+}
+
+TEST(SqlNullTest, SmallIntLiteralsAreNumeric) {
+  SchemaOnlyPlan input(Schema({Field("a", Int32Type{})}));
+  auto batch = MakeTestBatch();
+  BinaryExpr expr(BinaryOp::kAdd, lit(int8_t{1}), lit(int16_t{2}));
+  ASSERT_OK_AND_ASSIGN(auto field, expr.ToField(input));
+  EXPECT_TRUE(std::holds_alternative<Int16Type>(field.data_type));
+  ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(expr, input));
+  ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
+  EXPECT_EQ(result->GetValue(0), Value{int16_t{3}});
+}
+
+TEST(SqlNullTest, DivisionAndModuloByZeroAreNull) {
+  auto batch = MakeTestBatch();
+  const BinaryOp kOps[] = {BinaryOp::kDivide, BinaryOp::kModulo};
+  for (auto op : kOps) {
+    SCOPED_TRACE(std::string(plan::ToString(op)));
+    BinaryExpression ints(op, Col(0), Lit(Value{0}));
+    ASSERT_OK_AND_ASSIGN(auto r1, ints.Evaluate(batch));
+    EXPECT_TRUE(r1->IsNull(0));
+    BinaryExpression doubles(op, Col(1), Lit(Value{0.0}));
+    ASSERT_OK_AND_ASSIGN(auto r2, doubles.Evaluate(batch));
+    EXPECT_TRUE(r2->IsNull(0));
+  }
+}
+
+TEST(SqlNullTest, IntegerOverflowIsAnError) {
+  auto batch = MakeTestBatch();
+  BinaryExpression expr(BinaryOp::kAdd, Lit(Value{std::numeric_limits<int32_t>::max()}),
+                        Lit(Value{1}));
+  EXPECT_FALSE(expr.Evaluate(batch).has_value());
+}
+
+TEST(SqlNullTest, ArithmeticRejectsNonNumericOperand) {
+  auto batch = MakeTestBatch();
+  BinaryExpression on_string(BinaryOp::kAdd, Col(0), Lit(Value{std::string("x")}));
+  EXPECT_FALSE(on_string.Evaluate(batch).has_value());
+  BinaryExpression on_bool(BinaryOp::kAdd, Col(0), Col(2));
+  EXPECT_FALSE(on_bool.Evaluate(batch).has_value());
+}
+
+TEST(SqlNullTest, FilterDropsNullPredicateRows) {
+  auto batch = MakeNullableBatch();  // a: [10, null, 30, null, 50]
+  BinaryExpression pred(BinaryOp::kGt, Col(0), Lit(Value{20}));
+  ASSERT_OK_AND_ASSIGN(auto out, FilterRecordBatch(batch, pred));
+  ExpectColumn<int32_t>(out.column(0), {30, 50});
+
+  // NOT selected is not the same as false: (a > 20) OR NULL keeps only the true rows.
+  BinaryExpression or_null(BinaryOp::kOr, std::make_unique<BinaryExpression>(
+                                              BinaryOp::kGt, Col(0), Lit(Value{20})),
+                           Lit(std::monostate{}));
+  ASSERT_OK_AND_ASSIGN(auto out2, FilterRecordBatch(batch, or_null));
+  ASSERT_EQ(out2.num_rows(), 2U);
+  ExpectColumn<int32_t>(out2.column(0), {30, 50});
+}
+
+TEST(SqlNullTest, FilterPreservesNullsInSelectedRows) {
+  auto batch = MakeNullableBatch();  // a: [10, null, 30, null, 50]
+  LiteralExpression keep_all(Value{true});
+  ASSERT_OK_AND_ASSIGN(auto out, FilterRecordBatch(batch, keep_all));
+  ExpectColumn<int32_t>(out.column(0), {10, std::nullopt, 30, std::nullopt, 50});
+}
+
+TEST(SqlNullTest, LogicalResultTypeMatchesPhysical) {
+  SchemaOnlyPlan input(Schema({Field("a", Int32Type{}), Field("b", DoubleType{}),
+                               Field("c", BoolType{})}));
+  auto batch = MakeTestBatch();
+  const BinaryOp kOps[] = {BinaryOp::kEq,  BinaryOp::kNeq,      BinaryOp::kLt,
+                           BinaryOp::kLtEq, BinaryOp::kGt,      BinaryOp::kGtEq,
+                           BinaryOp::kAdd, BinaryOp::kSubtract, BinaryOp::kMultiply,
+                           BinaryOp::kDivide, BinaryOp::kModulo};
+  auto operands = [] {
+    std::vector<std::pair<LogicalExprPtr, LogicalExprPtr>> v;
+    v.emplace_back(col("a"), col("a"));
+    v.emplace_back(col("a"), col("b"));
+    v.emplace_back(col("b"), col("a"));
+    v.emplace_back(col("a"), lit(int64_t{7}));
+    v.emplace_back(col("a"), lit(Value{std::monostate{}}));
+    return v;
+  };
+  for (auto op : kOps) {
+    for (auto& [l, r] : operands()) {
+      BinaryExpr expr(op, std::move(l), std::move(r));
+      SCOPED_TRACE(expr.ToString());
+      ASSERT_OK_AND_ASSIGN(auto field, expr.ToField(input));
+      ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(expr, input));
+      ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
+      EXPECT_EQ(field.data_type.index(), result->GetType().index());
+    }
+  }
+
+  BinaryExpr and_expr(BinaryOp::kAnd, col("c"), col("c"));
+  ASSERT_OK_AND_ASSIGN(auto and_field, and_expr.ToField(input));
+  EXPECT_TRUE(std::holds_alternative<BoolType>(and_field.data_type));
+
+  BinaryExpr int_div(BinaryOp::kDivide, col("a"), col("a"));
+  ASSERT_OK_AND_ASSIGN(auto div_field, int_div.ToField(input));
+  EXPECT_TRUE(std::holds_alternative<DoubleType>(div_field.data_type));
+
+  BinaryExpr bad(BinaryOp::kAdd, col("a"), col("c"));
+  EXPECT_FALSE(bad.ToField(input).has_value());
 }

@@ -7,8 +7,12 @@
 /// @brief Binary operator kinds shared by the logical and physical plan layers.
 
 #include <array>
+#include <string>
 #include <string_view>
 #include <utility>
+
+#include "quest/columnar/types.hpp"
+#include "quest/common/result.hpp"
 
 namespace quest::plan {
 
@@ -46,6 +50,45 @@ inline constexpr std::array<std::string_view, 13> kBinaryOpSymbols = {
 /// @return True for `+ - * / %`.
 [[nodiscard]] constexpr bool IsArithmetic(BinaryOp op) noexcept {
   return std::to_underlying(op) >= std::to_underlying(BinaryOp::kAdd);
+}
+
+/// @brief SQL result type of `left op right`, shared by `BinaryExpr::ToField` and
+/// `BinaryExpression::Evaluate` so both layers agree.
+///
+/// Comparisons and AND/OR yield bool. Arithmetic needs numeric operands: any float or
+/// double operand, or `/`, yields double (int / int is real division, as in DuckDB);
+/// otherwise the wider of the two integer types. Callers resolve a NULL literal operand,
+/// which has no type of its own, to the other operand's type.
+/// @param op Operator.
+/// @param left Left operand type.
+/// @param right Right operand type.
+/// @return The result type, or `TypeError` for arithmetic on a non-numeric type.
+[[nodiscard]] inline Result<columnar::DataType> BinaryResultType(BinaryOp op,
+                                                                 const columnar::DataType& left,
+                                                                 const columnar::DataType& right) {
+  if (!IsArithmetic(op)) {
+    return columnar::BoolType{};
+  }
+  auto is_int = [](const columnar::DataType& t) {
+    return std::holds_alternative<columnar::Int8Type>(t) ||
+           std::holds_alternative<columnar::Int16Type>(t) ||
+           std::holds_alternative<columnar::Int32Type>(t) ||
+           std::holds_alternative<columnar::Int64Type>(t);
+  };
+  auto is_float = [](const columnar::DataType& t) {
+    return std::holds_alternative<columnar::FloatType>(t) ||
+           std::holds_alternative<columnar::DoubleType>(t);
+  };
+  if (!(is_int(left) || is_float(left)) || !(is_int(right) || is_float(right))) {
+    return Error::TypeError("'" + std::string(ToString(op)) + "' needs numeric operands, got " +
+                            columnar::GetTypeName(left) + " and " +
+                            columnar::GetTypeName(right));
+  }
+  if (is_float(left) || is_float(right) || op == BinaryOp::kDivide) {
+    return columnar::DoubleType{};
+  }
+  // Int8Type..Int64Type are declared in width order in DataType.
+  return left.index() >= right.index() ? left : right;
 }
 
 }  // namespace quest::plan

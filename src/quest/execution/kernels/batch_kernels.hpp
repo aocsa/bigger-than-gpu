@@ -17,11 +17,12 @@
 
 namespace quest::execution {
 
-/// @brief Gather selected rows from a column into a new materialized column.
+/// @brief Gather selected rows from a column into a new materialized column, keeping nulls.
 [[nodiscard]] std::shared_ptr<columnar::ColumnVector> GatherColumn(
     const columnar::ColumnVector& col, const std::vector<size_t>& indices);
 
-/// @brief Apply a boolean mask expression and gather matching rows.
+/// @brief Apply a boolean mask expression and gather the rows where it is true; a null
+/// mask value does not select its row.
 [[nodiscard]] Result<columnar::RecordBatch> FilterRecordBatch(
     const columnar::RecordBatch& batch, plan::physical::Expression& expr);
 
@@ -29,11 +30,6 @@ namespace quest::execution {
 ///
 /// If @p n_rows is 0, returns an empty batch with the same schema. If
 /// @p n_rows >= batch.num_rows(), gathers every row (a full copy).
-///
-/// @note Inherits GatherColumn's null handling: gathered values lose their
-/// null bitmap (nulls become type defaults). A Limit whose boundary batch is
-/// truncated therefore drops nulls in that batch while pass-through batches
-/// keep them — resolved when materialized columns track nulls (phase 7).
 [[nodiscard]] Result<columnar::RecordBatch> TruncateRecordBatch(
     const columnar::RecordBatch& batch, std::size_t n_rows);
 

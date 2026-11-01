@@ -11,98 +11,66 @@
 
 namespace quest::execution {
 
+namespace {
+
+template <typename T>
+[[nodiscard]] std::shared_ptr<columnar::ColumnVector> GatherTyped(
+    const columnar::ColumnVector& col, const std::vector<size_t>& indices,
+    columnar::DataType type) {
+  std::vector<T> data;
+  data.reserve(indices.size());
+  std::vector<bool> validity;
+  validity.reserve(indices.size());
+  bool has_null = false;
+  for (size_t idx : indices) {
+    auto val = col.GetValue(idx);
+    if (auto* v = std::get_if<T>(&val)) {
+      data.push_back(*v);
+      validity.push_back(true);
+    } else if constexpr (std::is_same_v<T, std::string>) {
+      // Binary and fixed-width byte types are carried as strings.
+      if (std::holds_alternative<std::monostate>(val)) {
+        data.emplace_back();
+        validity.push_back(false);
+        has_null = true;
+      } else {
+        data.push_back(columnar::ValueToString(val));
+        validity.push_back(true);
+      }
+    } else {
+      data.push_back(T{});
+      validity.push_back(false);
+      has_null = true;
+    }
+  }
+  return std::make_shared<plan::physical::MaterializedColumnVector>(
+      plan::physical::ColumnData{std::move(data)}, std::move(type),
+      has_null ? std::move(validity) : std::vector<bool>{});
+}
+
+}  // namespace
+
 std::shared_ptr<columnar::ColumnVector> GatherColumn(
     const columnar::ColumnVector& col, const std::vector<size_t>& indices) {
-  std::vector<columnar::Value> filtered_values;
-  filtered_values.reserve(indices.size());
-  for (size_t idx : indices) {
-    filtered_values.push_back(col.GetValue(idx));
-  }
-
   return std::visit(
-      [&filtered_values](const auto& type_tag) -> std::shared_ptr<columnar::ColumnVector> {
+      [&](const auto& type_tag) -> std::shared_ptr<columnar::ColumnVector> {
         using TypeTag = std::decay_t<decltype(type_tag)>;
-
         if constexpr (std::is_same_v<TypeTag, columnar::BoolType>) {
-          std::vector<bool> data;
-          data.reserve(filtered_values.size());
-          for (const auto& val : filtered_values) {
-            if (auto* v = std::get_if<bool>(&val)) {
-              data.push_back(*v);
-            } else {
-              data.push_back(false);
-            }
-          }
-          return std::make_shared<plan::physical::MaterializedColumnVector>(
-              plan::physical::ColumnData{std::move(data)}, type_tag);
+          return GatherTyped<bool>(col, indices, type_tag);
+        } else if constexpr (std::is_same_v<TypeTag, columnar::Int8Type>) {
+          return GatherTyped<int8_t>(col, indices, type_tag);
+        } else if constexpr (std::is_same_v<TypeTag, columnar::Int16Type>) {
+          return GatherTyped<int16_t>(col, indices, type_tag);
         } else if constexpr (std::is_same_v<TypeTag, columnar::Int32Type>) {
-          std::vector<int32_t> data;
-          data.reserve(filtered_values.size());
-          for (const auto& val : filtered_values) {
-            if (auto* v = std::get_if<int32_t>(&val)) {
-              data.push_back(*v);
-            } else {
-              data.push_back(0);
-            }
-          }
-          return std::make_shared<plan::physical::MaterializedColumnVector>(
-              plan::physical::ColumnData{std::move(data)}, type_tag);
+          return GatherTyped<int32_t>(col, indices, type_tag);
         } else if constexpr (std::is_same_v<TypeTag, columnar::Int64Type>) {
-          std::vector<int64_t> data;
-          data.reserve(filtered_values.size());
-          for (const auto& val : filtered_values) {
-            if (auto* v = std::get_if<int64_t>(&val)) {
-              data.push_back(*v);
-            } else {
-              data.push_back(0);
-            }
-          }
-          return std::make_shared<plan::physical::MaterializedColumnVector>(
-              plan::physical::ColumnData{std::move(data)}, type_tag);
+          return GatherTyped<int64_t>(col, indices, type_tag);
         } else if constexpr (std::is_same_v<TypeTag, columnar::FloatType>) {
-          std::vector<float> data;
-          data.reserve(filtered_values.size());
-          for (const auto& val : filtered_values) {
-            if (auto* v = std::get_if<float>(&val)) {
-              data.push_back(*v);
-            } else {
-              data.push_back(0.0f);
-            }
-          }
-          return std::make_shared<plan::physical::MaterializedColumnVector>(
-              plan::physical::ColumnData{std::move(data)}, type_tag);
+          return GatherTyped<float>(col, indices, type_tag);
         } else if constexpr (std::is_same_v<TypeTag, columnar::DoubleType>) {
-          std::vector<double> data;
-          data.reserve(filtered_values.size());
-          for (const auto& val : filtered_values) {
-            if (auto* v = std::get_if<double>(&val)) {
-              data.push_back(*v);
-            } else {
-              data.push_back(0.0);
-            }
-          }
-          return std::make_shared<plan::physical::MaterializedColumnVector>(
-              plan::physical::ColumnData{std::move(data)}, type_tag);
-        } else if constexpr (std::is_same_v<TypeTag, columnar::StringType>) {
-          std::vector<std::string> data;
-          data.reserve(filtered_values.size());
-          for (const auto& val : filtered_values) {
-            if (auto* v = std::get_if<std::string>(&val)) {
-              data.push_back(*v);
-            } else {
-              data.emplace_back();
-            }
-          }
-          return std::make_shared<plan::physical::MaterializedColumnVector>(
-              plan::physical::ColumnData{std::move(data)}, type_tag);
+          return GatherTyped<double>(col, indices, type_tag);
         } else {
-          std::vector<std::string> data;
-          data.reserve(filtered_values.size());
-          for (const auto& val : filtered_values) {
-            data.push_back(columnar::ValueToString(val));
-          }
-          return std::make_shared<plan::physical::MaterializedColumnVector>(
-              plan::physical::ColumnData{std::move(data)}, columnar::StringType{});
+          return GatherTyped<std::string>(col, indices, columnar::StringType{});
         }
       },
       col.GetType());

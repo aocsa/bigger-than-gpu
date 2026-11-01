@@ -6,23 +6,25 @@
 #include <cmath>
 #include <functional>
 #include <limits>
+#include <optional>
+#include <string>
 
 namespace quest::plan::physical {
 
 namespace {
 
-/// @brief Compares two values; null or non-numeric mismatched operands compare false, mixed
-/// numeric types compare as double.
+/// @brief Compares two values; null if either is null. Mixed numeric types compare as
+/// double; other mismatched types compare false.
 template <typename Op>
-bool CompareValues(const Value& left, const Value& right) {
+std::optional<bool> CompareValues(const Value& left, const Value& right) {
   return std::visit(
-      [](const auto& lhs, const auto& rhs) -> bool {
+      [](const auto& lhs, const auto& rhs) -> std::optional<bool> {
         using LT = std::decay_t<decltype(lhs)>;
         using RT = std::decay_t<decltype(rhs)>;
 
         if constexpr (std::is_same_v<LT, std::monostate> ||
                       std::is_same_v<RT, std::monostate>) {
-          return false;  // null comparisons are false
+          return std::nullopt;
         } else if constexpr (std::is_same_v<LT, RT>) {
           return Op{}(lhs, rhs);
         } else if constexpr (std::is_arithmetic_v<LT> &&
@@ -35,34 +37,167 @@ bool CompareValues(const Value& left, const Value& right) {
       left, right);
 }
 
+/// @brief Applies @p fn to each row pair; a `std::nullopt` row result is stored as null.
 template <typename T, typename Fn>
-[[nodiscard]] std::shared_ptr<ColumnVector> MapRows(const ColumnVector& left,
-                                                    const ColumnVector& right,
-                                                    size_t num_rows, Fn fn) {
-  std::vector<T> result;
-  result.reserve(num_rows);
+[[nodiscard]] Result<std::shared_ptr<ColumnVector>> MapRows(const ColumnVector& left,
+                                                            const ColumnVector& right,
+                                                            size_t num_rows, DataType type,
+                                                            Fn fn) {
+  std::vector<T> values(num_rows);
+  std::vector<bool> validity(num_rows, true);
+  bool has_null = false;
   for (size_t i = 0; i < num_rows; ++i) {
-    result.push_back(fn(left.GetValue(i), right.GetValue(i)));
+    Result<std::optional<T>> row = fn(left.GetValue(i), right.GetValue(i));
+    if (!row) {
+      return std::unexpected(row.error());
+    }
+    if (*row) {
+      values[i] = **row;
+    } else {
+      validity[i] = false;
+      has_null = true;
+    }
   }
-  DataType type = columnar::DoubleType{};
-  if constexpr (std::is_same_v<T, bool>) {
-    type = columnar::BoolType{};
-  }
-  return std::make_shared<MaterializedColumnVector>(ColumnData{std::move(result)},
-                                                    std::move(type));
+  return std::make_shared<MaterializedColumnVector>(
+      ColumnData{std::move(values)}, std::move(type),
+      has_null ? std::move(validity) : std::vector<bool>{});
 }
 
-[[nodiscard]] double ToDouble(const Value& val) {
+[[nodiscard]] Result<std::optional<bool>> ToBool(const Value& v, BinaryOp op) {
+  if (std::holds_alternative<std::monostate>(v)) {
+    return std::nullopt;
+  }
+  if (const auto* b = std::get_if<bool>(&v)) {
+    return *b;
+  }
+  return Error::TypeError("'" + std::string(plan::ToString(op)) + "' needs bool operands");
+}
+
+/// @brief Three-valued AND/OR: the dominant value (false for AND, true for OR) wins over
+/// null; otherwise any null makes the result null.
+[[nodiscard]] Result<std::optional<bool>> AndOr(BinaryOp op, const Value& a, const Value& b) {
+  auto lhs = ToBool(a, op);
+  if (!lhs) {
+    return lhs;
+  }
+  auto rhs = ToBool(b, op);
+  if (!rhs) {
+    return rhs;
+  }
+  const bool dominant = op == BinaryOp::kOr;
+  if (*lhs == dominant || *rhs == dominant) {
+    return dominant;
+  }
+  if (!lhs->has_value() || !rhs->has_value()) {
+    return std::nullopt;
+  }
+  return !dominant;
+}
+
+template <typename T>
+[[nodiscard]] T NumericAs(const Value& v) {
   return std::visit(
-      [](const auto& v) -> double {
-        using T = std::decay_t<decltype(v)>;
-        if constexpr (std::is_arithmetic_v<T>) {
-          return static_cast<double>(v);
+      [](const auto& x) -> T {
+        using V = std::decay_t<decltype(x)>;
+        if constexpr (std::is_arithmetic_v<V> && !std::is_same_v<V, bool>) {
+          return static_cast<T>(x);
         } else {
-          return 0.0;  // Non-numeric types return 0
+          // BinaryResultType admitted only numeric column types.
+          std::unreachable();
         }
       },
-      val);
+      v);
+}
+
+/// @brief One row of `a op b` computed in the result type @p T.
+template <typename T>
+[[nodiscard]] Result<std::optional<T>> Arithmetic(BinaryOp op, const Value& a, const Value& b) {
+  if (std::holds_alternative<std::monostate>(a) || std::holds_alternative<std::monostate>(b)) {
+    return std::nullopt;
+  }
+  const T x = NumericAs<T>(a);
+  const T y = NumericAs<T>(b);
+  if constexpr (std::is_integral_v<T>) {
+    T out{};
+    bool overflow = false;
+    switch (op) {
+      case BinaryOp::kAdd:
+        overflow = __builtin_add_overflow(x, y, &out);
+        break;
+      case BinaryOp::kSubtract:
+        overflow = __builtin_sub_overflow(x, y, &out);
+        break;
+      case BinaryOp::kMultiply:
+        overflow = __builtin_mul_overflow(x, y, &out);
+        break;
+      case BinaryOp::kModulo:
+        if (y == 0) {
+          return std::nullopt;
+        }
+        // min % -1 overflows in C++; the mathematical result is 0.
+        out = y == -1 ? T{0} : static_cast<T>(x % y);
+        break;
+      default:
+        std::unreachable();  // integer `/` yields double
+    }
+    if (overflow) {
+      return Error::OutOfRange("Integer overflow in '" + std::string(plan::ToString(op)) + "'");
+    }
+    return out;
+  } else {
+    switch (op) {
+      case BinaryOp::kAdd:
+        return x + y;
+      case BinaryOp::kSubtract:
+        return x - y;
+      case BinaryOp::kMultiply:
+        return x * y;
+      case BinaryOp::kDivide:
+        return y == 0 ? std::optional<T>{} : x / y;
+      case BinaryOp::kModulo:
+        return y == 0 ? std::optional<T>{} : std::fmod(x, y);
+      default:
+        std::unreachable();
+    }
+  }
+}
+
+[[nodiscard]] bool IsNullLiteral(const ColumnVector& col) {
+  const auto* lit = dynamic_cast<const LiteralColumnVector*>(&col);
+  return lit != nullptr && std::holds_alternative<std::monostate>(lit->value());
+}
+
+[[nodiscard]] Result<std::shared_ptr<ColumnVector>> EvaluateArithmetic(BinaryOp op,
+                                                                       const ColumnVector& l,
+                                                                       const ColumnVector& r,
+                                                                       size_t n) {
+  auto type = BinaryResultType(op, IsNullLiteral(l) ? r.GetType() : l.GetType(),
+                               IsNullLiteral(r) ? l.GetType() : r.GetType());
+  if (!type) {
+    return std::unexpected(type.error());
+  }
+  auto map = [&]<typename T>() {
+    return MapRows<T>(l, r, n, *type,
+                      [op](const Value& a, const Value& b) { return Arithmetic<T>(op, a, b); });
+  };
+  return std::visit(
+      [&](const auto& tag) -> Result<std::shared_ptr<ColumnVector>> {
+        using Tag = std::decay_t<decltype(tag)>;
+        if constexpr (std::is_same_v<Tag, columnar::Int8Type>) {
+          return map.template operator()<int8_t>();
+        } else if constexpr (std::is_same_v<Tag, columnar::Int16Type>) {
+          return map.template operator()<int16_t>();
+        } else if constexpr (std::is_same_v<Tag, columnar::Int32Type>) {
+          return map.template operator()<int32_t>();
+        } else if constexpr (std::is_same_v<Tag, columnar::Int64Type>) {
+          return map.template operator()<int64_t>();
+        } else if constexpr (std::is_same_v<Tag, columnar::DoubleType>) {
+          return map.template operator()<double>();
+        } else {
+          std::unreachable();  // BinaryResultType yields only these for arithmetic
+        }
+      },
+      *type);
 }
 
 }  // namespace
@@ -72,6 +207,9 @@ template <typename T, typename Fn>
 // =============================================================================
 
 Value MaterializedColumnVector::GetValue(size_t index) const {
+  if (IsNull(index)) {
+    return std::monostate{};
+  }
   return std::visit(
       [index](const auto& vec) -> Value {
         if (index >= vec.size()) {
@@ -91,7 +229,11 @@ Result<std::shared_ptr<ColumnVector>> LiteralExpression::Evaluate(
   DataType dtype = std::visit(
       [](const auto& val) -> DataType {
         using T = std::decay_t<decltype(val)>;
-        if constexpr (std::is_same_v<T, int32_t>) {
+        if constexpr (std::is_same_v<T, int8_t>) {
+          return columnar::Int8Type{};
+        } else if constexpr (std::is_same_v<T, int16_t>) {
+          return columnar::Int16Type{};
+        } else if constexpr (std::is_same_v<T, int32_t>) {
           return columnar::Int32Type{};
         } else if constexpr (std::is_same_v<T, int64_t>) {
           return columnar::Int64Type{};
@@ -161,50 +303,32 @@ Result<std::shared_ptr<ColumnVector>> BinaryExpression::Evaluate(
   const auto& r = **right_result;
   const size_t n = input.num_rows();
 
+  auto compare = [&]<typename Op>() {
+    return MapRows<bool>(l, r, n, columnar::BoolType{}, CompareValues<Op>);
+  };
   switch (op_) {
     case BinaryOp::kEq:
-      return MapRows<bool>(l, r, n, CompareValues<std::equal_to<>>);
+      return compare.template operator()<std::equal_to<>>();
     case BinaryOp::kNeq:
-      return MapRows<bool>(l, r, n, CompareValues<std::not_equal_to<>>);
+      return compare.template operator()<std::not_equal_to<>>();
     case BinaryOp::kLt:
-      return MapRows<bool>(l, r, n, CompareValues<std::less<>>);
+      return compare.template operator()<std::less<>>();
     case BinaryOp::kLtEq:
-      return MapRows<bool>(l, r, n, CompareValues<std::less_equal<>>);
+      return compare.template operator()<std::less_equal<>>();
     case BinaryOp::kGt:
-      return MapRows<bool>(l, r, n, CompareValues<std::greater<>>);
+      return compare.template operator()<std::greater<>>();
     case BinaryOp::kGtEq:
-      return MapRows<bool>(l, r, n, CompareValues<std::greater_equal<>>);
+      return compare.template operator()<std::greater_equal<>>();
     case BinaryOp::kAnd:
-      return MapRows<bool>(l, r, n, [](const Value& a, const Value& b) {
-        const auto* lhs = std::get_if<bool>(&a);
-        const auto* rhs = std::get_if<bool>(&b);
-        return lhs && rhs && *lhs && *rhs;
-      });
     case BinaryOp::kOr:
-      return MapRows<bool>(l, r, n, [](const Value& a, const Value& b) {
-        const auto* lhs = std::get_if<bool>(&a);
-        const auto* rhs = std::get_if<bool>(&b);
-        return lhs && rhs && (*lhs || *rhs);
-      });
+      return MapRows<bool>(l, r, n, columnar::BoolType{},
+                           [op = op_](const Value& a, const Value& b) { return AndOr(op, a, b); });
     case BinaryOp::kAdd:
-      return MapRows<double>(
-          l, r, n, [](const Value& a, const Value& b) { return ToDouble(a) + ToDouble(b); });
     case BinaryOp::kSubtract:
-      return MapRows<double>(
-          l, r, n, [](const Value& a, const Value& b) { return ToDouble(a) - ToDouble(b); });
     case BinaryOp::kMultiply:
-      return MapRows<double>(
-          l, r, n, [](const Value& a, const Value& b) { return ToDouble(a) * ToDouble(b); });
     case BinaryOp::kDivide:
-      return MapRows<double>(l, r, n, [](const Value& a, const Value& b) {
-        double d = ToDouble(b);
-        return d == 0.0 ? std::numeric_limits<double>::quiet_NaN() : ToDouble(a) / d;
-      });
     case BinaryOp::kModulo:
-      return MapRows<double>(l, r, n, [](const Value& a, const Value& b) {
-        double d = ToDouble(b);
-        return d == 0.0 ? std::numeric_limits<double>::quiet_NaN() : std::fmod(ToDouble(a), d);
-      });
+      return EvaluateArithmetic(op_, l, r, n);
   }
   std::unreachable();
 }

@@ -135,7 +135,8 @@ Bugs fixed along the way (not in the original plan):
 
 Follow-ups found (not done here):
 - Expressions do not follow SQL null semantics: comparisons with null yield false, `false OR
-  null` is false, arithmetic treats null as 0.0 and always returns double.
+  null` is false, arithmetic treats null as 0.0 and always returns double. (Fixed by the
+  SQL null semantics change.)
 - `BatchHolder` byte accounting: `Add` counts the host size, `Pull` subtracts the spilled file
   size, so `current_bytes_` can underflow once back-pressure is wired.
 - `ParquetFileReader` shares one `ifstream` across partitions; parallel `ReadPartition` races.

@@ -44,8 +44,9 @@ using ColumnData = std::variant<std::vector<bool>, std::vector<int8_t>,
 /// @brief A column vector that owns its data (for expression results).
 class MaterializedColumnVector : public ColumnVector {
  public:
-  MaterializedColumnVector(ColumnData data, DataType type)
-      : data_(std::move(data)), type_(std::move(type)) {}
+  /// @param validity Per-row valid flag; empty means no row is null.
+  MaterializedColumnVector(ColumnData data, DataType type, std::vector<bool> validity = {})
+      : data_(std::move(data)), type_(std::move(type)), validity_(std::move(validity)) {}
 
   [[nodiscard]] DataType GetType() const override { return type_; }
 
@@ -53,8 +54,8 @@ class MaterializedColumnVector : public ColumnVector {
     return std::visit([](const auto& vec) { return vec.size(); }, data_);
   }
 
-  [[nodiscard]] bool IsNull(size_t /*index*/) const override {
-    return false;  // Materialized columns don't track nulls for now
+  [[nodiscard]] bool IsNull(size_t index) const override {
+    return index < validity_.size() && !validity_[index];
   }
 
   [[nodiscard]] Value GetValue(size_t index) const override;
@@ -64,6 +65,7 @@ class MaterializedColumnVector : public ColumnVector {
  private:
   ColumnData data_;
   DataType type_;
+  std::vector<bool> validity_;
 };
 
 /// @brief A column vector that broadcasts a single value.
@@ -147,11 +149,11 @@ class ColumnExpression : public Expression {
 // Binary Expression
 // =============================================================================
 
-/// @brief Binary expression. Comparisons and AND/OR produce a bool column; arithmetic
-/// produces a double column.
+/// @brief Binary expression with SQL null semantics; the result type is `BinaryResultType`.
 ///
-/// AND/OR are false unless both operands are bool. Arithmetic treats non-numeric values
-/// (including null) as 0.0; division or modulo by zero yields NaN.
+/// A comparison or arithmetic with a null operand is null. AND/OR use three-valued logic:
+/// `false AND null` is false, `true OR null` is true, otherwise null wins. Division or
+/// modulo by zero is null and integer overflow is an error, as in DuckDB.
 class BinaryExpression : public Expression {
  public:
   BinaryExpression(BinaryOp op, ExpressionPtr left, ExpressionPtr right)
