@@ -131,6 +131,7 @@ class ThriftDecoder {
  private:
   /// @brief Reads a length-prefixed run of bytes.
   /// @param too_long The error message when the run passes the end of the data.
+  /// @return A view of the bytes in the decoder's buffer, or `ThriftDecodeError`.
   [[nodiscard]] Result<std::span<const uint8_t>> ReadLengthPrefixed(const char* too_long) noexcept;
 
   std::span<const uint8_t> data_;
@@ -162,6 +163,11 @@ template <typename OnField>
     }
   }
 }
+
+// =============================================================================
+// Read(decoder, out): one overload per field type. Each reads one value from @p decoder
+// into @p out and returns the decoder's error, if any. A struct type adds its own overload.
+// =============================================================================
 
 /// @brief Reads an i16 into @p out.
 [[nodiscard]] inline Status Read(ThriftDecoder& decoder, int16_t& out) {

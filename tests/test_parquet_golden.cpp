@@ -205,7 +205,8 @@ void DumpPages(std::span<const uint8_t> file, const ColumnChunkMetadata& cc,
 }  // namespace
 
 TEST(ParquetGoldenTest, FootersMatchGoldenDumps) {
-  const bool update = std::getenv("QUEST_UPDATE_GOLDEN") != nullptr;
+  const char* update_env = std::getenv("QUEST_UPDATE_GOLDEN");
+  const bool update = update_env != nullptr && std::string_view(update_env) == "1";
   const auto files = ParquetFiles();
   ASSERT_GE(files.size(), 19U);
   for (const auto& relative : files) {
