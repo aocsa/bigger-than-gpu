@@ -240,8 +240,8 @@ Result<std::shared_ptr<Graph>> GraphBuilder::Build() && {
   for (const auto& spec : edge_specs_) {
     if (spec.name.empty()) { continue; }
     if (!seen_names.insert(spec.name).second) {
-      return std::unexpected(Error::Invalid(std::format(
-          "GraphBuilder: duplicate edge name '{}'. Edge names must be unique.", spec.name)).error());
+      return Error::Invalid(std::format(
+          "GraphBuilder: duplicate edge name '{}'. Edge names must be unique.", spec.name));
     }
   }
 

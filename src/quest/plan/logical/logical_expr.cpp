@@ -24,14 +24,13 @@ Result<Field> Column::ToField(const LogicalPlan& input) const {
       return field;
     }
   }
-  return std::unexpected(
-      Error::SchemaError("No column named '" + name_ + "' in schema"));
+  return Error::SchemaError("No column named '" + name_ + "' in schema");
 }
 
 Result<Field> ColumnIndex::ToField(const LogicalPlan& input) const {
   const auto& fields = input.schema().fields();
   if (index_ >= fields.size()) {
-    return std::unexpected(Error::OutOfRange("Column index out of range"));
+    return Error::OutOfRange("Column index out of range");
   }
   return fields[index_];
 }
@@ -53,14 +52,12 @@ Result<Field> BinaryExpr::ToField(const LogicalPlan& input) const {
   }
   const DataType& lt = left_field->data_type;
   const DataType& rt = right_field->data_type;
-  auto type = BinaryResultType(op_, IsNullLiteral(*left_) ? rt : lt,
-                               IsNullLiteral(*right_) ? lt : rt);
-  if (!type) {
-    return std::unexpected(type.error());
-  }
-  return Field{
-      left_->ToString() + " " + std::string(plan::ToString(op_)) + " " + right_->ToString(),
-      std::move(*type)};
+  return BinaryResultType(op_, IsNullLiteral(*left_) ? rt : lt, IsNullLiteral(*right_) ? lt : rt)
+      .transform([&](DataType type) {
+        return Field{
+            left_->ToString() + " " + std::string(plan::ToString(op_)) + " " + right_->ToString(),
+            type};
+      });
 }
 
 std::string BinaryExpr::ToString() const {
@@ -75,19 +72,8 @@ Result<Field> CaseExpr::ToField(const LogicalPlan& input) const {
     if (!field) {
       return std::unexpected(field.error());
     }
-    if (IsNullLiteral(result)) {
-      return {};
-    }
-    if (!type) {
-      type = field->data_type;
-      return {};
-    }
-    auto common = CommonType(*type, field->data_type);
-    if (!common) {
-      return std::unexpected(common.error());
-    }
-    type = std::move(*common);
-    return {};
+    return UnifyType(type, IsNullLiteral(result) ? std::nullopt
+                                                 : std::optional<DataType>(field->data_type));
   };
   for (const auto& [when, then] : branches_) {
     auto condition = when->ToField(input);

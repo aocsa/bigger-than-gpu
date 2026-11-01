@@ -383,9 +383,7 @@ std::string LiteralExpression::ToString() const { return value_.ToSql(); }
 Result<ColumnVectorPtr> ColumnExpression::Evaluate(
     const RecordBatch& input) const {
   if (index_ >= input.num_columns()) {
-    return std::unexpected(
-        Error::OutOfRange("Column index out of range: " +
-                           std::to_string(index_)));
+    return Error::OutOfRange("Column index out of range: " + std::to_string(index_));
   }
   return input.column_ptr(index_);
 }
@@ -482,18 +480,11 @@ Result<ColumnVectorPtr> CaseExpression::Evaluate(const RecordBatch& input) const
 
   std::optional<DataType> type;
   for (const auto& result : results) {
-    if (IsNullLiteral(*result)) {
-      continue;
+    auto status = UnifyType(
+        type, IsNullLiteral(*result) ? std::nullopt : std::optional<DataType>(result->GetType()));
+    if (!status) {
+      return std::unexpected(status.error());
     }
-    if (!type) {
-      type = result->GetType();
-      continue;
-    }
-    auto common = CommonType(*type, result->GetType());
-    if (!common) {
-      return std::unexpected(common.error());
-    }
-    type = std::move(*common);
   }
   if (!type) {
     type = results.back()->GetType();  // every result is a NULL literal

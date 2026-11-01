@@ -35,7 +35,7 @@ Result<plan::physical::ExpressionPtr> CreatePhysicalExpr(
   if (const auto* col = dynamic_cast<const plan::logical::Column*>(&expr)) {
     auto index = input.schema().GetFieldIndex(col->name());
     if (!index) {
-      return std::unexpected(Error::SchemaError("No column named: " + col->name()));
+      return Error::SchemaError("No column named: " + col->name());
     }
     return std::make_unique<plan::physical::ColumnExpression>(*index);
   }
@@ -76,8 +76,7 @@ Result<plan::physical::ExpressionPtr> CreatePhysicalExpr(
                                                             std::move(*otherwise_result));
   }
 
-  return std::unexpected(
-      Error::PhysicalPlanError("Cannot create physical expression from: " + expr.ToString()));
+  return Error::PhysicalPlanError("Cannot create physical expression from: " + expr.ToString());
 }
 
 namespace {
@@ -134,30 +133,52 @@ namespace {
   return columns;
 }
 
-/// @brief Translate a logical subtree into taskflow operators, wiring the
-/// subtree's internal edges into @p gb, and return its root operator (whose
-/// output feeds the parent).
+/// @brief Translates one logical plan into taskflow operators that it owns and numbers.
 ///
-/// Recurses to leaves first (scan → … → root). Each operator is owned by
-/// @p ops; the returned pointer is stable (the object never moves, only the
-/// owning unique_ptr does). Branching nodes (Union) translate each child
-/// subtree and wire both roots into their named ports — which is why wiring
-/// lives here rather than in a flat post-pass over @p ops.
-[[nodiscard]] Result<taskflow::Operator*> TranslateNode(
-    const plan::logical::LogicalPlan& plan,
-    const std::shared_ptr<memory::MemoryResourceManager>& memory_manager,
-    std::vector<std::unique_ptr<taskflow::Operator>>& ops, taskflow::GraphBuilder& gb,
-    std::uint32_t& next_id) {
+/// `Translate` recurses to leaves first (scan → … → root) and wires each subtree's internal
+/// edges as it returns. Branching nodes (Union, Join) translate each child subtree and wire
+/// both roots into their named ports, which a flat post-pass over the operators cannot do.
+class Lowering {
+ public:
+  explicit Lowering(std::shared_ptr<memory::MemoryResourceManager> memory)
+      : memory_(std::move(memory)), gb_{memory_} {}
+
+  /// @return The root operator of @p plan, whose output feeds the parent. The pointer is
+  /// stable: the operator never moves, only its owning unique_ptr does.
+  [[nodiscard]] Result<taskflow::Operator*> Translate(const plan::logical::LogicalPlan& plan);
+
+  /// @brief Ends the graph at a CollectorOperator fed by @p root and builds it.
+  [[nodiscard]] Result<ExecutableGraphPtr> Finish(taskflow::Operator& root) && {
+    // CollectorOperator declares Full via InputEdgeContract, so the root → collector edge
+    // infers Full (the RESULT_COLLECTOR shape) without a special-case link() call.
+    auto& collector = Add<taskflow::CollectorOperator>();
+    gb_.Edge(root, collector);
+    return std::move(gb_).Build().transform([&](std::shared_ptr<taskflow::Graph> graph) {
+      return std::make_unique<ExecutableGraph>(std::move(graph), std::move(ops_), &collector);
+    });
+  }
+
+ private:
+  /// @brief Makes an `Op` with the next operator id followed by @p args, and keeps it.
+  template <typename Op, typename... Args>
+  Op& Add(Args&&... args) {
+    auto& op = ops_.emplace_back(std::make_unique<Op>(next_id_++, std::forward<Args>(args)...));
+    return static_cast<Op&>(*op);
+  }
+
+  std::shared_ptr<memory::MemoryResourceManager> memory_;
+  taskflow::GraphBuilder gb_;
+  std::vector<std::unique_ptr<taskflow::Operator>> ops_;
+  std::uint32_t next_id_ = 0;
+};
+
+Result<taskflow::Operator*> Lowering::Translate(const plan::logical::LogicalPlan& plan) {
   if (const auto* scan = dynamic_cast<const plan::logical::Scan*>(&plan)) {
-    auto op = std::make_unique<taskflow::TableScanOperator>(
-        next_id++, scan->data_source(), scan->projection(), memory_manager);
-    auto* op_ptr = op.get();
-    ops.push_back(std::move(op));
-    return op_ptr;
+    return &Add<taskflow::TableScanOperator>(scan->data_source(), scan->projection(), memory_);
   }
 
   if (const auto* selection = dynamic_cast<const plan::logical::Selection*>(&plan)) {
-    auto child = TranslateNode(selection->input(), memory_manager, ops, gb, next_id);
+    auto child = Translate(selection->input());
     if (!child) {
       return std::unexpected(child.error());
     }
@@ -165,12 +186,9 @@ namespace {
     if (!expr_result) {
       return std::unexpected(expr_result.error());
     }
-    auto op = std::make_unique<taskflow::FilterOperator>(next_id++, std::move(*expr_result),
-                                                         memory_manager);
-    auto* op_ptr = op.get();
-    ops.push_back(std::move(op));
-    gb.Edge(**child, *op_ptr);
-    return op_ptr;
+    auto& op = Add<taskflow::FilterOperator>(std::move(*expr_result), memory_);
+    gb_.Edge(**child, op);
+    return &op;
   }
 
   if (const auto* projection = dynamic_cast<const plan::logical::Projection*>(&plan)) {
@@ -179,16 +197,14 @@ namespace {
     // columns — the ProjectOperator disappears and fewer columns come off disk.
     if (const auto* scan = dynamic_cast<const plan::logical::Scan*>(&projection->input())) {
       if (auto folded = TryColumnRefProjection(*projection, *scan)) {
-        auto op = std::make_unique<taskflow::TableScanOperator>(
-            next_id++, scan->data_source(), std::move(*folded), memory_manager);
-        op->set_type(taskflow::OperatorType::BindableTableScan);
-        auto* op_ptr = op.get();
-        ops.push_back(std::move(op));
-        return op_ptr;
+        auto& op = Add<taskflow::TableScanOperator>(scan->data_source(), std::move(*folded),
+                                                    memory_);
+        op.set_type(taskflow::OperatorType::BindableTableScan);
+        return &op;
       }
     }
 
-    auto child = TranslateNode(projection->input(), memory_manager, ops, gb, next_id);
+    auto child = Translate(projection->input());
     if (!child) {
       return std::unexpected(child.error());
     }
@@ -213,66 +229,57 @@ namespace {
       fields.push_back(*field_result);
     }
 
-    auto op = std::make_unique<taskflow::ProjectOperator>(
-        next_id++, columnar::Schema(std::move(fields)), std::move(exprs), memory_manager);
-    auto* op_ptr = op.get();
-    ops.push_back(std::move(op));
-    gb.Edge(**child, *op_ptr);
-    return op_ptr;
+    auto& op = Add<taskflow::ProjectOperator>(columnar::Schema(std::move(fields)),
+                                              std::move(exprs), memory_);
+    gb_.Edge(**child, op);
+    return &op;
   }
 
   if (const auto* limit = dynamic_cast<const plan::logical::Limit*>(&plan)) {
-    auto child = TranslateNode(limit->input(), memory_manager, ops, gb, next_id);
+    auto child = Translate(limit->input());
     if (!child) {
       return std::unexpected(child.error());
     }
-    auto op = std::make_unique<taskflow::LimitOperator>(next_id++, limit->limit(), memory_manager);
-    auto* op_ptr = op.get();
-    ops.push_back(std::move(op));
-    gb.Edge(**child, *op_ptr);
-    return op_ptr;
+    auto& op = Add<taskflow::LimitOperator>(limit->limit(), memory_);
+    gb_.Edge(**child, op);
+    return &op;
   }
 
   if (const auto* union_all = dynamic_cast<const plan::logical::Union*>(&plan)) {
     if (!plan::logical::UnionCompatible(union_all->left().schema(), union_all->right().schema())) {
-      return std::unexpected(Error::SchemaError("UNION ALL inputs have mismatched schemas"));
+      return Error::SchemaError("UNION ALL inputs have mismatched schemas");
     }
-    auto left = TranslateNode(union_all->left(), memory_manager, ops, gb, next_id);
+    auto left = Translate(union_all->left());
     if (!left) {
       return std::unexpected(left.error());
     }
-    auto right = TranslateNode(union_all->right(), memory_manager, ops, gb, next_id);
+    auto right = Translate(union_all->right());
     if (!right) {
       return std::unexpected(right.error());
     }
-    auto op = std::make_unique<taskflow::UnionOperator>(next_id++);
-    auto* op_ptr = op.get();
-    ops.push_back(std::move(op));
-    gb.Edge(**left, op_ptr->input_a());
-    gb.Edge(**right, op_ptr->input_b());
-    return op_ptr;
+    auto& op = Add<taskflow::UnionOperator>();
+    gb_.Edge(**left, op.input_a());
+    gb_.Edge(**right, op.input_b());
+    return &op;
   }
 
   if (const auto* join = dynamic_cast<const plan::logical::Join*>(&plan)) {
-    auto probe = TranslateNode(join->probe(), memory_manager, ops, gb, next_id);
+    auto probe = Translate(join->probe());
     if (!probe) {
       return std::unexpected(probe.error());
     }
-    auto build = TranslateNode(join->build(), memory_manager, ops, gb, next_id);
+    auto build = Translate(join->build());
     if (!build) {
       return std::unexpected(build.error());
     }
-    auto op = std::make_unique<taskflow::HashJoinOperator>(next_id++, join->build_key(),
-                                                           join->probe_key(), memory_manager);
-    auto* op_ptr = op.get();
-    ops.push_back(std::move(op));
-    gb.Edge(**build, op_ptr->build());
-    gb.Edge(**probe, op_ptr->probe());
-    return op_ptr;
+    auto& op = Add<taskflow::HashJoinOperator>(join->build_key(), join->probe_key(), memory_);
+    gb_.Edge(**build, op.build());
+    gb_.Edge(**probe, op.probe());
+    return &op;
   }
 
   if (const auto* aggregate = dynamic_cast<const plan::logical::Aggregate*>(&plan)) {
-    auto child = TranslateNode(aggregate->input(), memory_manager, ops, gb, next_id);
+    auto child = Translate(aggregate->input());
     if (!child) {
       return std::unexpected(child.error());
     }
@@ -285,16 +292,14 @@ namespace {
       }
       specs.push_back(std::move(*spec));
     }
-    auto op = std::make_unique<taskflow::HashAggregateOperator>(
-        next_id++, aggregate->group_by(), std::move(specs), memory_manager);
-    auto* op_ptr = op.get();
-    ops.push_back(std::move(op));
-    gb.Edge(**child, *op_ptr);
-    return op_ptr;
+    auto& op =
+        Add<taskflow::HashAggregateOperator>(aggregate->group_by(), std::move(specs), memory_);
+    gb_.Edge(**child, op);
+    return &op;
   }
 
   if (const auto* sort = dynamic_cast<const plan::logical::Sort*>(&plan)) {
-    auto child = TranslateNode(sort->input(), memory_manager, ops, gb, next_id);
+    auto child = Translate(sort->input());
     if (!child) {
       return std::unexpected(child.error());
     }
@@ -303,15 +308,13 @@ namespace {
     for (const auto& key : sort->keys()) {
       keys.push_back({key.column, key.ascending});
     }
-    auto op = std::make_unique<taskflow::SortOperator>(next_id++, std::move(keys), memory_manager);
-    auto* op_ptr = op.get();
-    ops.push_back(std::move(op));
-    gb.Edge(**child, *op_ptr);
-    return op_ptr;
+    auto& op = Add<taskflow::SortOperator>(std::move(keys), memory_);
+    gb_.Edge(**child, op);
+    return &op;
   }
 
-  return std::unexpected(Error::PhysicalPlanError(
-      "CreateGraph: unsupported logical plan node: " + plan.ToString()));
+  return Error::PhysicalPlanError("CreateGraph: unsupported logical plan node: " +
+                                  plan.ToString());
 }
 
 }  // namespace
@@ -324,32 +327,9 @@ Result<ExecutableGraphPtr> CreateGraph(
         std::make_shared<memory::CPUMemoryResource>(),
         std::make_shared<memory::DiskMemoryResource>());
   }
-
-  // TranslateNode wires internal edges as it recurses (branching nodes like
-  // Union need per-port wiring, which a flat post-pass can't express) and
-  // returns the plan's root operator.
-  std::vector<std::unique_ptr<taskflow::Operator>> ops;
-  std::uint32_t next_id = 0;
-  taskflow::GraphBuilder gb{memory_manager};
-  auto root = TranslateNode(plan, memory_manager, ops, gb, next_id);
-  if (!root) {
-    return std::unexpected(root.error());
-  }
-
-  // CollectorOperator declares Full via InputEdgeContract, so the root →
-  // collector edge automatically infers Full — the RESULT_COLLECTOR shape —
-  // without a special-case link() call.
-  auto collector = std::make_unique<taskflow::CollectorOperator>(next_id++);
-  auto* collector_ptr = collector.get();
-  gb.Edge(**root, *collector);
-  ops.push_back(std::move(collector));
-
-  auto graph_result = std::move(gb).Build();
-  if (!graph_result) {
-    return std::unexpected(graph_result.error());
-  }
-
-  return std::make_unique<ExecutableGraph>(std::move(*graph_result), std::move(ops), collector_ptr);
+  Lowering lowering(std::move(memory_manager));
+  return lowering.Translate(plan).and_then(
+      [&](taskflow::Operator* root) { return std::move(lowering).Finish(*root); });
 }
 
 }  // namespace quest::execution

@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -164,6 +165,22 @@ inline constexpr std::array<std::string_view, 13> kBinaryOpSymbols = {
                             columnar::GetTypeName(right));
   }
   return widened;
+}
+
+/// @brief Folds one CASE result type into @p common, the common type of the results so far.
+/// @param common The common type so far; nullopt until a result has a type.
+/// @param type The result type; nullopt for a NULL literal, which takes the others' type.
+/// @return `TypeError` if the types are incompatible.
+[[nodiscard]] inline Status UnifyType(std::optional<columnar::DataType>& common,
+                                      std::optional<columnar::DataType> type) {
+  if (!type) {
+    return {};
+  }
+  if (!common) {
+    common = type;
+    return {};
+  }
+  return CommonType(*common, *type).transform([&](columnar::DataType next) { common = next; });
 }
 
 }  // namespace quest::plan

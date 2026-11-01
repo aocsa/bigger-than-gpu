@@ -112,8 +112,8 @@ class Literal : public LogicalExpr {
 // Binary Expressions
 // =============================================================================
 
-/// @brief Binary expression; comparisons and AND/OR yield bool, arithmetic yields the left
-/// operand's type.
+/// @brief Binary expression; comparisons and AND/OR yield bool, arithmetic yields
+/// `BinaryResultType`.
 class BinaryExpr : public LogicalExpr {
  public:
   BinaryExpr(BinaryOp op, LogicalExprPtr left, LogicalExprPtr right)

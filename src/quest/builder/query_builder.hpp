@@ -52,11 +52,8 @@ class QueryBuilder {
 
   /// @brief Start with a Parquet data source.
   [[nodiscard]] static Result<QueryBuilder> FromParquet(const std::string& filename) {
-    auto plan_result = QueryPlan::FromParquet(filename);
-    if (!plan_result) {
-      return std::unexpected(plan_result.error());
-    }
-    return QueryBuilder(std::move(*plan_result));
+    return QueryPlan::FromParquet(filename).transform(
+        [](QueryPlan plan) { return QueryBuilder(std::move(plan)); });
   }
 
   /// @brief Start with a generic data source.
@@ -140,16 +137,10 @@ class QueryBuilder {
   /// @return Collected RecordBatches, or the lowering/execution error.
   [[nodiscard]] Result<std::vector<columnar::RecordBatch>> ExecuteOnGraph(
       std::shared_ptr<memory::MemoryResourceManager> memory_manager = nullptr) && {
-    auto graph_result = execution::CreateGraph(plan_.plan(), std::move(memory_manager));
-    if (!graph_result) {
-      return std::unexpected(graph_result.error());
-    }
-    auto exec = std::move(*graph_result);
-    auto status = exec->Execute();
-    if (!status) {
-      return std::unexpected(status.error());
-    }
-    return exec->collector().CollectBatches();
+    return execution::CreateGraph(plan_.plan(), std::move(memory_manager))
+        .and_then([](execution::ExecutableGraphPtr exec) {
+          return exec->Execute().and_then([&] { return exec->collector().CollectBatches(); });
+        });
   }
 
   // ===========================================================================
