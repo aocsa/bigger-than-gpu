@@ -26,7 +26,7 @@ using columnar::DataType;
 using columnar::Field;
 using columnar::RecordBatch;
 using columnar::Schema;
-using columnar::Value;
+using columnar::Scalar;
 
 // =============================================================================
 // Abstract Expression Base Class
@@ -51,7 +51,7 @@ using ExpressionPtr = std::unique_ptr<Expression>;
 /// @brief Literal expression - returns a constant value for all rows.
 class LiteralExpression : public Expression {
  public:
-  explicit LiteralExpression(Value value) : value_(std::move(value)) {}
+  explicit LiteralExpression(Scalar value) : value_(std::move(value)) {}
 
   [[nodiscard]] Result<ColumnVectorPtr> Evaluate(
       const RecordBatch& input) const override;
@@ -59,7 +59,7 @@ class LiteralExpression : public Expression {
   [[nodiscard]] std::string ToString() const override;
 
  private:
-  Value value_;
+  Scalar value_;
 };
 
 // =============================================================================
@@ -151,8 +151,6 @@ class AggregateExpression : public Expression {
       : input_(std::move(input)) {}
 
  protected:
-  /// @brief Helper to convert Value to double.
-  [[nodiscard]] static double ToDouble(const Value& val);
 
   ExpressionPtr input_;
 };

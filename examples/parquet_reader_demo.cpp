@@ -44,7 +44,7 @@ void PrintRecordBatch(const RecordBatch& batch, size_t max_rows = 10) {
       if (col > 0) {
         std::cout << " | ";
       }
-      std::string value = ValueToString(batch.column(col).GetValue(row));
+      std::string value = FormatCell(batch.column(col), row);
       if (value.length() > 15) {
         value = value.substr(0, 12) + "...";
       }

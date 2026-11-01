@@ -13,7 +13,7 @@ namespace {
 
 [[nodiscard]] bool IsNullLiteral(const LogicalExpr& expr) {
   const auto* lit = dynamic_cast<const Literal*>(&expr);
-  return lit != nullptr && std::holds_alternative<std::monostate>(lit->value());
+  return lit != nullptr && lit->value().is_null();
 }
 
 }  // namespace
@@ -37,59 +37,10 @@ Result<Field> ColumnIndex::ToField(const LogicalPlan& input) const {
 }
 
 Result<Field> Literal::ToField(const LogicalPlan& /*input*/) const {
-  DataType dtype = std::visit(
-      [](const auto& v) -> DataType {
-        using T = std::decay_t<decltype(v)>;
-        if constexpr (std::is_same_v<T, int8_t>) {
-          return columnar::DataType::kInt8;
-        } else if constexpr (std::is_same_v<T, int16_t>) {
-          return columnar::DataType::kInt16;
-        } else if constexpr (std::is_same_v<T, int32_t>) {
-          return columnar::DataType::kInt32;
-        } else if constexpr (std::is_same_v<T, int64_t>) {
-          return columnar::DataType::kInt64;
-        } else if constexpr (std::is_same_v<T, float>) {
-          return columnar::DataType::kFloat;
-        } else if constexpr (std::is_same_v<T, double>) {
-          return columnar::DataType::kDouble;
-        } else if constexpr (std::is_same_v<T, bool>) {
-          return columnar::DataType::kBool;
-        } else if constexpr (std::is_same_v<T, columnar::Date32>) {
-          return columnar::DataType::kDate32;
-        } else if constexpr (std::is_same_v<T, columnar::Timestamp>) {
-          return columnar::DataType::kTimestamp;
-        } else if constexpr (std::is_same_v<T, columnar::DecimalValue>) {
-          return columnar::DecimalValueType(v);
-        } else {
-          return columnar::DataType::kString;
-        }
-      },
-      value_);
-  return Field{"literal", dtype};
+  return Field{"literal", value_.type()};
 }
 
-std::string Literal::ToString() const {
-  return std::visit(
-      [](const auto& v) -> std::string {
-        using T = std::decay_t<decltype(v)>;
-        if constexpr (std::is_same_v<T, std::string>) {
-          return "\"" + v + "\"";
-        } else if constexpr (std::is_same_v<T, bool>) {
-          return v ? "true" : "false";
-        } else if constexpr (std::is_same_v<T, std::monostate>) {
-          return "null";
-        } else if constexpr (std::is_same_v<T, columnar::Date32>) {
-          return "DATE '" + columnar::ValueToString(v) + "'";
-        } else if constexpr (std::is_same_v<T, columnar::Timestamp>) {
-          return "TIMESTAMP '" + columnar::ValueToString(v) + "'";
-        } else if constexpr (std::is_same_v<T, columnar::DecimalValue>) {
-          return columnar::ValueToString(v);
-        } else {
-          return std::to_string(v);
-        }
-      },
-      value_);
-}
+std::string Literal::ToString() const { return value_.ToSql(); }
 
 Result<Field> BinaryExpr::ToField(const LogicalPlan& input) const {
   auto left_field = left_->ToField(input);

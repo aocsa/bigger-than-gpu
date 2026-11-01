@@ -175,9 +175,9 @@ TEST(BindableScanTest, ReorderedFoldReturnsExpectedRows) {
   ASSERT_EQ(first.num_columns(), 2U);
   EXPECT_EQ(first.schema().field(0).name, "name");
   EXPECT_EQ(first.schema().field(1).name, "id");
-  EXPECT_EQ(std::get<std::string>(first.column(0).GetValue(0)), "Nscgvnttbc");
-  EXPECT_EQ(std::get<int64_t>(first.column(1).GetValue(0)), 1);
+  EXPECT_EQ(std::string(first.column(0).Get<std::string_view>(0)), "Nscgvnttbc");
+  EXPECT_EQ(first.column(1).Get<int64_t>(0), 1);
   ASSERT_GT(last.num_rows(), 0U);
-  EXPECT_EQ(std::get<std::string>(last.column(0).GetValue(last.num_rows() - 1)), "Bpqguwmolp");
-  EXPECT_EQ(std::get<int64_t>(last.column(1).GetValue(last.num_rows() - 1)), 100000);
+  EXPECT_EQ(std::string(last.column(0).Get<std::string_view>(last.num_rows() - 1)), "Bpqguwmolp");
+  EXPECT_EQ(last.column(1).Get<int64_t>(last.num_rows() - 1), 100000);
 }

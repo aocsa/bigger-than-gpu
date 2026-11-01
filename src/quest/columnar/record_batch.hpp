@@ -60,8 +60,7 @@ class RecordBatch {
     for (size_t row = 0; row < rows; ++row) {
       for (size_t col = 0; col < cols; ++col) {
         if (col > 0) oss << ",";
-        Value val = columns_[col]->GetValue(row);
-        oss << ValueToString(val);
+        oss << FormatCell(*columns_[col], row);
       }
       oss << "\n";
     }

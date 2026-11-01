@@ -107,16 +107,16 @@ TEST(TruncateRecordBatchTest, ExactBoundary) {
   auto batch = MakeTestRecordBatch(5);
   ASSERT_OK_AND_ASSIGN(auto truncated, TruncateRecordBatch(batch, 5));
   EXPECT_EQ(truncated.num_rows(), 5U);
-  EXPECT_EQ(std::get<int32_t>(truncated.column(0).GetValue(0)), 0);
-  EXPECT_EQ(std::get<int32_t>(truncated.column(0).GetValue(4)), 4);
+  EXPECT_EQ(truncated.column(0).Get<int32_t>(0), 0);
+  EXPECT_EQ(truncated.column(0).Get<int32_t>(4), 4);
 }
 
 TEST(TruncateRecordBatchTest, MidBatch) {
   auto batch = MakeTestRecordBatch(10);
   ASSERT_OK_AND_ASSIGN(auto truncated, TruncateRecordBatch(batch, 3));
   EXPECT_EQ(truncated.num_rows(), 3U);
-  EXPECT_EQ(std::get<int32_t>(truncated.column(0).GetValue(0)), 0);
-  EXPECT_EQ(std::get<int32_t>(truncated.column(0).GetValue(2)), 2);
+  EXPECT_EQ(truncated.column(0).Get<int32_t>(0), 0);
+  EXPECT_EQ(truncated.column(0).Get<int32_t>(2), 2);
 }
 
 TEST(TruncateRecordBatchTest, ZeroRows) {
@@ -295,7 +295,7 @@ TEST(LimitE2ETest, GraphRowCountMatchesLimit) {
   for (const auto& batch : graph_batches) {
     ASSERT_EQ(batch.num_columns(), 1U);
     for (std::size_t i = 0; i < batch.num_rows(); ++i) {
-      ids.push_back(std::get<int64_t>(batch.column(0).GetValue(i)));
+      ids.push_back(batch.column(0).Get<int64_t>(i));
     }
   }
   EXPECT_EQ(ids, (std::vector<int64_t>{1, 2, 3}));

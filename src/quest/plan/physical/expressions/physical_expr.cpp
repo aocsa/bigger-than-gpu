@@ -372,6 +372,25 @@ template <typename T>
   });
 }
 
+/// @brief Each row of a numeric @p col as double (a Decimal divided by 10^scale); 0 for a null
+/// row or a non-numeric column.
+[[nodiscard]] std::vector<double> AsDoubles(const ColumnVector& col) {
+  std::vector<double> values(col.size(), 0.0);
+  columnar::VisitType(col.GetType(), [&]<typename Tag>(Tag) {
+    using T = typename Tag::CType;
+    if constexpr (kIsNumber<T>) {
+      const auto view = col.View<T>();
+      for (size_t i = 0; i < values.size(); ++i) {
+        if (!view.IsNull(i)) {
+          auto value = CastOne<double>(view[i], col.GetType().scale, 0);
+          values[i] = value ? *value : 0.0;
+        }
+      }
+    }
+  });
+  return values;
+}
+
 }  // namespace
 
 // =============================================================================
@@ -380,63 +399,10 @@ template <typename T>
 
 Result<ColumnVectorPtr> LiteralExpression::Evaluate(
     const RecordBatch& input) const {
-  DataType dtype = std::visit(
-      [](const auto& val) -> DataType {
-        using T = std::decay_t<decltype(val)>;
-        if constexpr (std::is_same_v<T, int8_t>) {
-          return columnar::DataType::kInt8;
-        } else if constexpr (std::is_same_v<T, int16_t>) {
-          return columnar::DataType::kInt16;
-        } else if constexpr (std::is_same_v<T, int32_t>) {
-          return columnar::DataType::kInt32;
-        } else if constexpr (std::is_same_v<T, int64_t>) {
-          return columnar::DataType::kInt64;
-        } else if constexpr (std::is_same_v<T, float>) {
-          return columnar::DataType::kFloat;
-        } else if constexpr (std::is_same_v<T, double>) {
-          return columnar::DataType::kDouble;
-        } else if constexpr (std::is_same_v<T, bool>) {
-          return columnar::DataType::kBool;
-        } else if constexpr (std::is_same_v<T, columnar::Date32>) {
-          return columnar::DataType::kDate32;
-        } else if constexpr (std::is_same_v<T, columnar::Timestamp>) {
-          return columnar::DataType::kTimestamp;
-        } else if constexpr (std::is_same_v<T, columnar::DecimalValue>) {
-          return columnar::DecimalValueType(val);
-        } else {
-          return columnar::DataType::kString;
-        }
-      },
-      value_);
-  auto one_row = columnar::ColumnFromValues(dtype, std::span<const Value>(&value_, 1));
-  if (!one_row) {
-    return std::unexpected(one_row.error());
-  }
-  return ColumnVector::Constant(**one_row, input.num_rows());
+  return ColumnVector::Constant(value_.column(), input.num_rows());
 }
 
-std::string LiteralExpression::ToString() const {
-  return std::visit(
-      [](const auto& val) -> std::string {
-        using T = std::decay_t<decltype(val)>;
-        if constexpr (std::is_same_v<T, std::string>) {
-          return "\"" + val + "\"";
-        } else if constexpr (std::is_same_v<T, bool>) {
-          return val ? "true" : "false";
-        } else if constexpr (std::is_same_v<T, std::monostate>) {
-          return "null";
-        } else if constexpr (std::is_same_v<T, columnar::Date32>) {
-          return "DATE '" + columnar::ValueToString(val) + "'";
-        } else if constexpr (std::is_same_v<T, columnar::Timestamp>) {
-          return "TIMESTAMP '" + columnar::ValueToString(val) + "'";
-        } else if constexpr (std::is_same_v<T, columnar::DecimalValue>) {
-          return columnar::ValueToString(val);
-        } else {
-          return std::to_string(val);
-        }
-      },
-      value_);
-}
+std::string LiteralExpression::ToString() const { return value_.ToSql(); }
 
 // =============================================================================
 // Column Expression
@@ -611,21 +577,6 @@ std::string CaseExpression::ToString() const {
 // Aggregate Expressions
 // =============================================================================
 
-double AggregateExpression::ToDouble(const Value& val) {
-  return std::visit(
-      [](const auto& v) -> double {
-        using T = std::decay_t<decltype(v)>;
-        if constexpr (std::is_arithmetic_v<T>) {
-          return static_cast<double>(v);
-        } else if constexpr (std::is_same_v<T, columnar::DecimalValue>) {
-          return columnar::ToDoubleValue(v);
-        } else {
-          return 0.0;
-        }
-      },
-      val);
-}
-
 Result<ColumnVectorPtr> SumExpression::Evaluate(
     const RecordBatch& input) const {
   auto input_result = input_->Evaluate(input);
@@ -634,11 +585,12 @@ Result<ColumnVectorPtr> SumExpression::Evaluate(
   }
 
   auto& col = **input_result;
+  const std::vector<double> values = AsDoubles(col);
   double sum = 0.0;
 
   for (size_t i = 0; i < col.size(); ++i) {
     if (!col.IsNull(i)) {
-      sum += ToDouble(col.GetValue(i));
+      sum += values[i];
     }
   }
 
@@ -653,12 +605,13 @@ Result<ColumnVectorPtr> AvgExpression::Evaluate(
   }
 
   auto& col = **input_result;
+  const std::vector<double> values = AsDoubles(col);
   double sum = 0.0;
   size_t count = 0;
 
   for (size_t i = 0; i < col.size(); ++i) {
     if (!col.IsNull(i)) {
-      sum += ToDouble(col.GetValue(i));
+      sum += values[i];
       ++count;
     }
   }
@@ -700,6 +653,7 @@ Result<ColumnVectorPtr> MinExpression::Evaluate(
   }
 
   auto& col = **input_result;
+  const std::vector<double> values = AsDoubles(col);
   if (col.size() == 0) {
     return OneRow<double>(columnar::DataType::kDouble, std::numeric_limits<double>::quiet_NaN());
   }
@@ -709,7 +663,7 @@ Result<ColumnVectorPtr> MinExpression::Evaluate(
 
   for (size_t i = 0; i < col.size(); ++i) {
     if (!col.IsNull(i)) {
-      double val = ToDouble(col.GetValue(i));
+      double val = values[i];
       if (!found || val < min_val) {
         min_val = val;
         found = true;
@@ -732,6 +686,7 @@ Result<ColumnVectorPtr> MaxExpression::Evaluate(
   }
 
   auto& col = **input_result;
+  const std::vector<double> values = AsDoubles(col);
   if (col.size() == 0) {
     return OneRow<double>(columnar::DataType::kDouble, std::numeric_limits<double>::quiet_NaN());
   }
@@ -741,7 +696,7 @@ Result<ColumnVectorPtr> MaxExpression::Evaluate(
 
   for (size_t i = 0; i < col.size(); ++i) {
     if (!col.IsNull(i)) {
-      double val = ToDouble(col.GetValue(i));
+      double val = values[i];
       if (!found || val > max_val) {
         max_val = val;
         found = true;

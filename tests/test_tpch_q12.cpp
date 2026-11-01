@@ -108,9 +108,9 @@ TEST(TpchQ12Test, MatchesDuckDb) {
     EXPECT_EQ(batch.schema().field(1).name, "high_line_count");
     EXPECT_EQ(batch.schema().field(2).name, "low_line_count");
     for (std::size_t i = 0; i < batch.num_rows(); ++i) {
-      rows.emplace_back(std::get<std::string>(batch.column(0).GetValue(i)),
-                        std::get<std::int64_t>(batch.column(1).GetValue(i)),
-                        std::get<std::int64_t>(batch.column(2).GetValue(i)));
+      rows.emplace_back(std::string(batch.column(0).Get<std::string_view>(i)),
+                        batch.column(1).Get<std::int64_t>(i),
+                        batch.column(2).Get<std::int64_t>(i));
     }
   }
 
@@ -137,10 +137,10 @@ TEST(TpchQ12Test, DateColumnsGroupMinMaxAndSortLikeDuckDb) {
   std::vector<std::string> rows;
   for (const auto& batch : batches) {
     for (std::size_t i = 0; i < batch.num_rows(); ++i) {
-      rows.push_back(columnar::ValueToString(batch.column(0).GetValue(i)) + " " +
-                     columnar::ValueToString(batch.column(1).GetValue(i)) + " " +
-                     columnar::ValueToString(batch.column(2).GetValue(i)) + " " +
-                     columnar::ValueToString(batch.column(3).GetValue(i)));
+      rows.push_back(columnar::FormatCell(batch.column(0), i) + " " +
+                     columnar::FormatCell(batch.column(1), i) + " " +
+                     columnar::FormatCell(batch.column(2), i) + " " +
+                     columnar::FormatCell(batch.column(3), i));
     }
   }
 
@@ -171,9 +171,9 @@ TEST(TpchQ12Test, SumOfBoolAndCaseOverDatesLikeDuckDb) {
   std::vector<std::string> rows;
   for (const auto& batch : batches) {
     for (std::size_t i = 0; i < batch.num_rows(); ++i) {
-      rows.push_back(columnar::ValueToString(batch.column(0).GetValue(i)) + " " +
-                     columnar::ValueToString(batch.column(1).GetValue(i)) + " " +
-                     columnar::ValueToString(batch.column(2).GetValue(i)));
+      rows.push_back(columnar::FormatCell(batch.column(0), i) + " " +
+                     columnar::FormatCell(batch.column(1), i) + " " +
+                     columnar::FormatCell(batch.column(2), i));
     }
   }
 

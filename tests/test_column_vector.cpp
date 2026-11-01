@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// @file test_column_vector.cpp
-/// @brief ColumnBuilder, ColumnVector and ColumnView: layout, nulls, constants, Value bridge.
+/// @brief ColumnBuilder, ColumnVector and ColumnView: layout, nulls, constants.
 
 #include <gtest/gtest.h>
 
@@ -153,7 +153,7 @@ TEST(ConstantColumnTest, OneRowStandsForEveryRowAndSharesBuffers) {
   const auto view = col->View<std::string_view>();
   EXPECT_EQ(view[0], "MAIL");
   EXPECT_EQ(view[999], "MAIL");
-  EXPECT_EQ(col->GetValue(500), Value{std::string("MAIL")});
+  EXPECT_EQ(col->Get<std::string_view>(500), "MAIL");
 }
 
 TEST(ConstantColumnTest, NullConstantIsNullInEveryRow) {
@@ -173,29 +173,16 @@ TEST(ConstantColumnTest, NullConstantOfZeroRowsIsStillNull) {
 }
 
 // =============================================================================
-// Value bridge (until the Value variant goes)
+// Typed reads and FormatCell
 // =============================================================================
 
-TEST(ValueBridgeTest, GetValueGivesTheTypedAlternative) {
+TEST(TypedReadTest, GetAndIsNull) {
   auto ints = MakeColumn<int16_t>(DataType::kInt16, {7, std::nullopt});
-  EXPECT_EQ(ints->GetValue(0), Value{int16_t{7}});
-  EXPECT_TRUE(std::holds_alternative<std::monostate>(ints->GetValue(1)));
-  EXPECT_TRUE(std::holds_alternative<std::monostate>(ints->GetValue(2)));  // past the end
+  EXPECT_EQ(ints->Get<int16_t>(0), 7);
+  EXPECT_TRUE(ints->IsNull(1));
 
   auto strings = MakeColumn<std::string_view>(DataType::kString, {"abc"});
-  EXPECT_EQ(strings->GetValue(0), Value{std::string("abc")});
-}
-
-TEST(ValueBridgeTest, ColumnFromValuesChecksTypes) {
-  const std::vector<Value> values = {Value{int32_t{1}}, Value{}, Value{int32_t{3}}};
-  ASSERT_OK_AND_ASSIGN(auto col, ColumnFromValues(DataType::kInt32, values));
-  EXPECT_EQ(col->Get<int32_t>(2), 3);
-  EXPECT_TRUE(col->IsNull(1));
-
-  const std::vector<Value> mixed = {Value{int32_t{1}}, Value{std::string("x")}};
-  auto bad = ColumnFromValues(DataType::kInt32, mixed);
-  ASSERT_FALSE(bad.has_value());
-  EXPECT_EQ(bad.error().code(), quest::ErrorCode::TypeError);
+  EXPECT_EQ(strings->Get<std::string_view>(0), "abc");
 }
 
 TEST(DecimalColumnTest, StoresUnscaledAndFormatsWithTheScale) {
@@ -206,8 +193,9 @@ TEST(DecimalColumnTest, StoresUnscaledAndFormatsWithTheScale) {
   auto col = std::move(builder).Finish();
   EXPECT_EQ(col->GetType(), DataType::Decimal(15, 2));
   EXPECT_EQ(col->Get<Decimal64>(0), Decimal64{123456});
-  EXPECT_EQ(col->GetValue(0), (Value{DecimalValue{123456, 2}}));
-  EXPECT_EQ(ValueToString(col->GetValue(1)), "-0.07");
+  EXPECT_EQ(FormatCell(*col, 0), "1234.56");
+  EXPECT_EQ(FormatCell(*col, 1), "-0.07");
+  EXPECT_EQ(FormatCell(*col, 2), "null");
   EXPECT_TRUE(col->IsNull(2));
 }
 
@@ -219,29 +207,27 @@ TEST(DecimalColumnTest, FormatDecimalLikeDuckDb) {
   EXPECT_EQ(FormatDecimal(std::numeric_limits<int64_t>::min(), 18), "-9.223372036854775808");
 }
 
-TEST(DecimalColumnTest, ColumnFromValuesRejectsAnotherScale) {
-  const std::vector<Value> values = {Value{DecimalValue{5, 3}}};
-  auto col = ColumnFromValues(DataType::Decimal(15, 2), values);
-  ASSERT_FALSE(col.has_value());
-  EXPECT_EQ(col.error().code(), quest::ErrorCode::TypeError);
-}
-
 // =============================================================================
 // Date32 and Timestamp
 // =============================================================================
 
-TEST(Date32Test, ValueToStringIsIsoDate) {
-  EXPECT_EQ(ValueToString(Value{Date32{9538}}), "1996-02-12");
-  EXPECT_EQ(ValueToString(Value{Date32{0}}), "1970-01-01");
-  EXPECT_EQ(ValueToString(Value{Date32{-1}}), "1969-12-31");
-  EXPECT_EQ(ValueToString(Value{Date32{11016}}), "2000-02-29");
+TEST(Date32Test, FormatCellIsIsoDate) {
+  auto col = MakeColumn<Date32>(DataType::kDate32,
+                                {Date32{9538}, Date32{0}, Date32{-1}, Date32{11016}});
+  EXPECT_EQ(FormatCell(*col, 0), "1996-02-12");
+  EXPECT_EQ(FormatCell(*col, 1), "1970-01-01");
+  EXPECT_EQ(FormatCell(*col, 2), "1969-12-31");
+  EXPECT_EQ(FormatCell(*col, 3), "2000-02-29");
 }
 
 TEST(TimestampTest, FormatsLikeDuckDb) {
-  EXPECT_EQ(ValueToString(Value{Timestamp{0}}), "1970-01-01 00:00:00");
-  EXPECT_EQ(ValueToString(Value{Timestamp{1'704'164'645'500'000}}), "2024-01-02 03:04:05.5");
-  EXPECT_EQ(ValueToString(Value{Timestamp{1'704'164'645'123'456}}), "2024-01-02 03:04:05.123456");
-  EXPECT_EQ(ValueToString(Value{Timestamp{-1}}), "1969-12-31 23:59:59.999999");
+  auto col = MakeColumn<Timestamp>(DataType::kTimestamp,
+                                   {Timestamp{0}, Timestamp{1'704'164'645'500'000},
+                                    Timestamp{1'704'164'645'123'456}, Timestamp{-1}});
+  EXPECT_EQ(FormatCell(*col, 0), "1970-01-01 00:00:00");
+  EXPECT_EQ(FormatCell(*col, 1), "2024-01-02 03:04:05.5");
+  EXPECT_EQ(FormatCell(*col, 2), "2024-01-02 03:04:05.123456");
+  EXPECT_EQ(FormatCell(*col, 3), "1969-12-31 23:59:59.999999");
   EXPECT_EQ(GetTypeName(DataType::kTimestamp), "Timestamp");
 }
 
@@ -259,9 +245,9 @@ TEST(Date32Test, ConcatenateKeepsDate32) {
   ASSERT_OK_AND_ASSIGN(auto merged, ConcatenateRecordBatches({&a, &b}));
   ASSERT_EQ(merged.num_rows(), 3U);
   EXPECT_EQ(merged.column(0).GetType(), DataType::kDate32);
-  EXPECT_EQ(merged.column(0).GetValue(0), Value{Date32{1}});
+  EXPECT_EQ(merged.column(0).Get<Date32>(0), Date32{1});
   EXPECT_TRUE(merged.column(0).IsNull(1));
-  EXPECT_EQ(merged.column(0).GetValue(2), Value{Date32{2}});
+  EXPECT_EQ(merged.column(0).Get<Date32>(2), Date32{2});
 }
 
 TEST(ConcatenateTest, MixesBatchesWithAndWithoutNulls) {

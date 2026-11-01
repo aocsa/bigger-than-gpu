@@ -168,11 +168,10 @@ TEST(QueryBuilderDateTest, ReceiptDateRangeMatchesDuckDb) {
     const auto* receipt = batch.GetColumnByName("l_receiptdate");
     ASSERT_NE(receipt, nullptr);
     for (size_t i = 0; i < batch.num_rows(); ++i) {
-      const Value v = receipt->GetValue(i);
-      const auto* d = std::get_if<Date32>(&v);
-      ASSERT_NE(d, nullptr);
-      EXPECT_GE(d->days, 8766);
-      EXPECT_LT(d->days, 9131);
+      ASSERT_FALSE(receipt->IsNull(i));
+      const Date32 d = receipt->Get<Date32>(i);
+      EXPECT_GE(d.days, 8766);
+      EXPECT_LT(d.days, 9131);
     }
   }
   EXPECT_EQ(rows, 9525U);

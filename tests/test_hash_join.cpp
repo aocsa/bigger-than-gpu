@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "quest/cache/data_block.hpp"
+#include "quest/columnar/column_vector.hpp"
 #include "quest/columnar/record_batch.hpp"
 #include "quest/columnar/schema.hpp"
 #include "quest/io/parquet/parquet_data_source.hpp"
@@ -89,7 +90,7 @@ using OptInt = std::optional<std::int64_t>;
       if (col > 0) {
         rendered += "|";
       }
-      rendered += ValueToString(batch.column(col).GetValue(row));
+      rendered += FormatCell(batch.column(col), row);
     }
     rows.push_back(std::move(rendered));
   }
@@ -523,7 +524,7 @@ TEST_P(HashJoinTpchTest, OrdersJoinFilteredLineitemMatchesDuckDb) {
   auto shipmode_is = [](std::string mode) {
     return std::make_unique<plan::physical::BinaryExpression>(
         plan::BinaryOp::kEq, std::make_unique<plan::physical::ColumnExpression>(1),
-        std::make_unique<plan::physical::LiteralExpression>(Value{std::move(mode)}));
+        std::make_unique<plan::physical::LiteralExpression>(Scalar(mode)));
   };
   auto predicate = std::make_unique<plan::physical::BinaryExpression>(
       plan::BinaryOp::kOr, shipmode_is("MAIL"), shipmode_is("SHIP"));
@@ -554,9 +555,9 @@ TEST_P(HashJoinTpchTest, OrdersJoinFilteredLineitemMatchesDuckDb) {
     ASSERT_EQ(FieldNames(batch.schema()), (std::vector<std::string>{"o_orderkey", "o_orderpriority",
                                                                     "l_orderkey", "l_shipmode"}));
     for (std::size_t row = 0; row < batch.num_rows(); ++row) {
-      auto order_key = std::get<std::int64_t>(batch.column(0).GetValue(row));
-      EXPECT_EQ(order_key, std::get<std::int64_t>(batch.column(2).GetValue(row)));
-      auto mode = std::get<std::string>(batch.column(3).GetValue(row));
+      auto order_key = batch.column(0).Get<std::int64_t>(row);
+      EXPECT_EQ(order_key, batch.column(2).Get<std::int64_t>(row));
+      auto mode = std::string(batch.column(3).Get<std::string_view>(row));
       EXPECT_TRUE(mode == "MAIL" || mode == "SHIP") << mode;
       order_key_sum += order_key;
     }

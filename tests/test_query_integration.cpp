@@ -194,13 +194,13 @@ TEST_F(QueryIntegrationTest, EvaluateColumnExpression) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   EXPECT_EQ(result->size(), 5U);
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 75000.0, 0.001);  // Alice
-  EXPECT_NEAR(std::get<double>(result->GetValue(3)), 90000.0, 0.001);  // Diana
+  EXPECT_NEAR(result->Get<double>(0), 75000.0, 0.001);  // Alice
+  EXPECT_NEAR(result->Get<double>(3), 90000.0, 0.001);  // Diana
 }
 
 TEST_F(QueryIntegrationTest, EvaluateComparisonExpression) {
   auto left = std::make_unique<ColumnExpression>(2);   // salary
-  auto right = std::make_unique<LiteralExpression>(Value{70000.0});
+  auto right = std::make_unique<LiteralExpression>(Scalar(70000.0));
   BinaryExpression expr(BinaryOp::kGt, std::move(left), std::move(right));
 
   const auto& batch = batches_[0];
@@ -208,24 +208,24 @@ TEST_F(QueryIntegrationTest, EvaluateComparisonExpression) {
 
   // salary > 70000: Alice(75k)=true, Bob(65k)=false, Charlie(80k)=true,
   //                 Diana(90k)=true, Eve(55k)=false
-  EXPECT_TRUE(std::get<bool>(result->GetValue(0)));   // Alice
-  EXPECT_FALSE(std::get<bool>(result->GetValue(1)));  // Bob
-  EXPECT_TRUE(std::get<bool>(result->GetValue(2)));   // Charlie
-  EXPECT_TRUE(std::get<bool>(result->GetValue(3)));   // Diana
-  EXPECT_FALSE(std::get<bool>(result->GetValue(4)));  // Eve
+  EXPECT_TRUE(result->Get<bool>(0));   // Alice
+  EXPECT_FALSE(result->Get<bool>(1));  // Bob
+  EXPECT_TRUE(result->Get<bool>(2));   // Charlie
+  EXPECT_TRUE(result->Get<bool>(3));   // Diana
+  EXPECT_FALSE(result->Get<bool>(4));  // Eve
 }
 
 TEST_F(QueryIntegrationTest, EvaluateArithmeticExpression) {
   auto left = std::make_unique<ColumnExpression>(2);  // salary
-  auto right = std::make_unique<LiteralExpression>(Value{1.1});
+  auto right = std::make_unique<LiteralExpression>(Scalar(1.1));
   BinaryExpression expr(BinaryOp::kMultiply, std::move(left), std::move(right));
 
   const auto& batch = batches_[0];
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // salary * 1.1
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 82500.0, 0.001);  // Alice
-  EXPECT_NEAR(std::get<double>(result->GetValue(3)), 99000.0, 0.001);  // Diana
+  EXPECT_NEAR(result->Get<double>(0), 82500.0, 0.001);  // Alice
+  EXPECT_NEAR(result->Get<double>(3), 99000.0, 0.001);  // Diana
 }
 
 // =============================================================================
@@ -240,7 +240,7 @@ TEST_F(QueryIntegrationTest, AggregateSum) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // SUM(salary) = 75000 + 65000 + 80000 + 90000 + 55000 = 365000
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 365000.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 365000.0, 0.001);
 }
 
 TEST_F(QueryIntegrationTest, AggregateAvg) {
@@ -251,7 +251,7 @@ TEST_F(QueryIntegrationTest, AggregateAvg) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // AVG(salary) = 365000 / 5 = 73000
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 73000.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 73000.0, 0.001);
 }
 
 TEST_F(QueryIntegrationTest, AggregateCount) {
@@ -261,7 +261,7 @@ TEST_F(QueryIntegrationTest, AggregateCount) {
   const auto& batch = batches_[0];
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
-  EXPECT_EQ(std::get<int64_t>(result->GetValue(0)), 5);
+  EXPECT_EQ(result->Get<int64_t>(0), 5);
 }
 
 TEST_F(QueryIntegrationTest, AggregateMin) {
@@ -272,7 +272,7 @@ TEST_F(QueryIntegrationTest, AggregateMin) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // MIN(salary) = 55000 (Eve)
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 55000.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 55000.0, 0.001);
 }
 
 TEST_F(QueryIntegrationTest, AggregateMax) {
@@ -283,7 +283,7 @@ TEST_F(QueryIntegrationTest, AggregateMax) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // MAX(salary) = 90000 (Diana)
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 90000.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 90000.0, 0.001);
 }
 
 // =============================================================================
@@ -293,29 +293,29 @@ TEST_F(QueryIntegrationTest, AggregateMax) {
 TEST_F(QueryIntegrationTest, ComplexArithmeticChain) {
   // (salary + 10000) * 1.05
   auto salary = std::make_unique<ColumnExpression>(2);
-  auto bonus = std::make_unique<LiteralExpression>(Value{10000.0});
+  auto bonus = std::make_unique<LiteralExpression>(Scalar(10000.0));
   auto add_expr =
       std::make_unique<BinaryExpression>(BinaryOp::kAdd, std::move(salary), std::move(bonus));
 
-  auto multiplier = std::make_unique<LiteralExpression>(Value{1.05});
+  auto multiplier = std::make_unique<LiteralExpression>(Scalar(1.05));
   BinaryExpression final_expr(BinaryOp::kMultiply, std::move(add_expr), std::move(multiplier));
 
   const auto& batch = batches_[0];
   ASSERT_OK_AND_ASSIGN(auto result, final_expr.Evaluate(batch));
 
   // Alice: (75000 + 10000) * 1.05 = 89250
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 89250.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 89250.0, 0.001);
 }
 
 TEST_F(QueryIntegrationTest, ComplexLogicalCondition) {
   // (salary > 60000) AND (active == true)
   auto salary = std::make_unique<ColumnExpression>(2);
-  auto threshold = std::make_unique<LiteralExpression>(Value{60000.0});
+  auto threshold = std::make_unique<LiteralExpression>(Scalar(60000.0));
   auto salary_check =
       std::make_unique<BinaryExpression>(BinaryOp::kGt, std::move(salary), std::move(threshold));
 
   auto active = std::make_unique<ColumnExpression>(4);
-  auto true_val = std::make_unique<LiteralExpression>(Value{true});
+  auto true_val = std::make_unique<LiteralExpression>(Scalar(true));
   auto active_check =
       std::make_unique<BinaryExpression>(BinaryOp::kEq, std::move(active), std::move(true_val));
 
@@ -329,11 +329,11 @@ TEST_F(QueryIntegrationTest, ComplexLogicalCondition) {
   // Charlie: 80k > 60k AND false = false
   // Diana: 90k > 60k AND true = true
   // Eve: 55k > 60k AND true = false
-  EXPECT_TRUE(std::get<bool>(result->GetValue(0)));   // Alice
-  EXPECT_TRUE(std::get<bool>(result->GetValue(1)));   // Bob
-  EXPECT_FALSE(std::get<bool>(result->GetValue(2)));  // Charlie
-  EXPECT_TRUE(std::get<bool>(result->GetValue(3)));   // Diana
-  EXPECT_FALSE(std::get<bool>(result->GetValue(4)));  // Eve
+  EXPECT_TRUE(result->Get<bool>(0));   // Alice
+  EXPECT_TRUE(result->Get<bool>(1));   // Bob
+  EXPECT_FALSE(result->Get<bool>(2));  // Charlie
+  EXPECT_TRUE(result->Get<bool>(3));   // Diana
+  EXPECT_FALSE(result->Get<bool>(4));  // Eve
 }
 
 // =============================================================================

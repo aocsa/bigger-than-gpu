@@ -216,7 +216,7 @@ class CalendarDate {
 /// @param date A compile-time-checked calendar date.
 /// @return A literal expression of type `Date32Type`.
 [[nodiscard]] inline ExprBuilder LitDate(CalendarDate date) {
-  return ExprBuilder(plan::logical::lit(columnar::Value{date.date()}));
+  return ExprBuilder(plan::logical::lit(columnar::Scalar(date.date())));
 }
 
 /// @brief Decimal literal `Unscaled / 10^Scale`, e.g. `LitDecimal<5, 2>()` is 0.05, typed
@@ -228,8 +228,8 @@ template <std::int64_t Unscaled, int Scale>
            Unscaled > -columnar::PowerOfTen(columnar::DataType::kMaxDecimalPrecision) &&
            Unscaled < columnar::PowerOfTen(columnar::DataType::kMaxDecimalPrecision))
 [[nodiscard]] ExprBuilder LitDecimal() {
-  return ExprBuilder(plan::logical::lit(
-      columnar::Value{columnar::DecimalValue{Unscaled, static_cast<std::uint8_t>(Scale)}}));
+  return ExprBuilder(
+      plan::logical::lit(columnar::Scalar::Decimal(Unscaled, static_cast<std::uint8_t>(Scale))));
 }
 
 }  // namespace quest

@@ -85,8 +85,8 @@ TEST(GraphBridgeTest, ParquetFilterProjectReturnsExpectedRows) {
   for (const auto& batch : graph_batches) {
     ASSERT_EQ(batch.num_columns(), 3U);
     for (std::size_t i = 0; i < batch.num_rows(); ++i) {
-      const auto id = std::get<int64_t>(batch.column(0).GetValue(i));
-      const auto salary = std::get<int64_t>(batch.column(2).GetValue(i));
+      const auto id = batch.column(0).Get<int64_t>(i);
+      const auto salary = batch.column(2).Get<int64_t>(i);
       EXPECT_GT(salary, 60000);
       EXPECT_GT(id, prev_id) << "rows must keep file order";
       prev_id = id;
@@ -101,14 +101,14 @@ TEST(GraphBridgeTest, ParquetFilterProjectReturnsExpectedRows) {
 
   ASSERT_FALSE(graph_batches.empty());
   const auto& first = graph_batches.front();
-  EXPECT_EQ(std::get<int64_t>(first.column(0).GetValue(0)), 2);
-  EXPECT_EQ(std::get<std::string>(first.column(1).GetValue(0)), "Otapxhbqkl");
-  EXPECT_EQ(std::get<int64_t>(first.column(2).GetValue(0)), 100169);
+  EXPECT_EQ(first.column(0).Get<int64_t>(0), 2);
+  EXPECT_EQ(std::string(first.column(1).Get<std::string_view>(0)), "Otapxhbqkl");
+  EXPECT_EQ(first.column(2).Get<int64_t>(0), 100169);
   const auto& last = graph_batches.back();
   const auto last_row = last.num_rows() - 1;
-  EXPECT_EQ(std::get<int64_t>(last.column(0).GetValue(last_row)), 100000);
-  EXPECT_EQ(std::get<std::string>(last.column(1).GetValue(last_row)), "Bpqguwmolp");
-  EXPECT_EQ(std::get<int64_t>(last.column(2).GetValue(last_row)), 123265);
+  EXPECT_EQ(last.column(0).Get<int64_t>(last_row), 100000);
+  EXPECT_EQ(std::string(last.column(1).Get<std::string_view>(last_row)), "Bpqguwmolp");
+  EXPECT_EQ(last.column(2).Get<int64_t>(last_row), 123265);
 }
 
 TEST(GraphBridgeTest, ArithmeticProjectionViaCreatePhysicalExpr) {

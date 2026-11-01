@@ -220,36 +220,34 @@ TEST(SchemaTest, ToString) {
 }
 
 // =============================================================================
-// Value Tests
+// FormatCell Tests
 // =============================================================================
 
-TEST(ValueTest, ToStringNull) {
-  Value null_val = std::monostate{};
-  EXPECT_EQ(ValueToString(null_val), "null");
+TEST(FormatCellTest, Null) {
+  auto col = MakeColumn<int32_t>(DataType::kInt32, {std::nullopt});
+  EXPECT_EQ(FormatCell(*col, 0), "null");
 }
 
-TEST(ValueTest, ToStringBool) {
-  Value true_val = true;
-  Value false_val = false;
-  EXPECT_EQ(ValueToString(true_val), "true");
-  EXPECT_EQ(ValueToString(false_val), "false");
+TEST(FormatCellTest, Bool) {
+  auto col = MakeColumn<bool>(DataType::kBool, {true, false});
+  EXPECT_EQ(FormatCell(*col, 0), "true");
+  EXPECT_EQ(FormatCell(*col, 1), "false");
 }
 
-TEST(ValueTest, ToStringNumbers) {
-  Value int_val = int32_t(42);
-  EXPECT_EQ(ValueToString(int_val), "42");
+TEST(FormatCellTest, Numbers) {
+  auto ints = MakeColumn<int32_t>(DataType::kInt32, {42});
+  EXPECT_EQ(FormatCell(*ints, 0), "42");
 
-  Value long_val = int64_t(-12345);
-  EXPECT_EQ(ValueToString(long_val), "-12345");
+  auto longs = MakeColumn<int64_t>(DataType::kInt64, {-12345});
+  EXPECT_EQ(FormatCell(*longs, 0), "-12345");
 
-  Value double_val = 3.14;
-  std::string double_str = ValueToString(double_val);
-  EXPECT_NE(double_str.find("3.14"), std::string::npos);
+  auto doubles = MakeColumn<double>(DataType::kDouble, {3.14});
+  EXPECT_NE(FormatCell(*doubles, 0).find("3.14"), std::string::npos);
 }
 
-TEST(ValueTest, ToStringString) {
-  Value str_val = std::string("hello");
-  EXPECT_EQ(ValueToString(str_val), "hello");
+TEST(FormatCellTest, String) {
+  auto col = MakeColumn<std::string_view>(DataType::kString, {"hello"});
+  EXPECT_EQ(FormatCell(*col, 0), "hello");
 }
 
 // =============================================================================

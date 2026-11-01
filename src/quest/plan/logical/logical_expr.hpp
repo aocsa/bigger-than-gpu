@@ -23,7 +23,7 @@ class LogicalPlan;
 using columnar::DataType;
 using plan::BinaryOp;
 using columnar::Field;
-using columnar::Value;
+using columnar::Scalar;
 
 // =============================================================================
 // Abstract Base Class
@@ -91,7 +91,7 @@ class ColumnIndex : public LogicalExpr {
 
 class Literal : public LogicalExpr {
  public:
-  explicit Literal(Value value) : value_(std::move(value)) {}
+  explicit Literal(Scalar value) : value_(std::move(value)) {}
 
   [[nodiscard]] Result<Field> ToField(const LogicalPlan& /*input*/) const override;
 
@@ -101,10 +101,10 @@ class Literal : public LogicalExpr {
     return std::make_unique<Literal>(value_);
   }
 
-  [[nodiscard]] const Value& value() const { return value_; }
+  [[nodiscard]] const Scalar& value() const { return value_; }
 
  private:
-  Value value_;
+  Scalar value_;
 };
 
 // =============================================================================
@@ -303,7 +303,7 @@ inline LogicalExprPtr col_idx(size_t index) {
 
 template <typename T>
 LogicalExprPtr lit(T value) {
-  return std::make_unique<Literal>(Value{value});
+  return std::make_unique<Literal>(Scalar(value));
 }
 
 inline LogicalExprPtr eq(LogicalExprPtr left, LogicalExprPtr right) {

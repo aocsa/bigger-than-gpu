@@ -59,7 +59,7 @@ namespace {
   std::vector<int64_t> values;
   for (const auto& batch : batches) {
     for (std::size_t i = 0; i < batch.num_rows(); ++i) {
-      values.push_back(std::get<int64_t>(batch.column(0).GetValue(i)));
+      values.push_back(batch.column(0).Get<int64_t>(i));
     }
   }
   return values;

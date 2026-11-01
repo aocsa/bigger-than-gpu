@@ -46,8 +46,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeInt32Column) {
 
   for (size_t i = 0; i < 5; ++i) {
     EXPECT_FALSE(deserialized.column(0).IsNull(i));
-    EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(i)),
-              std::get<int32_t>(original.column(0).GetValue(i)));
+    EXPECT_EQ(deserialized.column(0).Get<int32_t>(i),
+              original.column(0).Get<int32_t>(i));
   }
 }
 
@@ -78,12 +78,12 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeMultipleColumns) {
   EXPECT_EQ(deserialized.schema().field(2).name, "value");
 
   for (size_t i = 0; i < 3; ++i) {
-    EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(i)),
-              std::get<int32_t>(original.column(0).GetValue(i)));
-    EXPECT_EQ(std::get<std::string>(deserialized.column(1).GetValue(i)),
-              std::get<std::string>(original.column(1).GetValue(i)));
-    EXPECT_DOUBLE_EQ(std::get<double>(deserialized.column(2).GetValue(i)),
-                     std::get<double>(original.column(2).GetValue(i)));
+    EXPECT_EQ(deserialized.column(0).Get<int32_t>(i),
+              original.column(0).Get<int32_t>(i));
+    EXPECT_EQ(std::string(deserialized.column(1).Get<std::string_view>(i)),
+              std::string(original.column(1).Get<std::string_view>(i)));
+    EXPECT_DOUBLE_EQ(deserialized.column(2).Get<double>(i),
+                     original.column(2).Get<double>(i));
   }
 }
 
@@ -108,9 +108,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeWithNulls) {
   EXPECT_TRUE(deserialized.column(0).IsNull(3));
   EXPECT_FALSE(deserialized.column(0).IsNull(4));
 
-  EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(0)), 10);
-  EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(2)), 20);
-  EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(4)), 30);
+  EXPECT_EQ(deserialized.column(0).Get<int32_t>(0), 10);
+  EXPECT_EQ(deserialized.column(0).Get<int32_t>(2), 20);
+  EXPECT_EQ(deserialized.column(0).Get<int32_t>(4), 30);
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeDate32WithNulls) {
@@ -125,9 +125,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeDate32WithNulls) {
   const auto& out = deserialized.column(0);
   EXPECT_EQ(out.GetType(), DataType::kDate32);
   ASSERT_EQ(out.size(), 3U);
-  EXPECT_EQ(out.GetValue(0), Value{Date32{9538}});
+  EXPECT_EQ(out.Get<Date32>(0), Date32{9538});
   EXPECT_TRUE(out.IsNull(1));
-  EXPECT_EQ(out.GetValue(2), Value{Date32{-1}});
+  EXPECT_EQ(out.Get<Date32>(2), Date32{-1});
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeTimestampWithNulls) {
@@ -141,9 +141,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeTimestampWithNulls) {
   EXPECT_EQ(deserialized.schema().field(0).data_type, DataType::kTimestamp);
   const auto& out = deserialized.column(0);
   ASSERT_EQ(out.size(), 3U);
-  EXPECT_EQ(out.GetValue(0), Value{Timestamp{1'704'164'645'500'000}});
+  EXPECT_EQ(out.Get<Timestamp>(0), Timestamp{1'704'164'645'500'000});
   EXPECT_TRUE(out.IsNull(1));
-  EXPECT_EQ(out.GetValue(2), Value{Timestamp{-1}});
+  EXPECT_EQ(out.Get<Timestamp>(2), Timestamp{-1});
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeDecimalKeepsPrecisionAndScale) {
@@ -158,7 +158,7 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeDecimalKeepsPrecisionAndScal
   ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
   EXPECT_EQ(deserialized.schema().field(0).data_type, kMoney);
   EXPECT_EQ(deserialized.column(0).GetType(), kMoney);
-  EXPECT_EQ(ValueToString(deserialized.column(0).GetValue(0)), "-1234.56");
+  EXPECT_EQ(FormatCell(deserialized.column(0), 0), "-1234.56");
   EXPECT_TRUE(deserialized.column(0).IsNull(1));
 }
 
@@ -195,8 +195,8 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeStringWithNulls) {
   EXPECT_FALSE(deserialized.column(0).IsNull(2));
   EXPECT_TRUE(deserialized.column(0).IsNull(3));
 
-  EXPECT_EQ(std::get<std::string>(deserialized.column(0).GetValue(0)), "Hello");
-  EXPECT_EQ(std::get<std::string>(deserialized.column(0).GetValue(2)), "World");
+  EXPECT_EQ(std::string(deserialized.column(0).Get<std::string_view>(0)), "Hello");
+  EXPECT_EQ(std::string(deserialized.column(0).Get<std::string_view>(2)), "World");
 }
 
 // =============================================================================
@@ -214,10 +214,10 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeBool) {
   ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
   ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
-  EXPECT_EQ(std::get<bool>(deserialized.column(0).GetValue(0)), true);
-  EXPECT_EQ(std::get<bool>(deserialized.column(0).GetValue(1)), false);
-  EXPECT_EQ(std::get<bool>(deserialized.column(0).GetValue(2)), true);
-  EXPECT_EQ(std::get<bool>(deserialized.column(0).GetValue(3)), true);
+  EXPECT_EQ(deserialized.column(0).Get<bool>(0), true);
+  EXPECT_EQ(deserialized.column(0).Get<bool>(1), false);
+  EXPECT_EQ(deserialized.column(0).Get<bool>(2), true);
+  EXPECT_EQ(deserialized.column(0).Get<bool>(3), true);
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeInt64) {
@@ -231,9 +231,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeInt64) {
   ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
   ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
-  EXPECT_EQ(std::get<int64_t>(deserialized.column(0).GetValue(0)), 9223372036854775807LL);
-  EXPECT_EQ(std::get<int64_t>(deserialized.column(0).GetValue(1)), 0);
-  EXPECT_EQ(std::get<int64_t>(deserialized.column(0).GetValue(2)), -9223372036854775807LL);
+  EXPECT_EQ(deserialized.column(0).Get<int64_t>(0), 9223372036854775807LL);
+  EXPECT_EQ(deserialized.column(0).Get<int64_t>(1), 0);
+  EXPECT_EQ(deserialized.column(0).Get<int64_t>(2), -9223372036854775807LL);
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeFloat) {
@@ -247,9 +247,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeFloat) {
   ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
   ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
-  EXPECT_FLOAT_EQ(std::get<float>(deserialized.column(0).GetValue(0)), 1.5f);
-  EXPECT_FLOAT_EQ(std::get<float>(deserialized.column(0).GetValue(1)), 2.75f);
-  EXPECT_FLOAT_EQ(std::get<float>(deserialized.column(0).GetValue(2)), -0.125f);
+  EXPECT_FLOAT_EQ(deserialized.column(0).Get<float>(0), 1.5f);
+  EXPECT_FLOAT_EQ(deserialized.column(0).Get<float>(1), 2.75f);
+  EXPECT_FLOAT_EQ(deserialized.column(0).Get<float>(2), -0.125f);
 }
 
 TEST(RecordBatchSerializerTest, SerializeDeserializeAllIntTypes) {
@@ -274,14 +274,14 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeAllIntTypes) {
   ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
   ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
-  EXPECT_EQ(std::get<int8_t>(deserialized.column(0).GetValue(0)), 127);
-  EXPECT_EQ(std::get<int8_t>(deserialized.column(0).GetValue(1)), -128);
-  EXPECT_EQ(std::get<int16_t>(deserialized.column(1).GetValue(0)), 32767);
-  EXPECT_EQ(std::get<int16_t>(deserialized.column(1).GetValue(1)), -32768);
-  EXPECT_EQ(std::get<int32_t>(deserialized.column(2).GetValue(0)), 2147483647);
-  EXPECT_EQ(std::get<int32_t>(deserialized.column(2).GetValue(1)), -2147483648);
-  EXPECT_EQ(std::get<int64_t>(deserialized.column(3).GetValue(0)), 9223372036854775807LL);
-  EXPECT_EQ(std::get<int64_t>(deserialized.column(3).GetValue(1)), -9223372036854775807LL);
+  EXPECT_EQ(deserialized.column(0).Get<int8_t>(0), 127);
+  EXPECT_EQ(deserialized.column(0).Get<int8_t>(1), -128);
+  EXPECT_EQ(deserialized.column(1).Get<int16_t>(0), 32767);
+  EXPECT_EQ(deserialized.column(1).Get<int16_t>(1), -32768);
+  EXPECT_EQ(deserialized.column(2).Get<int32_t>(0), 2147483647);
+  EXPECT_EQ(deserialized.column(2).Get<int32_t>(1), -2147483648);
+  EXPECT_EQ(deserialized.column(3).Get<int64_t>(0), 9223372036854775807LL);
+  EXPECT_EQ(deserialized.column(3).Get<int64_t>(1), -9223372036854775807LL);
 }
 
 // =============================================================================
@@ -311,10 +311,10 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeFile) {
   EXPECT_EQ(deserialized.num_columns(), original.num_columns());
 
   for (size_t i = 0; i < 3; ++i) {
-    EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(i)),
-              std::get<int32_t>(original.column(0).GetValue(i)));
-    EXPECT_EQ(std::get<std::string>(deserialized.column(1).GetValue(i)),
-              std::get<std::string>(original.column(1).GetValue(i)));
+    EXPECT_EQ(deserialized.column(0).Get<int32_t>(i),
+              original.column(0).Get<int32_t>(i));
+    EXPECT_EQ(std::string(deserialized.column(1).Get<std::string_view>(i)),
+              std::string(original.column(1).Get<std::string_view>(i)));
   }
 
   std::filesystem::remove(filename);
@@ -348,9 +348,9 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeEmptyStrings) {
   ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
   ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
-  EXPECT_EQ(std::get<std::string>(deserialized.column(0).GetValue(0)), "");
-  EXPECT_EQ(std::get<std::string>(deserialized.column(0).GetValue(1)), "non-empty");
-  EXPECT_EQ(std::get<std::string>(deserialized.column(0).GetValue(2)), "");
+  EXPECT_EQ(std::string(deserialized.column(0).Get<std::string_view>(0)), "");
+  EXPECT_EQ(std::string(deserialized.column(0).Get<std::string_view>(1)), "non-empty");
+  EXPECT_EQ(std::string(deserialized.column(0).Get<std::string_view>(2)), "");
 }
 
 TEST(RecordBatchSerializerTest, InvalidMagicNumber) {
@@ -407,9 +407,9 @@ TEST(RecordBatchSerializerTest, LargeNumberOfRows) {
 
   EXPECT_EQ(deserialized.num_rows(), 10000U);
 
-  EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(0)), 0);
-  EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(5000)), 5000);
-  EXPECT_EQ(std::get<int32_t>(deserialized.column(0).GetValue(9999)), 9999);
+  EXPECT_EQ(deserialized.column(0).Get<int32_t>(0), 0);
+  EXPECT_EQ(deserialized.column(0).Get<int32_t>(5000), 5000);
+  EXPECT_EQ(deserialized.column(0).Get<int32_t>(9999), 9999);
 }
 
 TEST(RecordBatchSerializerTest, LongStrings) {
@@ -424,6 +424,6 @@ TEST(RecordBatchSerializerTest, LongStrings) {
   ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
   ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
 
-  EXPECT_EQ(std::get<std::string>(deserialized.column(0).GetValue(0)), long_string);
-  EXPECT_EQ(std::get<std::string>(deserialized.column(0).GetValue(1)), "short");
+  EXPECT_EQ(std::string(deserialized.column(0).Get<std::string_view>(0)), long_string);
+  EXPECT_EQ(std::string(deserialized.column(0).Get<std::string_view>(1)), "short");
 }

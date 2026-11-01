@@ -11,6 +11,9 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <string>
+#include <string_view>
+#include <type_traits>
 #include <vector>
 
 #include "quest/builder/expr_builder.hpp"
@@ -77,39 +80,39 @@ RecordBatch MakeNullableBatch() {
 // =============================================================================
 
 TEST(LiteralExpressionTest, IntLiteral) {
-  LiteralExpression expr(Value{42});
+  LiteralExpression expr(Scalar(42));
   auto batch = MakeTestBatch();
 
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   EXPECT_EQ(result->size(), batch.num_rows());
-  EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 42);
-  EXPECT_EQ(std::get<int32_t>(result->GetValue(4)), 42);
+  EXPECT_EQ(result->Get<int32_t>(0), 42);
+  EXPECT_EQ(result->Get<int32_t>(4), 42);
 }
 
 TEST(LiteralExpressionTest, DoubleLiteral) {
-  LiteralExpression expr(Value{3.14});
+  LiteralExpression expr(Scalar(3.14));
   auto batch = MakeTestBatch();
 
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   EXPECT_EQ(result->size(), batch.num_rows());
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 3.14, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 3.14, 0.001);
 }
 
 TEST(LiteralExpressionTest, BoolLiteral) {
-  LiteralExpression expr(Value{true});
+  LiteralExpression expr(Scalar(true));
   auto batch = MakeTestBatch();
 
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
-  EXPECT_TRUE(std::get<bool>(result->GetValue(0)));
+  EXPECT_TRUE(result->Get<bool>(0));
 }
 
 TEST(LiteralExpressionTest, ToString) {
-  LiteralExpression int_expr(Value{42});
-  LiteralExpression double_expr(Value{3.14});
-  LiteralExpression bool_expr(Value{true});
+  LiteralExpression int_expr(Scalar(42));
+  LiteralExpression double_expr(Scalar(3.14));
+  LiteralExpression bool_expr(Scalar(true));
 
   EXPECT_EQ(int_expr.ToString(), "42");
   EXPECT_NE(double_expr.ToString().find("3.14"), std::string::npos);
@@ -127,8 +130,8 @@ TEST(ColumnExpressionTest, GetColumn) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   EXPECT_EQ(result->size(), 5U);
-  EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 10);
-  EXPECT_EQ(std::get<int32_t>(result->GetValue(4)), 50);
+  EXPECT_EQ(result->Get<int32_t>(0), 10);
+  EXPECT_EQ(result->Get<int32_t>(4), 50);
 }
 
 TEST(ColumnExpressionTest, OutOfRange) {
@@ -150,58 +153,58 @@ TEST(ColumnExpressionTest, ToString) {
 
 TEST(EqExpressionTest, IntEquality) {
   auto left = std::make_unique<ColumnExpression>(0);
-  auto right = std::make_unique<LiteralExpression>(Value{30});
+  auto right = std::make_unique<LiteralExpression>(Scalar(30));
   BinaryExpression expr(BinaryOp::kEq, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // a: [10, 20, 30, 40, 50] == 30 -> [false, false, true, false, false]
-  EXPECT_FALSE(std::get<bool>(result->GetValue(0)));
-  EXPECT_FALSE(std::get<bool>(result->GetValue(1)));
-  EXPECT_TRUE(std::get<bool>(result->GetValue(2)));
-  EXPECT_FALSE(std::get<bool>(result->GetValue(3)));
-  EXPECT_FALSE(std::get<bool>(result->GetValue(4)));
+  EXPECT_FALSE(result->Get<bool>(0));
+  EXPECT_FALSE(result->Get<bool>(1));
+  EXPECT_TRUE(result->Get<bool>(2));
+  EXPECT_FALSE(result->Get<bool>(3));
+  EXPECT_FALSE(result->Get<bool>(4));
 }
 
 TEST(NeqExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
-  auto right = std::make_unique<LiteralExpression>(Value{30});
+  auto right = std::make_unique<LiteralExpression>(Scalar(30));
   BinaryExpression expr(BinaryOp::kNeq, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
-  EXPECT_TRUE(std::get<bool>(result->GetValue(0)));   // 10 != 30
-  EXPECT_FALSE(std::get<bool>(result->GetValue(2)));  // 30 != 30
+  EXPECT_TRUE(result->Get<bool>(0));   // 10 != 30
+  EXPECT_FALSE(result->Get<bool>(2));  // 30 != 30
 }
 
 TEST(LtExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
-  auto right = std::make_unique<LiteralExpression>(Value{30});
+  auto right = std::make_unique<LiteralExpression>(Scalar(30));
   BinaryExpression expr(BinaryOp::kLt, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // a: [10, 20, 30, 40, 50] < 30 -> [true, true, false, false, false]
-  EXPECT_TRUE(std::get<bool>(result->GetValue(0)));
-  EXPECT_TRUE(std::get<bool>(result->GetValue(1)));
-  EXPECT_FALSE(std::get<bool>(result->GetValue(2)));
+  EXPECT_TRUE(result->Get<bool>(0));
+  EXPECT_TRUE(result->Get<bool>(1));
+  EXPECT_FALSE(result->Get<bool>(2));
 }
 
 TEST(GtExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
-  auto right = std::make_unique<LiteralExpression>(Value{30});
+  auto right = std::make_unique<LiteralExpression>(Scalar(30));
   BinaryExpression expr(BinaryOp::kGt, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // a: [10, 20, 30, 40, 50] > 30 -> [false, false, false, true, true]
-  EXPECT_FALSE(std::get<bool>(result->GetValue(2)));
-  EXPECT_TRUE(std::get<bool>(result->GetValue(3)));
-  EXPECT_TRUE(std::get<bool>(result->GetValue(4)));
+  EXPECT_FALSE(result->Get<bool>(2));
+  EXPECT_TRUE(result->Get<bool>(3));
+  EXPECT_TRUE(result->Get<bool>(4));
 }
 
 // =============================================================================
@@ -217,53 +220,53 @@ TEST(AddExpressionTest, Basic) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // a + b: [10+1, 20+2, 30+3, 40+4, 50+5] = [11, 22, 33, 44, 55]
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 11.0, 0.001);
-  EXPECT_NEAR(std::get<double>(result->GetValue(2)), 33.0, 0.001);
-  EXPECT_NEAR(std::get<double>(result->GetValue(4)), 55.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 11.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(2), 33.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(4), 55.0, 0.001);
 }
 
 TEST(SubtractExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
-  auto right = std::make_unique<LiteralExpression>(Value{5});
+  auto right = std::make_unique<LiteralExpression>(Scalar(5));
   BinaryExpression expr(BinaryOp::kSubtract, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // a - 5: [5, 15, 25, 35, 45]; int32 - int32 stays int32
-  EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 5);
-  EXPECT_EQ(std::get<int32_t>(result->GetValue(4)), 45);
+  EXPECT_EQ(result->Get<int32_t>(0), 5);
+  EXPECT_EQ(result->Get<int32_t>(4), 45);
 }
 
 TEST(MultiplyExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
-  auto right = std::make_unique<LiteralExpression>(Value{2});
+  auto right = std::make_unique<LiteralExpression>(Scalar(2));
   BinaryExpression expr(BinaryOp::kMultiply, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // a * 2: [20, 40, 60, 80, 100]
-  EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 20);
-  EXPECT_EQ(std::get<int32_t>(result->GetValue(4)), 100);
+  EXPECT_EQ(result->Get<int32_t>(0), 20);
+  EXPECT_EQ(result->Get<int32_t>(4), 100);
 }
 
 TEST(DivideExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
-  auto right = std::make_unique<LiteralExpression>(Value{10});
+  auto right = std::make_unique<LiteralExpression>(Scalar(10));
   BinaryExpression expr(BinaryOp::kDivide, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // a / 10: [1, 2, 3, 4, 5]
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 1.0, 0.001);
-  EXPECT_NEAR(std::get<double>(result->GetValue(4)), 5.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 1.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(4), 5.0, 0.001);
 }
 
 TEST(DivideExpressionTest, DivisionByZero) {
-  auto left = std::make_unique<LiteralExpression>(Value{10});
-  auto right = std::make_unique<LiteralExpression>(Value{0});
+  auto left = std::make_unique<LiteralExpression>(Scalar(10));
+  auto right = std::make_unique<LiteralExpression>(Scalar(0));
   BinaryExpression expr(BinaryOp::kDivide, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
@@ -275,15 +278,15 @@ TEST(DivideExpressionTest, DivisionByZero) {
 
 TEST(ModuloExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(0);
-  auto right = std::make_unique<LiteralExpression>(Value{15});
+  auto right = std::make_unique<LiteralExpression>(Scalar(15));
   BinaryExpression expr(BinaryOp::kModulo, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // a % 15: [10, 5, 0, 10, 5]
-  EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 10);
-  EXPECT_EQ(std::get<int32_t>(result->GetValue(2)), 0);
+  EXPECT_EQ(result->Get<int32_t>(0), 10);
+  EXPECT_EQ(result->Get<int32_t>(2), 0);
 }
 
 // =============================================================================
@@ -300,22 +303,22 @@ TEST(AndExpressionTest, Basic) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // c: [true, false, true, false, true]
-  EXPECT_TRUE(std::get<bool>(result->GetValue(0)));
-  EXPECT_FALSE(std::get<bool>(result->GetValue(1)));
-  EXPECT_TRUE(std::get<bool>(result->GetValue(2)));
+  EXPECT_TRUE(result->Get<bool>(0));
+  EXPECT_FALSE(result->Get<bool>(1));
+  EXPECT_TRUE(result->Get<bool>(2));
 }
 
 TEST(OrExpressionTest, Basic) {
   auto left = std::make_unique<ColumnExpression>(2);
-  auto right = std::make_unique<LiteralExpression>(Value{false});
+  auto right = std::make_unique<LiteralExpression>(Scalar(false));
   BinaryExpression expr(BinaryOp::kOr, std::move(left), std::move(right));
 
   auto batch = MakeTestBatch();
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // c OR false = c
-  EXPECT_TRUE(std::get<bool>(result->GetValue(0)));
-  EXPECT_FALSE(std::get<bool>(result->GetValue(1)));
+  EXPECT_TRUE(result->Get<bool>(0));
+  EXPECT_FALSE(result->Get<bool>(1));
 }
 
 // =============================================================================
@@ -331,7 +334,7 @@ TEST(SumExpressionTest, Basic) {
 
   // SUM(a) = 10 + 20 + 30 + 40 + 50 = 150
   EXPECT_EQ(result->size(), 1U);
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 150.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 150.0, 0.001);
 }
 
 TEST(SumExpressionTest, WithNulls) {
@@ -342,7 +345,7 @@ TEST(SumExpressionTest, WithNulls) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // SUM of [10, null, 30, null, 50] = 90
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 90.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 90.0, 0.001);
 }
 
 TEST(AvgExpressionTest, Basic) {
@@ -354,7 +357,7 @@ TEST(AvgExpressionTest, Basic) {
 
   // AVG(a) = 150 / 5 = 30
   EXPECT_EQ(result->size(), 1U);
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 30.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 30.0, 0.001);
 }
 
 TEST(AvgExpressionTest, WithNulls) {
@@ -365,7 +368,7 @@ TEST(AvgExpressionTest, WithNulls) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // AVG of [10, null, 30, null, 50] = 90 / 3 = 30
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 30.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 30.0, 0.001);
 }
 
 TEST(CountExpressionTest, Basic) {
@@ -377,7 +380,7 @@ TEST(CountExpressionTest, Basic) {
 
   // COUNT(a) = 5 (all non-null)
   EXPECT_EQ(result->size(), 1U);
-  EXPECT_EQ(std::get<int64_t>(result->GetValue(0)), 5);
+  EXPECT_EQ(result->Get<int64_t>(0), 5);
 }
 
 TEST(CountExpressionTest, WithNulls) {
@@ -388,7 +391,7 @@ TEST(CountExpressionTest, WithNulls) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // COUNT of [10, null, 30, null, 50] = 3 (non-null only)
-  EXPECT_EQ(std::get<int64_t>(result->GetValue(0)), 3);
+  EXPECT_EQ(result->Get<int64_t>(0), 3);
 }
 
 TEST(CountStarExpressionTest, Basic) {
@@ -399,7 +402,7 @@ TEST(CountStarExpressionTest, Basic) {
 
   // COUNT(*) = 5 (all rows)
   EXPECT_EQ(result->size(), 1U);
-  EXPECT_EQ(std::get<int64_t>(result->GetValue(0)), 5);
+  EXPECT_EQ(result->Get<int64_t>(0), 5);
 }
 
 TEST(CountStarExpressionTest, WithNulls) {
@@ -409,7 +412,7 @@ TEST(CountStarExpressionTest, WithNulls) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // COUNT(*) = 5 (includes nulls)
-  EXPECT_EQ(std::get<int64_t>(result->GetValue(0)), 5);
+  EXPECT_EQ(result->Get<int64_t>(0), 5);
 }
 
 TEST(MinExpressionTest, Basic) {
@@ -421,7 +424,7 @@ TEST(MinExpressionTest, Basic) {
 
   // MIN(a) = 10
   EXPECT_EQ(result->size(), 1U);
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 10.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 10.0, 0.001);
 }
 
 TEST(MinExpressionTest, WithNulls) {
@@ -432,7 +435,7 @@ TEST(MinExpressionTest, WithNulls) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // MIN of [10, null, 30, null, 50] = 10
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 10.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 10.0, 0.001);
 }
 
 TEST(MaxExpressionTest, Basic) {
@@ -444,7 +447,7 @@ TEST(MaxExpressionTest, Basic) {
 
   // MAX(a) = 50
   EXPECT_EQ(result->size(), 1U);
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 50.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 50.0, 0.001);
 }
 
 TEST(MaxExpressionTest, WithNulls) {
@@ -455,7 +458,7 @@ TEST(MaxExpressionTest, WithNulls) {
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
 
   // MAX of [10, null, 30, null, 50] = 50
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), 50.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), 50.0, 0.001);
 }
 
 // =============================================================================
@@ -477,7 +480,7 @@ TEST(PhysicalExprEdgeCaseTest, EmptyBatch) {
   SumExpression sum_expr(std::move(input));
 
   ASSERT_OK_AND_ASSIGN(auto result, sum_expr.Evaluate(empty_batch));
-  EXPECT_EQ(std::get<double>(result->GetValue(0)), 0.0);  // SUM of nothing = 0
+  EXPECT_EQ(result->Get<double>(0), 0.0);  // SUM of nothing = 0
 }
 
 TEST(PhysicalExprEdgeCaseTest, NegativeNumbers) {
@@ -495,7 +498,7 @@ TEST(PhysicalExprEdgeCaseTest, NegativeNumbers) {
   MinExpression expr(std::move(input));
 
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
-  EXPECT_NEAR(std::get<double>(result->GetValue(0)), -10.0, 0.001);
+  EXPECT_NEAR(result->Get<double>(0), -10.0, 0.001);
 }
 
 // =============================================================================
@@ -528,31 +531,31 @@ TEST(CreatePhysicalExprTest, ArithmeticOpsRoundTripEvaluate) {
     ASSERT_NE(binary, nullptr);
     EXPECT_EQ(binary->op(), BinaryOp::kAdd);
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
-    EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 15);
+    EXPECT_EQ(result->Get<int32_t>(0), 15);
   }
   {
     BinaryExpr sub_expr(BinaryOp::kSubtract, col("a"), lit(5));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(sub_expr, input));
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
-    EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 5);
+    EXPECT_EQ(result->Get<int32_t>(0), 5);
   }
   {
     BinaryExpr mul_expr(BinaryOp::kMultiply, col("a"), lit(2));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(mul_expr, input));
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
-    EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 20);
+    EXPECT_EQ(result->Get<int32_t>(0), 20);
   }
   {
     BinaryExpr div_expr(BinaryOp::kDivide, col("a"), lit(10));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(div_expr, input));
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
-    EXPECT_NEAR(std::get<double>(result->GetValue(0)), 1.0, 0.001);
+    EXPECT_NEAR(result->Get<double>(0), 1.0, 0.001);
   }
   {
     BinaryExpr mod_expr(BinaryOp::kModulo, col("a"), lit(15));
     ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(mod_expr, input));
     ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
-    EXPECT_EQ(std::get<int32_t>(result->GetValue(0)), 10);
+    EXPECT_EQ(result->Get<int32_t>(0), 10);
   }
 }
 
@@ -582,21 +585,19 @@ RecordBatch MakeTruthTableBatch() {
 template <typename T>
 void ExpectColumn(const ColumnVector& col, const std::vector<std::optional<T>>& expected) {
   ASSERT_EQ(col.size(), expected.size());
+  using Cell = std::conditional_t<std::is_same_v<T, std::string>, std::string_view, T>;
   for (size_t i = 0; i < expected.size(); ++i) {
-    Value v = col.GetValue(i);
     if (!expected[i]) {
       EXPECT_TRUE(col.IsNull(i)) << "row " << i;
-      EXPECT_TRUE(std::holds_alternative<std::monostate>(v)) << "row " << i;
       continue;
     }
-    EXPECT_FALSE(col.IsNull(i)) << "row " << i;
-    ASSERT_TRUE(std::holds_alternative<T>(v)) << "row " << i << " holds index " << v.index();
-    EXPECT_EQ(std::get<T>(v), *expected[i]) << "row " << i;
+    ASSERT_FALSE(col.IsNull(i)) << "row " << i;
+    EXPECT_EQ(col.Get<Cell>(i), *expected[i]) << "row " << i;
   }
 }
 
 ExpressionPtr Col(size_t i) { return std::make_unique<ColumnExpression>(i); }
-ExpressionPtr Lit(Value v) { return std::make_unique<LiteralExpression>(std::move(v)); }
+ExpressionPtr Lit(Scalar v) { return std::make_unique<LiteralExpression>(std::move(v)); }
 
 }  // namespace
 
@@ -622,11 +623,11 @@ TEST(SqlNullTest, OrTruthTable) {
 
 TEST(SqlNullTest, AndOrWithNullLiteral) {
   auto batch = MakeTestBatch();  // c: [true, false, true, false, true]
-  BinaryExpression and_expr(BinaryOp::kAnd, Col(2), Lit(std::monostate{}));
+  BinaryExpression and_expr(BinaryOp::kAnd, Col(2), Lit(Scalar()));
   ASSERT_OK_AND_ASSIGN(auto and_result, and_expr.Evaluate(batch));
   ExpectColumn<bool>(*and_result, {std::nullopt, false, std::nullopt, false, std::nullopt});
 
-  BinaryExpression or_expr(BinaryOp::kOr, Col(2), Lit(std::monostate{}));
+  BinaryExpression or_expr(BinaryOp::kOr, Col(2), Lit(Scalar()));
   ASSERT_OK_AND_ASSIGN(auto or_result, or_expr.Evaluate(batch));
   ExpectColumn<bool>(*or_result, {true, std::nullopt, true, std::nullopt, true});
 }
@@ -643,14 +644,14 @@ TEST(SqlNullTest, ComparisonWithNullOperandIsNull) {
                            BinaryOp::kLtEq, BinaryOp::kGt, BinaryOp::kGtEq};
   for (auto op : kOps) {
     SCOPED_TRACE(std::string(plan::ToString(op)));
-    BinaryExpression expr(op, Col(0), Lit(Value{20}));
+    BinaryExpression expr(op, Col(0), Lit(Scalar(20)));
     ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
     EXPECT_TRUE(result->IsNull(1));
     EXPECT_TRUE(result->IsNull(3));
     EXPECT_FALSE(result->IsNull(0));
   }
 
-  BinaryExpression gt(BinaryOp::kGt, Col(0), Lit(Value{20}));
+  BinaryExpression gt(BinaryOp::kGt, Col(0), Lit(Scalar(20)));
   ASSERT_OK_AND_ASSIGN(auto result, gt.Evaluate(batch));
   ExpectColumn<bool>(*result, {false, std::nullopt, true, std::nullopt, true});
 }
@@ -658,22 +659,22 @@ TEST(SqlNullTest, ComparisonWithNullOperandIsNull) {
 TEST(SqlNullTest, ComparisonWithNullLiteralIsNull) {
   auto batch = MakeTestBatch();
   // NULL = NULL is null too, not true.
-  BinaryExpression null_eq_null(BinaryOp::kEq, Lit(std::monostate{}), Lit(std::monostate{}));
+  BinaryExpression null_eq_null(BinaryOp::kEq, Lit(Scalar()), Lit(Scalar()));
   ASSERT_OK_AND_ASSIGN(auto r1, null_eq_null.Evaluate(batch));
   ExpectColumn<bool>(*r1, std::vector<std::optional<bool>>(5, std::nullopt));
 
-  BinaryExpression a_neq_null(BinaryOp::kNeq, Col(0), Lit(std::monostate{}));
+  BinaryExpression a_neq_null(BinaryOp::kNeq, Col(0), Lit(Scalar()));
   ASSERT_OK_AND_ASSIGN(auto r2, a_neq_null.Evaluate(batch));
   ExpectColumn<bool>(*r2, std::vector<std::optional<bool>>(5, std::nullopt));
 }
 
 TEST(SqlNullTest, ArithmeticWithNullIsNull) {
   auto batch = MakeNullableBatch();  // a: [10, null, 30, null, 50]
-  BinaryExpression add(BinaryOp::kAdd, Col(0), Lit(Value{1}));
+  BinaryExpression add(BinaryOp::kAdd, Col(0), Lit(Scalar(1)));
   ASSERT_OK_AND_ASSIGN(auto result, add.Evaluate(batch));
   ExpectColumn<int32_t>(*result, {11, std::nullopt, 31, std::nullopt, 51});
 
-  BinaryExpression add_null(BinaryOp::kAdd, Col(0), Lit(std::monostate{}));
+  BinaryExpression add_null(BinaryOp::kAdd, Col(0), Lit(Scalar()));
   ASSERT_OK_AND_ASSIGN(auto all_null, add_null.Evaluate(batch));
   EXPECT_EQ(all_null->GetType(), DataType::kInt32);
   ExpectColumn<int32_t>(*all_null, std::vector<std::optional<int32_t>>(5, std::nullopt));
@@ -686,23 +687,23 @@ TEST(SqlNullTest, IntArithmeticStaysIntegral) {
     ExpressionPtr left;
     ExpressionPtr right;
     DataType type;
-    Value first;
+    std::string first;
   };
   Case cases[] = {
-      {BinaryOp::kAdd, Col(0), Col(0), DataType::kInt32, Value{int32_t{20}}},
-      {BinaryOp::kSubtract, Col(0), Lit(Value{5}), DataType::kInt32, Value{int32_t{5}}},
-      {BinaryOp::kMultiply, Col(0), Lit(Value{int64_t{3}}), DataType::kInt64, Value{int64_t{30}}},
-      {BinaryOp::kModulo, Col(0), Lit(Value{3}), DataType::kInt32, Value{int32_t{1}}},
+      {BinaryOp::kAdd, Col(0), Col(0), DataType::kInt32, "20"},
+      {BinaryOp::kSubtract, Col(0), Lit(Scalar(5)), DataType::kInt32, "5"},
+      {BinaryOp::kMultiply, Col(0), Lit(Scalar(int64_t{3})), DataType::kInt64, "30"},
+      {BinaryOp::kModulo, Col(0), Lit(Scalar(3)), DataType::kInt32, "1"},
       // int / int is real division, as in DuckDB.
-      {BinaryOp::kDivide, Col(0), Lit(Value{4}), DataType::kDouble, Value{2.5}},
-      {BinaryOp::kAdd, Col(0), Col(1), DataType::kDouble, Value{11.0}},
+      {BinaryOp::kDivide, Col(0), Lit(Scalar(4)), DataType::kDouble, "2.500000"},
+      {BinaryOp::kAdd, Col(0), Col(1), DataType::kDouble, "11.000000"},
   };
   for (auto& c : cases) {
     BinaryExpression expr(c.op, std::move(c.left), std::move(c.right));
     SCOPED_TRACE(expr.ToString());
     ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
     EXPECT_EQ(result->GetType(), c.type);
-    EXPECT_EQ(result->GetValue(0), c.first);
+    EXPECT_EQ(FormatCell(*result, 0), c.first);
   }
 }
 
@@ -714,7 +715,7 @@ TEST(SqlNullTest, SmallIntLiteralsAreNumeric) {
   EXPECT_TRUE(field.data_type == DataType::kInt16);
   ASSERT_OK_AND_ASSIGN(auto phys, CreatePhysicalExpr(expr, input));
   ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(batch));
-  EXPECT_EQ(result->GetValue(0), Value{int16_t{3}});
+  EXPECT_EQ(result->Get<int16_t>(0), 3);
 }
 
 TEST(SqlNullTest, DivisionAndModuloByZeroAreNull) {
@@ -722,10 +723,10 @@ TEST(SqlNullTest, DivisionAndModuloByZeroAreNull) {
   const BinaryOp kOps[] = {BinaryOp::kDivide, BinaryOp::kModulo};
   for (auto op : kOps) {
     SCOPED_TRACE(std::string(plan::ToString(op)));
-    BinaryExpression ints(op, Col(0), Lit(Value{0}));
+    BinaryExpression ints(op, Col(0), Lit(Scalar(0)));
     ASSERT_OK_AND_ASSIGN(auto r1, ints.Evaluate(batch));
     EXPECT_TRUE(r1->IsNull(0));
-    BinaryExpression doubles(op, Col(1), Lit(Value{0.0}));
+    BinaryExpression doubles(op, Col(1), Lit(Scalar(0.0)));
     ASSERT_OK_AND_ASSIGN(auto r2, doubles.Evaluate(batch));
     EXPECT_TRUE(r2->IsNull(0));
   }
@@ -733,14 +734,14 @@ TEST(SqlNullTest, DivisionAndModuloByZeroAreNull) {
 
 TEST(SqlNullTest, IntegerOverflowIsAnError) {
   auto batch = MakeTestBatch();
-  BinaryExpression expr(BinaryOp::kAdd, Lit(Value{std::numeric_limits<int32_t>::max()}),
-                        Lit(Value{1}));
+  BinaryExpression expr(BinaryOp::kAdd, Lit(Scalar(std::numeric_limits<int32_t>::max())),
+                        Lit(Scalar(1)));
   EXPECT_FALSE(expr.Evaluate(batch).has_value());
 }
 
 TEST(SqlNullTest, ArithmeticRejectsNonNumericOperand) {
   auto batch = MakeTestBatch();
-  BinaryExpression on_string(BinaryOp::kAdd, Col(0), Lit(Value{std::string("x")}));
+  BinaryExpression on_string(BinaryOp::kAdd, Col(0), Lit(Scalar(std::string("x"))));
   EXPECT_FALSE(on_string.Evaluate(batch).has_value());
   BinaryExpression on_bool(BinaryOp::kAdd, Col(0), Col(2));
   EXPECT_FALSE(on_bool.Evaluate(batch).has_value());
@@ -748,14 +749,14 @@ TEST(SqlNullTest, ArithmeticRejectsNonNumericOperand) {
 
 TEST(SqlNullTest, FilterDropsNullPredicateRows) {
   auto batch = MakeNullableBatch();  // a: [10, null, 30, null, 50]
-  BinaryExpression pred(BinaryOp::kGt, Col(0), Lit(Value{20}));
+  BinaryExpression pred(BinaryOp::kGt, Col(0), Lit(Scalar(20)));
   ASSERT_OK_AND_ASSIGN(auto out, FilterRecordBatch(batch, pred));
   ExpectColumn<int32_t>(out.column(0), {30, 50});
 
   // NOT selected is not the same as false: (a > 20) OR NULL keeps only the true rows.
   BinaryExpression or_null(BinaryOp::kOr, std::make_unique<BinaryExpression>(
-                                              BinaryOp::kGt, Col(0), Lit(Value{20})),
-                           Lit(std::monostate{}));
+                                              BinaryOp::kGt, Col(0), Lit(Scalar(20))),
+                           Lit(Scalar()));
   ASSERT_OK_AND_ASSIGN(auto out2, FilterRecordBatch(batch, or_null));
   ASSERT_EQ(out2.num_rows(), 2U);
   ExpectColumn<int32_t>(out2.column(0), {30, 50});
@@ -763,7 +764,7 @@ TEST(SqlNullTest, FilterDropsNullPredicateRows) {
 
 TEST(SqlNullTest, FilterOnNullLiteralKeepsNoRowAndOnNonBoolIsTypeError) {
   auto batch = MakeNullableBatch();
-  LiteralExpression null_predicate(std::monostate{});
+  LiteralExpression null_predicate{Scalar()};
   ASSERT_OK_AND_ASSIGN(auto none, FilterRecordBatch(batch, null_predicate));
   EXPECT_EQ(none.num_rows(), 0U);
 
@@ -775,7 +776,7 @@ TEST(SqlNullTest, FilterOnNullLiteralKeepsNoRowAndOnNonBoolIsTypeError) {
 
 TEST(SqlNullTest, FilterPreservesNullsInSelectedRows) {
   auto batch = MakeNullableBatch();  // a: [10, null, 30, null, 50]
-  LiteralExpression keep_all(Value{true});
+  LiteralExpression keep_all(Scalar(true));
   ASSERT_OK_AND_ASSIGN(auto out, FilterRecordBatch(batch, keep_all));
   ExpectColumn<int32_t>(out.column(0), {10, std::nullopt, 30, std::nullopt, 50});
 }
@@ -794,7 +795,7 @@ TEST(SqlNullTest, LogicalResultTypeMatchesPhysical) {
     v.emplace_back(col("a"), col("b"));
     v.emplace_back(col("b"), col("a"));
     v.emplace_back(col("a"), lit(int64_t{7}));
-    v.emplace_back(col("a"), lit(Value{std::monostate{}}));
+    v.emplace_back(col("a"), lit(Scalar()));
     return v;
   };
   for (auto op : kOps) {
@@ -846,7 +847,7 @@ RecordBatch MakePriorityBatch() {
 
 TEST(CaseExpressionTest, NullWhenTakesElse) {
   auto batch = MakeTruthTableBatch();  // l: [t, t, t, f, f, f, null, null, null]
-  auto expr = Case(Col(0), Lit(Value{1}), Lit(Value{0}));
+  auto expr = Case(Col(0), Lit(Scalar(1)), Lit(Scalar(0)));
   ASSERT_OK_AND_ASSIGN(auto result, expr->Evaluate(batch));
   EXPECT_EQ(result->GetType(), DataType::kInt32);
   ExpectColumn<int32_t>(*result, {1, 1, 1, 0, 0, 0, 0, 0, 0});
@@ -854,25 +855,25 @@ TEST(CaseExpressionTest, NullWhenTakesElse) {
 
 TEST(CaseExpressionTest, NullLiteralWhenTakesElse) {
   auto batch = MakeTestBatch();
-  auto expr = Case(Lit(std::monostate{}), Lit(Value{1}), Lit(Value{0}));
+  auto expr = Case(Lit(Scalar()), Lit(Scalar(1)), Lit(Scalar(0)));
   ASSERT_OK_AND_ASSIGN(auto result, expr->Evaluate(batch));
   ExpectColumn<int32_t>(*result, {0, 0, 0, 0, 0});
 }
 
 TEST(CaseExpressionTest, NullsInChosenBranchArePreserved) {
   auto batch = MakeNullableBatch();  // a: [10, null, 30, null, 50]
-  auto then_a = Case(Gt(Col(0), Lit(Value{20})), Col(0), Lit(std::monostate{}));
+  auto then_a = Case(Gt(Col(0), Lit(Scalar(20))), Col(0), Lit(Scalar()));
   ASSERT_OK_AND_ASSIGN(auto r1, then_a->Evaluate(batch));
   EXPECT_EQ(r1->GetType(), DataType::kInt32);
   ExpectColumn<int32_t>(*r1, {std::nullopt, std::nullopt, 30, std::nullopt, 50});
 
-  auto else_a = Case(Gt(Col(0), Lit(Value{20})), Lit(std::monostate{}), Col(0));
+  auto else_a = Case(Gt(Col(0), Lit(Scalar(20))), Lit(Scalar()), Col(0));
   ASSERT_OK_AND_ASSIGN(auto r2, else_a->Evaluate(batch));
   EXPECT_EQ(r2->GetType(), DataType::kInt32);
   ExpectColumn<int32_t>(*r2, {10, std::nullopt, std::nullopt, std::nullopt, std::nullopt});
 
   // A null in the branch that is not chosen does not leak into the result.
-  auto expr = Case(Gt(Col(0), Lit(Value{20})), Lit(Value{1}), Col(0));
+  auto expr = Case(Gt(Col(0), Lit(Scalar(20))), Lit(Scalar(1)), Col(0));
   ASSERT_OK_AND_ASSIGN(auto r3, expr->Evaluate(batch));
   ExpectColumn<int32_t>(*r3, {10, std::nullopt, 1, std::nullopt, 1});
 }
@@ -884,7 +885,7 @@ TEST(CaseExpressionTest, BranchesWidenToCommonType) {
   EXPECT_EQ(r1->GetType(), DataType::kInt32);
   ExpectColumn<int32_t>(*r1, {10, 20, 30, 40, 50});
 
-  auto int64 = Case(Col(2), Col(0), Lit(Value{int64_t{7}}));
+  auto int64 = Case(Col(2), Col(0), Lit(Scalar(int64_t{7})));
   ASSERT_OK_AND_ASSIGN(auto r2, int64->Evaluate(batch));
   EXPECT_EQ(r2->GetType(), DataType::kInt64);
   ExpectColumn<int64_t>(*r2, {10, 7, 30, 7, 50});
@@ -894,12 +895,12 @@ TEST(CaseExpressionTest, BranchesWidenToCommonType) {
   EXPECT_EQ(r3->GetType(), DataType::kDouble);
   ExpectColumn<double>(*r3, {10.0, 2.0, 30.0, 4.0, 50.0});
 
-  auto strings = Case(Col(2), Lit(Value{std::string("y")}), Lit(Value{std::string("n")}));
+  auto strings = Case(Col(2), Lit(Scalar(std::string("y"))), Lit(Scalar(std::string("n"))));
   ASSERT_OK_AND_ASSIGN(auto r4, strings->Evaluate(batch));
   EXPECT_EQ(r4->GetType(), DataType::kString);
   ExpectColumn<std::string>(*r4, {"y", "n", "y", "n", "y"});
 
-  auto bools = Case(Col(2), Lit(Value{false}), Col(2));
+  auto bools = Case(Col(2), Lit(Scalar(false)), Col(2));
   ASSERT_OK_AND_ASSIGN(auto r5, bools->Evaluate(batch));
   EXPECT_EQ(r5->GetType(), DataType::kBool);
   ExpectColumn<bool>(*r5, {false, false, false, false, false});
@@ -907,12 +908,12 @@ TEST(CaseExpressionTest, BranchesWidenToCommonType) {
 
 TEST(CaseExpressionTest, TypeErrors) {
   auto batch = MakeTestBatch();
-  auto non_bool_when = Case(Col(0), Lit(Value{1}), Lit(Value{0}));
+  auto non_bool_when = Case(Col(0), Lit(Scalar(1)), Lit(Scalar(0)));
   auto r1 = non_bool_when->Evaluate(batch);
   ASSERT_FALSE(r1.has_value());
   EXPECT_EQ(r1.error().code(), ErrorCode::TypeError);
 
-  auto int_vs_string = Case(Col(2), Col(0), Lit(Value{std::string("x")}));
+  auto int_vs_string = Case(Col(2), Col(0), Lit(Scalar(std::string("x"))));
   auto r2 = int_vs_string->Evaluate(batch);
   ASSERT_FALSE(r2.has_value());
   EXPECT_EQ(r2.error().code(), ErrorCode::TypeError);
@@ -924,16 +925,16 @@ TEST(CaseExpressionTest, TypeErrors) {
 }
 
 TEST(CaseExpressionTest, ToString) {
-  auto expr = Case(Col(2), Lit(Value{1}), Lit(Value{0}));
+  auto expr = Case(Col(2), Lit(Scalar(1)), Lit(Scalar(0)));
   EXPECT_EQ(expr->ToString(), "CASE WHEN #2 THEN 1 ELSE 0 END");
 }
 
 TEST(CaseExpressionTest, EmptyBatch) {
   RecordBatch empty(Schema({Field("c", DataType::kBool)}),
                     {MakeColumn<bool>(DataType::kBool, {})});
-  auto expr = Case(Col(0), Lit(Value{1}), Col(0));
+  auto expr = Case(Col(0), Lit(Scalar(1)), Col(0));
   ASSERT_FALSE(expr->Evaluate(empty).has_value());  // int32 vs bool is still a type error
-  auto ok = Case(Col(0), Lit(Value{1}), Lit(Value{0}));
+  auto ok = Case(Col(0), Lit(Scalar(1)), Lit(Scalar(0)));
   ASSERT_OK_AND_ASSIGN(auto result, ok->Evaluate(empty));
   EXPECT_EQ(result->size(), 0U);
 }
@@ -942,20 +943,20 @@ TEST(CaseExpressionTest, Q12PriorityFlag) {
   // CASE WHEN o_orderpriority = '1-URGENT' OR o_orderpriority = '2-HIGH' THEN 1 ELSE 0 END
   auto batch = MakePriorityBatch();
   auto is = [](const char* s) {
-    return std::make_unique<BinaryExpression>(BinaryOp::kEq, Col(0), Lit(Value{std::string(s)}));
+    return std::make_unique<BinaryExpression>(BinaryOp::kEq, Col(0), Lit(Scalar(std::string(s))));
   };
   auto isnt = [](const char* s) {
-    return std::make_unique<BinaryExpression>(BinaryOp::kNeq, Col(0), Lit(Value{std::string(s)}));
+    return std::make_unique<BinaryExpression>(BinaryOp::kNeq, Col(0), Lit(Scalar(std::string(s))));
   };
   auto high = Case(std::make_unique<BinaryExpression>(BinaryOp::kOr, is("1-URGENT"), is("2-HIGH")),
-                   Lit(Value{1}), Lit(Value{0}));
+                   Lit(Scalar(1)), Lit(Scalar(0)));
   ASSERT_OK_AND_ASSIGN(auto high_result, high->Evaluate(batch));
   EXPECT_EQ(high_result->GetType(), DataType::kInt32);
   ExpectColumn<int32_t>(*high_result, {1, 1, 0, 0, 0, 1});
 
   auto low =
       Case(std::make_unique<BinaryExpression>(BinaryOp::kAnd, isnt("1-URGENT"), isnt("2-HIGH")),
-           Lit(Value{1}), Lit(Value{0}));
+           Lit(Scalar(1)), Lit(Scalar(0)));
   ASSERT_OK_AND_ASSIGN(auto low_result, low->Evaluate(batch));
   ExpectColumn<int32_t>(*low_result, {0, 0, 1, 0, 1, 0});
 }
@@ -981,8 +982,8 @@ TEST(CaseExprTest, ResultTypeIsCommonTypeOfBranches) {
       {col("a"), col("b"), DataType::kDouble},
       {lit(1.5F), col("a"), DataType::kDouble},
       {lit(1.5F), lit(2.5F), DataType::kFloat},
-      {col("a"), lit(Value{std::monostate{}}), DataType::kInt32},
-      {lit(Value{std::monostate{}}), col("b"), DataType::kDouble},
+      {col("a"), lit(Scalar()), DataType::kInt32},
+      {lit(Scalar()), col("b"), DataType::kDouble},
       {col("s"), lit(std::string("x")), DataType::kString},
       {col("c"), lit(false), DataType::kBool},
   };
@@ -1025,7 +1026,7 @@ TEST(CaseExprTest, LogicalTypeMatchesPhysical) {
     v.emplace_back(col("a"), col("a"));
     v.emplace_back(col("a"), lit(int64_t{7}));
     v.emplace_back(col("b"), col("a"));
-    v.emplace_back(lit(Value{std::monostate{}}), col("a"));
+    v.emplace_back(lit(Scalar()), col("a"));
     v.emplace_back(col("c"), lit(true));
     return v;
   };
@@ -1097,7 +1098,7 @@ TEST(Date32ExprTest, ComparisonsFollowCalendarOrderAndNullSemantics) {
 
 TEST(Date32ExprTest, ComparisonWithNullLiteralIsNull) {
   auto batch = MakeDateBatch();
-  BinaryExpression expr(BinaryOp::kLt, Col(1), Lit(std::monostate{}));
+  BinaryExpression expr(BinaryOp::kLt, Col(1), Lit(Scalar()));
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
   ExpectColumn<bool>(*result, std::vector<std::optional<bool>>(3, std::nullopt));
 }
@@ -1105,7 +1106,7 @@ TEST(Date32ExprTest, ComparisonWithNullLiteralIsNull) {
 TEST(BinaryExpressionTest, NullLiteralOnEmptyBatchKeepsTheOtherType) {
   RecordBatch batch(Schema({Field("x", DataType::kInt32)}),
                     {MakeColumn<int32_t>(DataType::kInt32, {})});
-  BinaryExpression plus_null(BinaryOp::kAdd, Col(0), Lit(std::monostate{}));
+  BinaryExpression plus_null(BinaryOp::kAdd, Col(0), Lit(Scalar()));
   ASSERT_OK_AND_ASSIGN(auto result, plus_null.Evaluate(batch));
   EXPECT_EQ(result->GetType(), DataType::kInt32);
   EXPECT_EQ(result->size(), 0U);
@@ -1118,10 +1119,10 @@ TEST(Date32ExprTest, ComparisonWithNonDateIsTypeError) {
   ASSERT_FALSE(r1.has_value());
   EXPECT_EQ(r1.error().code(), ErrorCode::TypeError);
 
-  BinaryExpression int_date(BinaryOp::kLt, Lit(Value{8766}), Col(0));
+  BinaryExpression int_date(BinaryOp::kLt, Lit(Scalar(8766)), Col(0));
   EXPECT_FALSE(int_date.Evaluate(batch).has_value());
 
-  BinaryExpression date_string(BinaryOp::kEq, Col(0), Lit(Value{std::string("1994-01-01")}));
+  BinaryExpression date_string(BinaryOp::kEq, Col(0), Lit(Scalar(std::string("1994-01-01"))));
   EXPECT_FALSE(date_string.Evaluate(batch).has_value());
 }
 
@@ -1132,7 +1133,7 @@ TEST(Date32ExprTest, ArithmeticOnDatesIsTypeError) {
   ASSERT_FALSE(r1.has_value());
   EXPECT_EQ(r1.error().code(), ErrorCode::TypeError);
 
-  BinaryExpression date_int(BinaryOp::kAdd, Col(1), Lit(Value{1}));
+  BinaryExpression date_int(BinaryOp::kAdd, Col(1), Lit(Scalar(1)));
   EXPECT_FALSE(date_int.Evaluate(batch).has_value());
 }
 
@@ -1142,7 +1143,7 @@ TEST(TimestampExprTest, ComparesOnlyWithTimestamps) {
   RecordBatch batch(Schema({Field("ts", DataType::kTimestamp), Field("d", DataType::kDate32)}),
                     {ts, date});
 
-  BinaryExpression later(BinaryOp::kLt, Lit(Value{Timestamp{0}}), Col(0));
+  BinaryExpression later(BinaryOp::kLt, Lit(Scalar(Timestamp{0})), Col(0));
   ASSERT_OK_AND_ASSIGN(auto result, later.Evaluate(batch));
   ExpectColumn<bool>(*result, {false, true});
   EXPECT_EQ(later.ToString(), "TIMESTAMP '1970-01-01 00:00:00' < #0");
@@ -1152,7 +1153,7 @@ TEST(TimestampExprTest, ComparesOnlyWithTimestamps) {
   ASSERT_FALSE(mixed.has_value());
   EXPECT_EQ(mixed.error().code(), ErrorCode::TypeError);
 
-  BinaryExpression ts_plus(BinaryOp::kAdd, Col(0), Lit(Value{1}));
+  BinaryExpression ts_plus(BinaryOp::kAdd, Col(0), Lit(Scalar(1)));
   EXPECT_FALSE(ts_plus.Evaluate(batch).has_value());
 }
 
@@ -1163,7 +1164,7 @@ TEST(Date32ExprTest, LogicalTypesMatchPhysicalRules) {
   ASSERT_OK_AND_ASSIGN(auto cmp_field, cmp.ToField(input));
   EXPECT_TRUE(cmp_field.data_type == DataType::kBool);
 
-  BinaryExpr cmp_null(BinaryOp::kEq, col("a"), lit(Value{std::monostate{}}));
+  BinaryExpr cmp_null(BinaryOp::kEq, col("a"), lit(Scalar()));
   EXPECT_TRUE(cmp_null.ToField(input).has_value());
 
   BinaryExpr mixed(BinaryOp::kEq, col("a"), col("i"));
@@ -1177,7 +1178,7 @@ TEST(Date32ExprTest, LitDateIsATypedDate32Literal) {
   auto built = LitDate(std::chrono::year{1994} / 1 / 1).Build();
   const auto* literal = dynamic_cast<const Literal*>(built.get());
   ASSERT_NE(literal, nullptr);
-  EXPECT_EQ(literal->value(), Value{k19940101});
+  EXPECT_EQ(literal->value().Get<Date32>(), k19940101);
   EXPECT_EQ(literal->ToString(), "DATE '1994-01-01'");
 
   SchemaOnlyPlan input(Schema({Field("b", DataType::kDate32)}));
@@ -1188,14 +1189,14 @@ TEST(Date32ExprTest, LitDateIsATypedDate32Literal) {
   EXPECT_EQ(phys->ToString(), "DATE '1994-01-01'");
   ASSERT_OK_AND_ASSIGN(auto result, phys->Evaluate(MakeDateBatch()));
   EXPECT_EQ(result->GetType(), DataType::kDate32);
-  EXPECT_EQ(result->GetValue(2), Value{k19940101});
+  EXPECT_EQ(result->Get<Date32>(2), k19940101);
 
   EXPECT_EQ(LitDate(std::chrono::year{2000} / 2 / 29).GetExpr().ToString(), "DATE '2000-02-29'");
 }
 
 TEST(Date32ExprTest, FilterKeepsDate32Columns) {
   auto batch = MakeDateBatch();
-  BinaryExpression pred(BinaryOp::kGtEq, Col(1), Lit(Value{k19941231}));
+  BinaryExpression pred(BinaryOp::kGtEq, Col(1), Lit(Scalar(k19941231)));
   ASSERT_OK_AND_ASSIGN(auto out, FilterRecordBatch(batch, pred));
   ASSERT_EQ(out.num_rows(), 1U);
   EXPECT_EQ(out.column(0).GetType(), DataType::kDate32);
@@ -1246,13 +1247,13 @@ TEST(DecimalExprTest, ArithmeticIsExact) {
                      Decimals(kMoney, {2, 2})});
   auto disc_price = std::make_unique<BinaryExpression>(
       BinaryOp::kMultiply, Col(0),
-      std::make_unique<BinaryExpression>(BinaryOp::kSubtract, Lit(Value{1}), Col(1)));
+      std::make_unique<BinaryExpression>(BinaryOp::kSubtract, Lit(Scalar(1)), Col(1)));
   BinaryExpression charge(
       BinaryOp::kMultiply, std::move(disc_price),
-      std::make_unique<BinaryExpression>(BinaryOp::kAdd, Lit(Value{1}), Col(2)));
+      std::make_unique<BinaryExpression>(BinaryOp::kAdd, Lit(Scalar(1)), Col(2)));
   ASSERT_OK_AND_ASSIGN(auto result, charge.Evaluate(batch));
   EXPECT_EQ(result->GetType(), DataType::Decimal(18, 6));
-  EXPECT_EQ(ValueToString(result->GetValue(0)), "1196.288640");  // DuckDB's answer
+  EXPECT_EQ(FormatCell(*result, 0), "1196.288640");  // DuckDB's answer
   EXPECT_TRUE(result->IsNull(1));
 }
 
@@ -1273,15 +1274,15 @@ TEST(DecimalExprTest, ComparesAcrossScalesIntegersAndDoubles) {
   ASSERT_OK_AND_ASSIGN(auto eq, same_value.Evaluate(batch));
   ExpectColumn<bool>(*eq, {true, true});
 
-  BinaryExpression vs_literal(BinaryOp::kLtEq, Col(0), Lit(Value{DecimalValue{5, 2}}));
+  BinaryExpression vs_literal(BinaryOp::kLtEq, Col(0), Lit(Scalar::Decimal(5, 2)));
   ASSERT_OK_AND_ASSIGN(auto le, vs_literal.Evaluate(batch));
   ExpectColumn<bool>(*le, {true, false});
 
-  BinaryExpression vs_double(BinaryOp::kEq, Col(0), Lit(Value{0.05}));
+  BinaryExpression vs_double(BinaryOp::kEq, Col(0), Lit(Scalar(0.05)));
   ASSERT_OK_AND_ASSIGN(auto eq_double, vs_double.Evaluate(batch));
   ExpectColumn<bool>(*eq_double, {true, false});
 
-  BinaryExpression vs_int(BinaryOp::kGt, Col(0), Lit(Value{4}));
+  BinaryExpression vs_int(BinaryOp::kGt, Col(0), Lit(Scalar(4)));
   ASSERT_OK_AND_ASSIGN(auto gt, vs_int.Evaluate(batch));
   ExpectColumn<bool>(*gt, {false, true});
 }
@@ -1292,11 +1293,11 @@ TEST(DecimalExprTest, CaseWidensAnIntegerBranchToTheDecimal) {
                      MakeColumn<bool>(DataType::kBool, {true, false})});
   CaseExpression::Branches branches;
   branches.emplace_back(Col(1), Col(0));
-  CaseExpression expr(std::move(branches), Lit(Value{0}));
+  CaseExpression expr(std::move(branches), Lit(Scalar(0)));
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
   EXPECT_EQ(result->GetType(), DataType::Decimal(15, 2));  // as DuckDB, no carry digit
-  EXPECT_EQ(ValueToString(result->GetValue(0)), "1.25");
-  EXPECT_EQ(ValueToString(result->GetValue(1)), "0.00");
+  EXPECT_EQ(FormatCell(*result, 0), "1.25");
+  EXPECT_EQ(FormatCell(*result, 1), "0.00");
 }
 
 TEST(DecimalExprTest, CommonTypeMatchesDuckDb) {
@@ -1306,18 +1307,18 @@ TEST(DecimalExprTest, CommonTypeMatchesDuckDb) {
 }
 
 TEST(DecimalExprTest, LiteralIsTypedLikeDuckDb) {
-  LiteralExpression lit(Value{DecimalValue{5, 2}});
+  LiteralExpression lit(Scalar::Decimal(5, 2));
   RecordBatch batch(Schema({Field("x", DataType::kInt32)}), {MakeColumn<int32_t>(DataType::kInt32, {1})});
   ASSERT_OK_AND_ASSIGN(auto result, lit.Evaluate(batch));
   EXPECT_EQ(result->GetType(), DataType::Decimal(3, 2));
   EXPECT_EQ(lit.ToString(), "0.05");
-  EXPECT_EQ(DecimalValueType(DecimalValue{123456, 2}), DataType::Decimal(6, 2));
+  EXPECT_EQ(Scalar::Decimal(123456, 2).type(), DataType::Decimal(6, 2));
 }
 
 TEST(SqlNullTest, BoolComparesWithIntegerAsInteger) {
   RecordBatch batch(Schema({Field("b", DataType::kBool)}),
                     {MakeColumn<bool>(DataType::kBool, {true, false, std::nullopt})});
-  BinaryExpression eq_one(BinaryOp::kEq, Col(0), Lit(Value{1}));
+  BinaryExpression eq_one(BinaryOp::kEq, Col(0), Lit(Scalar(1)));
   ASSERT_OK_AND_ASSIGN(auto result, eq_one.Evaluate(batch));
   ExpectColumn<bool>(*result, {true, false, std::nullopt});
 }
@@ -1328,7 +1329,7 @@ TEST(SqlNullTest, ComputedNullKeepsItsType) {
                     {MakeColumn<int32_t>(DataType::kInt32, {1, 2})});
   BinaryExpression expr(
       BinaryOp::kAdd, Col(0),
-      std::make_unique<BinaryExpression>(BinaryOp::kAdd, Lit(std::monostate{}), Lit(Value{1.5})));
+      std::make_unique<BinaryExpression>(BinaryOp::kAdd, Lit(Scalar()), Lit(Scalar(1.5))));
   ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
   EXPECT_EQ(result->GetType(), DataType::kDouble);
   EXPECT_TRUE(result->IsNull(0));

@@ -380,8 +380,8 @@ TEST(HashAggregateTest, FloatKeysGroupMinusZeroAndNaN) {
                        Drive(op, {MakeBatch({{"g", Doubles({0.0, -0.0, kNaN, -kNaN})}})}));
   ASSERT_TRUE(out.has_value());
   ASSERT_EQ(out->num_rows(), 2U);
-  EXPECT_EQ(out->column(1).GetValue(0), columnar::Value{std::int64_t{2}});
-  EXPECT_EQ(out->column(1).GetValue(1), columnar::Value{std::int64_t{2}});
+  EXPECT_EQ(out->column(1).Get<std::int64_t>(0), 2);
+  EXPECT_EQ(out->column(1).Get<std::int64_t>(1), 2);
 }
 
 TEST(HashAggregateTest, StringMinMaxCompareBytewise) {

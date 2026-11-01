@@ -18,7 +18,6 @@
 #include <string_view>
 #include <utility>
 #include <type_traits>
-#include <variant>
 #include <vector>
 
 #include "quest/columnar/types.hpp"
@@ -26,40 +25,7 @@
 
 namespace quest::columnar {
 
-/// @brief A Decimal cell as a `Value`: the unscaled value and its column's scale. Values
-/// compare by member, so only values of one scale (one column) compare correctly.
-struct DecimalValue {
-  std::int64_t unscaled;
-  std::uint8_t scale;
-  auto operator<=>(const DecimalValue&) const = default;
-};
-
-using Value = std::variant<std::monostate,  // null
-                           bool, int8_t, int16_t, int32_t, int64_t, float,
-                           double, std::string, Date32, Timestamp, DecimalValue>;
-
-/// @brief The type of a Decimal literal, as DuckDB types `0.05`: Decimal(3, 2).
-[[nodiscard]] constexpr DataType DecimalValueType(const DecimalValue& value) noexcept {
-  int digits = 1;
-  for (auto magnitude = value.unscaled; magnitude >= 10 || magnitude <= -10; magnitude /= 10) {
-    ++digits;
-  }
-  return DataType::Decimal(static_cast<std::uint8_t>(std::max(digits, value.scale + 1)),
-                           value.scale);
-}
-
 __extension__ using Int128 = __int128;  // __extension__: -Wpedantic rejects bare __int128
-
-/// @brief An integer or Decimal value's unscaled digits and scale (an integer has scale 0).
-template <typename V>
-  requires(std::is_integral_v<V> || std::same_as<V, DecimalValue>)
-[[nodiscard]] constexpr std::pair<std::int64_t, int> UnscaledAndScale(const V& value) noexcept {
-  if constexpr (std::same_as<V, DecimalValue>) {
-    return {value.unscaled, value.scale};
-  } else {
-    return {static_cast<std::int64_t>(value), 0};
-  }
-}
 
 /// @brief @p unscaled at @p from_scale rewritten at @p to_scale (>= from_scale), or nullopt
 /// if it overflows an int64.
@@ -72,71 +38,30 @@ template <typename V>
   return out;
 }
 
-/// @brief A numeric `Value` alternative as double; a Decimal divides by 10^scale.
-template <typename V>
-[[nodiscard]] double ToDoubleValue(const V& value) noexcept {
-  if constexpr (std::same_as<V, DecimalValue>) {
-    return static_cast<double>(value.unscaled) / static_cast<double>(PowerOfTen(value.scale));
-  } else {
-    return static_cast<double>(value);
-  }
+/// @brief "1994-01-01".
+[[nodiscard]] inline std::string FormatDate32(Date32 date) {
+  const std::chrono::year_month_day ymd{std::chrono::sys_days{std::chrono::days{date.days}}};
+  return std::format("{:04}-{:02}-{:02}", static_cast<int>(ymd.year()),
+                     static_cast<unsigned>(ymd.month()), static_cast<unsigned>(ymd.day()));
 }
 
-inline std::string ValueToString(const Value& value) {
-  return std::visit(
-      [](const auto& v) -> std::string {
-        using T = std::decay_t<decltype(v)>;
-        if constexpr (std::is_same_v<T, std::monostate>) {
-          return "null";
-        } else if constexpr (std::is_same_v<T, bool>) {
-          return v ? "true" : "false";
-        } else if constexpr (std::is_same_v<T, std::string>) {
-          return v;
-        } else if constexpr (std::is_same_v<T, Date32>) {
-          const std::chrono::year_month_day ymd{std::chrono::sys_days{std::chrono::days{v.days}}};
-          return std::format("{:04}-{:02}-{:02}", static_cast<int>(ymd.year()),
-                             static_cast<unsigned>(ymd.month()), static_cast<unsigned>(ymd.day()));
-        } else if constexpr (std::is_same_v<T, DecimalValue>) {
-          return FormatDecimal(v.unscaled, v.scale);
-        } else if constexpr (std::is_same_v<T, Timestamp>) {
-          // DuckDB's text form: fractional seconds only when nonzero, without trailing zeros.
-          using namespace std::chrono;
-          const sys_time<microseconds> time{microseconds{v.micros}};
-          const auto day = floor<days>(time);
-          const year_month_day ymd{day};
-          const hh_mm_ss clock{time - day};
-          std::string text = std::format(
-              "{:04}-{:02}-{:02} {:02}:{:02}:{:02}", static_cast<int>(ymd.year()),
-              static_cast<unsigned>(ymd.month()), static_cast<unsigned>(ymd.day()),
-              clock.hours().count(), clock.minutes().count(), clock.seconds().count());
-          if (const auto micros = clock.subseconds().count(); micros != 0) {
-            std::string fraction = std::format("{:06}", micros);
-            fraction.erase(fraction.find_last_not_of('0') + 1);
-            text += "." + fraction;
-          }
-          return text;
-        } else {
-          return std::to_string(v);
-        }
-      },
-      value);
-}
-
-/// @brief The `Value` alternative for C++ type @p T: a String cell is a `std::string` and a
-/// Decimal cell a `DecimalValue`.
-template <typename T>
-using ValueOf = std::conditional_t<
-    std::same_as<T, std::string_view>, std::string,
-    std::conditional_t<std::same_as<T, Decimal64>, DecimalValue, T>>;
-
-/// @brief @p value as C++ type @p T; a `DecimalValue` drops its scale.
-template <typename T>
-[[nodiscard]] T FromValueOf(const ValueOf<T>& value) {
-  if constexpr (std::same_as<T, Decimal64>) {
-    return Decimal64{value.unscaled};
-  } else {
-    return T(value);
+/// @brief DuckDB's text form: fractional seconds only when nonzero, without trailing zeros.
+[[nodiscard]] inline std::string FormatTimestamp(Timestamp timestamp) {
+  using namespace std::chrono;
+  const sys_time<microseconds> time{microseconds{timestamp.micros}};
+  const auto day = floor<days>(time);
+  const year_month_day ymd{day};
+  const hh_mm_ss clock{time - day};
+  std::string text = std::format("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", static_cast<int>(ymd.year()),
+                                 static_cast<unsigned>(ymd.month()),
+                                 static_cast<unsigned>(ymd.day()), clock.hours().count(),
+                                 clock.minutes().count(), clock.seconds().count());
+  if (const auto micros = clock.subseconds().count(); micros != 0) {
+    std::string fraction = std::format("{:06}", micros);
+    fraction.erase(fraction.find_last_not_of('0') + 1);
+    text += "." + fraction;
   }
+  return text;
 }
 
 /// @brief How a column stores C++ type @p T: `std::vector<bool>` packs bits and has no
@@ -293,21 +218,6 @@ class ColumnVector final {
     return View<T>()[i];
   }
 
-  /// @brief Row @p i as a `Value` (null, or past the end: monostate). Not for hot paths.
-  [[nodiscard]] Value GetValue(std::size_t i) const {
-    if (i >= size_ || IsNull(i)) {
-      return std::monostate{};
-    }
-    return VisitType(type_, [&]<typename Tag>(Tag) -> Value {
-      using T = typename Tag::CType;
-      if constexpr (std::same_as<T, Decimal64>) {
-        return DecimalValue{Get<T>(i).unscaled, type_.scale};
-      } else {
-        return ValueOf<T>(Get<T>(i));
-      }
-    });
-  }
-
   /// @brief Bytes in the column's buffers; a constant column counts its one row.
   [[nodiscard]] std::size_t size_in_bytes() const noexcept {
     return validity_.bytes.size() + values_.bytes.size() + offsets_.bytes.size();
@@ -440,31 +350,114 @@ class ColumnBuilder {
   std::size_t null_count_ = 0;
 };
 
-/// @brief A column of @p type holding @p values (monostate is null), for code that still holds
-/// `Value`s.
-/// @return The column, or `TypeError` if a value is not of @p type.
-[[nodiscard]] inline Result<ColumnVectorPtr> ColumnFromValues(DataType type,
-                                                              std::span<const Value> values) {
-  return VisitType(type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
+// =============================================================================
+// FormatCell and Scalar
+// =============================================================================
+
+/// @brief Row @p row of @p column as text: "null", true, 42, 1.500000, text, 1994-01-01,
+/// 1994-01-01 12:00:00.5, 1234.56.
+[[nodiscard]] inline std::string FormatCell(const ColumnVector& column, std::size_t row) {
+  if (column.IsNull(row)) {
+    return "null";
+  }
+  return VisitType(column.GetType(), [&]<typename Tag>(Tag) -> std::string {
     using T = typename Tag::CType;
-    ColumnBuilder<T> builder(type, values.size());
-    for (const Value& value : values) {
-      if (std::holds_alternative<std::monostate>(value)) {
-        builder.AppendNull();
-      } else if (const auto* v = std::get_if<ValueOf<T>>(&value)) {
-        if constexpr (std::same_as<T, Decimal64>) {
-          if (v->scale != type.scale) {
-            return Error::TypeError("Decimal value of scale " + std::to_string(v->scale) +
-                                    " in a column of scale " + std::to_string(type.scale));
-          }
-        }
-        builder.Append(FromValueOf<T>(*v));
-      } else {
-        return Error::TypeError("Value is not a " + std::string(Tag::kName));
-      }
+    const T value = column.Get<T>(row);
+    if constexpr (std::same_as<T, bool>) {
+      return value ? "true" : "false";
+    } else if constexpr (std::same_as<T, std::string_view>) {
+      return std::string(value);
+    } else if constexpr (std::same_as<T, Date32>) {
+      return FormatDate32(value);
+    } else if constexpr (std::same_as<T, Timestamp>) {
+      return FormatTimestamp(value);
+    } else if constexpr (std::same_as<T, Decimal64>) {
+      return FormatDecimal(value.unscaled, column.GetType().scale);
+    } else {
+      return std::to_string(value);
     }
-    return std::move(builder).Finish();
   });
 }
+
+/// @brief One value of one type, or a typed null: a literal.
+///
+/// It holds a one-row column, so a literal broadcasts with `ColumnVector::Constant` and
+/// prints with `FormatCell`.
+class Scalar {
+ public:
+  /// @brief The NULL literal. It has no type of its own: it reads as String, and an operator
+  /// gives it the other operand's type.
+  Scalar() : Scalar(Null(DataType::kString)) {}
+  explicit Scalar(bool value) : Scalar(DataType::kBool, value) {}
+  explicit Scalar(std::int8_t value) : Scalar(DataType::kInt8, value) {}
+  explicit Scalar(std::int16_t value) : Scalar(DataType::kInt16, value) {}
+  explicit Scalar(std::int32_t value) : Scalar(DataType::kInt32, value) {}
+  explicit Scalar(std::int64_t value) : Scalar(DataType::kInt64, value) {}
+  explicit Scalar(float value) : Scalar(DataType::kFloat, value) {}
+  explicit Scalar(double value) : Scalar(DataType::kDouble, value) {}
+  explicit Scalar(std::string_view value) : Scalar(DataType::kString, value) {}
+  // Without these, a string literal would pick the bool overload.
+  explicit Scalar(const char* value) : Scalar(std::string_view(value)) {}
+  explicit Scalar(const std::string& value) : Scalar(std::string_view(value)) {}
+  explicit Scalar(Date32 value) : Scalar(DataType::kDate32, value) {}
+  explicit Scalar(Timestamp value) : Scalar(DataType::kTimestamp, value) {}
+
+  /// @brief `unscaled / 10^scale`, typed as DuckDB types the literal: 0.05 is Decimal(3, 2).
+  [[nodiscard]] static Scalar Decimal(std::int64_t unscaled, std::uint8_t scale) {
+    int digits = 1;
+    for (auto rest = unscaled; rest >= 10 || rest <= -10; rest /= 10) {
+      ++digits;
+    }
+    const auto precision = static_cast<std::uint8_t>(std::max<int>(digits, scale + 1));
+    return Scalar(DataType::Decimal(precision, scale), Decimal64{unscaled});
+  }
+
+  /// @brief A null of @p type.
+  [[nodiscard]] static Scalar Null(DataType type) {
+    return VisitType(type, [&]<typename Tag>(Tag) {
+      ColumnBuilder<typename Tag::CType> builder(type, 1);
+      builder.AppendNull();
+      return Scalar(std::move(builder).Finish());
+    });
+  }
+
+  [[nodiscard]] DataType type() const noexcept { return column_->GetType(); }
+  [[nodiscard]] bool is_null() const noexcept { return column_->IsNull(0); }
+  /// @brief The value; @p T must be the CType of `type()`.
+  template <typename T>
+  [[nodiscard]] T Get() const noexcept {
+    return column_->Get<T>(0);
+  }
+  /// @brief The one-row column.
+  [[nodiscard]] const ColumnVector& column() const noexcept { return *column_; }
+
+  /// @brief As SQL text: null, true, 42, "text", DATE '1994-01-01', TIMESTAMP '...', 0.05.
+  [[nodiscard]] std::string ToSql() const {
+    if (is_null()) {
+      return "null";
+    }
+    switch (type().id) {
+      case TypeId::kString:
+        return "\"" + FormatCell(*column_, 0) + "\"";
+      case TypeId::kDate32:
+        return "DATE '" + FormatCell(*column_, 0) + "'";
+      case TypeId::kTimestamp:
+        return "TIMESTAMP '" + FormatCell(*column_, 0) + "'";
+      default:
+        return FormatCell(*column_, 0);
+    }
+  }
+
+ private:
+  template <typename T>
+  Scalar(DataType type, T value) {
+    ColumnBuilder<T> builder(type, 1);
+    builder.Append(value);
+    column_ = std::move(builder).Finish();
+  }
+  explicit Scalar(ColumnVectorPtr column) : column_(std::move(column)) {}
+
+  ColumnVectorPtr column_;
+};
 
 }  // namespace quest::columnar

@@ -67,11 +67,13 @@ struct Cell {
     for (std::size_t r = 0; r < batch.num_rows(); ++r) {
       auto& row = rows.emplace_back();
       for (std::size_t c = 0; c < batch.num_columns(); ++c) {
-        const auto value = batch.column(c).GetValue(r);
-        // ValueToString prints doubles with 6 decimals, too few to compare an AVG.
-        const auto* d = std::get_if<double>(&value);
-        row.push_back(d != nullptr ? Cell{std::format("{}", *d), true}
-                                   : Cell{columnar::ValueToString(value)});
+        const auto& column = batch.column(c);
+        // FormatCell prints doubles with 6 decimals, too few to compare an AVG.
+        if (column.GetType() == columnar::DataType::kDouble && !column.IsNull(r)) {
+          row.push_back(Cell{std::format("{}", column.Get<double>(r)), true});
+        } else {
+          row.push_back(Cell{columnar::FormatCell(column, r)});
+        }
       }
     }
   }

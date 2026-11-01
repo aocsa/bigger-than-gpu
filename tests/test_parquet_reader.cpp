@@ -148,7 +148,7 @@ TEST_F(ParquetReaderTest, Utf8ColumnReadsAsString) {
 
   ASSERT_OK_AND_ASSIGN(auto batch, ds.ReadPartition(0, {"name"}));
   EXPECT_EQ(batch.column(0).GetType(), DataType::kString);
-  EXPECT_TRUE(std::holds_alternative<std::string>(batch.column(0).GetValue(0)));
+  EXPECT_FALSE(batch.column(0).IsNull(0));
 }
 
 TEST_F(ParquetReaderTest, NumericColumnTypes) {
@@ -320,8 +320,8 @@ TEST(ParquetDateTest, DictionaryEncodedDateLoadsAsDate32) {
 
   ASSERT_OK_AND_ASSIGN(auto batch, ds.ReadPartition(0, {"l_commitdate"}));
   EXPECT_EQ(batch.column(0).GetType(), DataType::kDate32);
-  EXPECT_EQ(batch.column(0).GetValue(0), Value{Date32{9538}});
-  EXPECT_EQ(ValueToString(batch.column(0).GetValue(0)), "1996-02-12");
+  EXPECT_EQ(batch.column(0).Get<Date32>(0), Date32{9538});
+  EXPECT_EQ(FormatCell(batch.column(0), 0), "1996-02-12");
 }
 
 TEST(ParquetDateTest, PlainEncodedDateWithNullLoadsAsDate32) {
@@ -336,10 +336,10 @@ TEST(ParquetDateTest, PlainEncodedDateWithNullLoadsAsDate32) {
   const auto& col = batch.column(0);
   EXPECT_EQ(col.GetType(), DataType::kDate32);
   ASSERT_EQ(col.size(), 4U);
-  EXPECT_EQ(col.GetValue(0), Value{Date32{9538}});
+  EXPECT_EQ(col.Get<Date32>(0), Date32{9538});
   EXPECT_TRUE(col.IsNull(1));
-  EXPECT_EQ(ValueToString(col.GetValue(2)), "1969-12-31");
-  EXPECT_EQ(ValueToString(col.GetValue(3)), "2000-02-29");
+  EXPECT_EQ(FormatCell(col, 2), "1969-12-31");
+  EXPECT_EQ(FormatCell(col, 3), "2000-02-29");
 }
 
 // =============================================================================
@@ -365,8 +365,10 @@ TEST(ParquetTpchTest, DecimalColumnReadsAsDecimal) {
   EXPECT_FALSE(field.field_id.has_value());  // Thrift field 7 is the scale, not the field id
 
   ASSERT_OK_AND_ASSIGN(auto batch, reader.ReadRowGroup(0, {"l_extendedprice", "l_discount"}));
-  EXPECT_EQ(batch.column(0).GetValue(0), (Value{DecimalValue{2471035, 2}}));  // 24710.35
-  EXPECT_EQ(batch.column(1).GetValue(0), (Value{DecimalValue{4, 2}}));        // 0.04
+  EXPECT_EQ(batch.column(0).Get<Decimal64>(0).unscaled, 2471035);  // 24710.35
+  EXPECT_EQ(batch.column(0).GetType().scale, 2);
+  EXPECT_EQ(batch.column(1).Get<Decimal64>(0).unscaled, 4);        // 0.04
+  EXPECT_EQ(batch.column(1).GetType().scale, 2);
 }
 
 TEST(ParquetTpchTest, ParallelRowGroupReadsMatchSerialReads) {
@@ -416,7 +418,7 @@ TEST(ParquetSnappyTest, PageWithEqualSizesIsStillDecompressed) {
   const std::vector<std::string> first = {"MAIL", "MAIL", "MAIL", "TRUCK",
                                           "RAIL", "RAIL", "SHIP", "FOB"};
   for (std::size_t i = 0; i < first.size(); ++i) {
-    EXPECT_EQ(batch.column(0).GetValue(i), Value{first[i]}) << "row " << i;
+    EXPECT_EQ(batch.column(0).Get<std::string_view>(i), first[i]) << "row " << i;
   }
 }
 
@@ -451,21 +453,21 @@ TEST(ParquetTypeMappingTest, TimestampUnitsUnsignedAndDecimal) {
 
   ASSERT_OK_AND_ASSIGN(auto batch, reader.ReadRowGroup(0, {}));
   auto text = [&batch](std::size_t column, std::size_t row) {
-    return ValueToString(batch.column(column).GetValue(row));
+    return FormatCell(batch.column(column), row);
   };
   EXPECT_EQ(text(0, 0), "2024-01-02 03:04:05.5");
   EXPECT_EQ(text(1, 0), "2024-01-02 03:04:05.123456");
   EXPECT_EQ(text(2, 0), "2024-01-02 03:04:05.123456");  // nanoseconds drop to micros
-  EXPECT_EQ(batch.column(3).GetValue(0), Value{std::int32_t{200}});
-  EXPECT_EQ(batch.column(4).GetValue(0), Value{std::int32_t{60000}});
-  EXPECT_EQ(batch.column(5).GetValue(0), Value{std::int64_t{4000000000}});  // above INT32_MAX
-  EXPECT_EQ(ValueToString(batch.column(6).GetValue(0)), "1234567.89");  // INT32 widened
+  EXPECT_EQ(batch.column(3).Get<std::int32_t>(0), 200);
+  EXPECT_EQ(batch.column(4).Get<std::int32_t>(0), 60000);
+  EXPECT_EQ(batch.column(5).Get<std::int64_t>(0), 4000000000);  // above INT32_MAX
+  EXPECT_EQ(FormatCell(batch.column(6), 0), "1234567.89");  // INT32 widened
 
   EXPECT_TRUE(batch.column(0).IsNull(1));
   EXPECT_EQ(text(1, 1), "1969-12-31 23:59:59.999999");
   EXPECT_EQ(text(2, 1), "1969-12-31 23:59:59.999999");  // -1 ns floors to -1 us
   EXPECT_TRUE(batch.column(5).IsNull(1));
-  EXPECT_EQ(ValueToString(batch.column(6).GetValue(1)), "-0.07");
+  EXPECT_EQ(FormatCell(batch.column(6), 1), "-0.07");
 }
 
 TEST(ParquetTypeMappingTest, Int96ReadsAsTimestamp) {
@@ -474,9 +476,9 @@ TEST(ParquetTypeMappingTest, Int96ReadsAsTimestamp) {
   EXPECT_EQ(reader.schema().field(0).data_type, DataType::kTimestamp);
   ASSERT_OK_AND_ASSIGN(auto batch, reader.ReadRowGroup(0, {}));
   ASSERT_EQ(batch.num_rows(), 3U);
-  EXPECT_EQ(batch.column(0).GetValue(0), Value{Timestamp{0}});
-  EXPECT_EQ(ValueToString(batch.column(0).GetValue(1)), "2024-01-02 03:04:05.5");
-  EXPECT_EQ(batch.column(0).GetValue(2), Value{Timestamp{-1}});
+  EXPECT_EQ(batch.column(0).Get<Timestamp>(0), Timestamp{0});
+  EXPECT_EQ(FormatCell(batch.column(0), 1), "2024-01-02 03:04:05.5");
+  EXPECT_EQ(batch.column(0).Get<Timestamp>(2), Timestamp{-1});
 }
 
 TEST(ParquetTypeMappingTest, UnsupportedColumnsFailToOpen) {
@@ -491,11 +493,11 @@ TEST(ParquetTypeMappingTest, DictionaryEncodedInt96ReadsAsTimestamp) {
   ASSERT_OK_AND_ASSIGN(auto reader, ParquetFileReader::Open(TypesFile("int96_dictionary.parquet")));
   ASSERT_OK_AND_ASSIGN(auto batch, reader.ReadRowGroup(0, {}));
   ASSERT_EQ(batch.num_rows(), 4U);
-  const Value later{Timestamp{1'704'164'645'500'000}};
-  EXPECT_EQ(batch.column(0).GetValue(0), later);
-  EXPECT_EQ(batch.column(0).GetValue(1), Value{Timestamp{-1}});
-  EXPECT_EQ(batch.column(0).GetValue(2), later);
-  EXPECT_EQ(batch.column(0).GetValue(3), later);
+  const Timestamp later{1'704'164'645'500'000};
+  EXPECT_EQ(batch.column(0).Get<Timestamp>(0), later);
+  EXPECT_EQ(batch.column(0).Get<Timestamp>(1), Timestamp{-1});
+  EXPECT_EQ(batch.column(0).Get<Timestamp>(2), later);
+  EXPECT_EQ(batch.column(0).Get<Timestamp>(3), later);
 }
 
 TEST(ParquetTypeMappingTest, MillisOutOfMicrosRangeIsOutOfRange) {
