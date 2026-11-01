@@ -165,6 +165,13 @@ TEST(ConstantColumnTest, NullConstantIsNullInEveryRow) {
   EXPECT_TRUE(col->View<int32_t>().IsNull(3));
 }
 
+TEST(ConstantColumnTest, NullConstantOfZeroRowsIsStillNull) {
+  auto one_row = MakeColumn<int32_t>(DataType::kInt32, {std::nullopt});
+  auto col = ColumnVector::Constant(*one_row, 0);
+  EXPECT_EQ(col->size(), 0U);
+  EXPECT_TRUE(col->IsNull(0));  // how a NULL literal is recognised on an empty batch
+}
+
 // =============================================================================
 // Value bridge (until the Value variant goes)
 // =============================================================================

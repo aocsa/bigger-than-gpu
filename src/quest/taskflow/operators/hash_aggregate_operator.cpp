@@ -53,9 +53,6 @@ template <typename T>
         using V = std::decay_t<decltype(v)>;
         if constexpr (std::is_same_v<V, std::monostate>) {
           return 0;
-        } else if constexpr (std::is_same_v<V, std::vector<std::uint8_t>>) {
-          return std::hash<std::string_view>{}(
-              std::string_view(reinterpret_cast<const char*>(v.data()), v.size()));
         } else if constexpr (std::is_same_v<V, columnar::Date32>) {
           return std::hash<std::int32_t>{}(v.days);
         } else if constexpr (std::is_same_v<V, columnar::Timestamp>) {

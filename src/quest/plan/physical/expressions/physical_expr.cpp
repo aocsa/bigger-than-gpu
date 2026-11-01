@@ -327,8 +327,6 @@ std::string LiteralExpression::ToString() const {
           return val ? "true" : "false";
         } else if constexpr (std::is_same_v<T, std::monostate>) {
           return "null";
-        } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
-          return "<binary>";
         } else if constexpr (std::is_same_v<T, columnar::Date32>) {
           return "DATE '" + columnar::ValueToString(val) + "'";
         } else if constexpr (std::is_same_v<T, columnar::Timestamp>) {

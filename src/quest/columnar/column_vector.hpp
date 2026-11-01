@@ -26,7 +26,7 @@ namespace quest::columnar {
 
 using Value = std::variant<std::monostate,  // null
                            bool, int8_t, int16_t, int32_t, int64_t, float,
-                           double, std::string, std::vector<uint8_t>, Date32, Timestamp>;
+                           double, std::string, Date32, Timestamp>;
 
 inline std::string ValueToString(const Value& value) {
   return std::visit(
@@ -38,8 +38,6 @@ inline std::string ValueToString(const Value& value) {
           return v ? "true" : "false";
         } else if constexpr (std::is_same_v<T, std::string>) {
           return v;
-        } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
-          return std::string(reinterpret_cast<const char*>(v.data()), v.size());
         } else if constexpr (std::is_same_v<T, Date32>) {
           const std::chrono::year_month_day ymd{std::chrono::sys_days{std::chrono::days{v.days}}};
           return std::format("{:04}-{:02}-{:02}", static_cast<int>(ymd.year()),
@@ -191,7 +189,8 @@ class ColumnVector final {
   [[nodiscard]] bool is_constant() const noexcept { return constant_; }
 
   [[nodiscard]] bool IsNull(std::size_t i) const noexcept {
-    if (null_count_ == 0) {
+    // The bitmap, not null_count_: a null constant of 0 rows has no nulls but is still null.
+    if (validity_.bytes.empty()) {
       return false;
     }
     const std::size_t row = constant_ ? 0 : i;
@@ -208,7 +207,7 @@ class ColumnVector final {
     ColumnView<T> view;
     view.size_ = size_;
     view.stride_ = constant_ ? 0 : 1;
-    view.validity_ = null_count_ == 0 ? nullptr : validity_.As<std::uint8_t>();
+    view.validity_ = validity_.bytes.empty() ? nullptr : validity_.As<std::uint8_t>();
     if constexpr (std::same_as<T, std::string_view>) {
       view.offsets_ = offsets_.As<std::int64_t>();
       view.chars_ = values_.As<char>();

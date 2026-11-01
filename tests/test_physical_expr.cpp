@@ -1090,6 +1090,15 @@ TEST(Date32ExprTest, ComparisonWithNullLiteralIsNull) {
   ExpectColumn<bool>(*result, std::vector<std::optional<bool>>(3, std::nullopt));
 }
 
+TEST(BinaryExpressionTest, NullLiteralOnEmptyBatchKeepsTheOtherType) {
+  RecordBatch batch(Schema({Field("x", DataType::kInt32)}),
+                    {MakeColumn<int32_t>(DataType::kInt32, {})});
+  BinaryExpression plus_null(BinaryOp::kAdd, Col(0), Lit(std::monostate{}));
+  ASSERT_OK_AND_ASSIGN(auto result, plus_null.Evaluate(batch));
+  EXPECT_EQ(result->GetType(), DataType::kInt32);
+  EXPECT_EQ(result->size(), 0U);
+}
+
 TEST(Date32ExprTest, ComparisonWithNonDateIsTypeError) {
   auto batch = MakeDateBatch();
   BinaryExpression date_int(BinaryOp::kEq, Col(1), Col(2));
