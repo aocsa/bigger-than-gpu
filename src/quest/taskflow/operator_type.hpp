@@ -24,17 +24,20 @@ enum class OperatorType : std::uint8_t {
     Union,
 
     // Aggregation Operators
+    HashAggregate,
     ComputeAggregate,
     DistributeAggregate,
     MergeAggregate,
 
     // Sort Operators
+    Sort,
     SortAndSample,
     Partition,
     PartitionSingleNode,
     MergeStream,
 
     // Join Operators
+    HashJoin,
     PartwiseJoin,
     JoinPartition,
 
@@ -47,10 +50,12 @@ enum class OperatorType : std::uint8_t {
     Unknown
 };
 
-inline constexpr std::array<std::string_view, 19> kOperatorTypeNames = {
-    "TableScan", "BindableTableScan", "Generate", "Project", "Filter", "Union", "ComputeAggregate",
-    "DistributeAggregate", "MergeAggregate", "SortAndSample", "Partition", "PartitionSingleNode",
-    "MergeStream", "PartwiseJoin", "JoinPartition", "Limit", "Output", "Print", "Unknown"};
+inline constexpr std::array<std::string_view, 22> kOperatorTypeNames = {
+    "TableScan",     "BindableTableScan",   "Generate",       "Project",          "Filter",
+    "Union",         "HashAggregate",       "ComputeAggregate", "DistributeAggregate",
+    "MergeAggregate", "Sort",               "SortAndSample",  "Partition",        "PartitionSingleNode",
+    "MergeStream",   "HashJoin",            "PartwiseJoin",   "JoinPartition",    "Limit",
+    "Output",        "Print",               "Unknown"};
 static_assert(kOperatorTypeNames.size() == std::to_underlying(OperatorType::Unknown) + 1);
 
 [[nodiscard]] constexpr std::string_view to_string(OperatorType type) noexcept {
@@ -69,7 +74,9 @@ static_assert(kOperatorTypeNames.size() == std::to_underlying(OperatorType::Unkn
 /// Becomes the sink of the producer pipeline and the source of the consumer pipeline.
 /// Streaming operators (Filter, Project, Limit) fuse into their pipeline instead.
 [[nodiscard]] constexpr bool is_blocking_operator(OperatorType type) noexcept {
-    return type == OperatorType::ComputeAggregate ||
+    return type == OperatorType::HashAggregate ||
+           type == OperatorType::Sort ||
+           type == OperatorType::ComputeAggregate ||
            type == OperatorType::DistributeAggregate ||
            type == OperatorType::MergeAggregate ||
            type == OperatorType::SortAndSample ||
