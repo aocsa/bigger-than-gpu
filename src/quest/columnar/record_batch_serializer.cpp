@@ -163,7 +163,7 @@ Result<DataType> RecordBatchSerializer::ReadDataType(const std::vector<uint8_t>&
                                                      size_t& offset) {
   auto tag = ReadValue<std::underlying_type_t<DataType>>(buffer, offset);
   if (!tag) return std::unexpected(tag.error());
-  if (*tag > std::to_underlying(DataType::kDate32)) {
+  if (*tag > std::to_underlying(DataType::kTimestamp)) {
     return Error::Invalid("Unknown type index");
   }
   return static_cast<DataType>(*tag);

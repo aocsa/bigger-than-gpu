@@ -1152,6 +1152,30 @@ TEST(Date32ExprTest, ArithmeticOnDatesIsTypeError) {
   EXPECT_FALSE(date_int.Evaluate(batch).has_value());
 }
 
+TEST(TimestampExprTest, ComparesOnlyWithTimestamps) {
+  auto ts = std::make_shared<TypedColumnVector<Timestamp>>(DataType::kTimestamp, 2);
+  ts->Append(Timestamp{-1});
+  ts->Append(Timestamp{1'704'164'645'500'000});
+  auto date = std::make_shared<TypedColumnVector<Date32>>(DataType::kDate32, 2);
+  date->Append(Date32{0});
+  date->Append(Date32{19724});
+  RecordBatch batch(Schema({Field("ts", DataType::kTimestamp), Field("d", DataType::kDate32)}),
+                    {ts, date});
+
+  BinaryExpression later(BinaryOp::kLt, Lit(Value{Timestamp{0}}), Col(0));
+  ASSERT_OK_AND_ASSIGN(auto result, later.Evaluate(batch));
+  ExpectColumn<bool>(*result, {false, true});
+  EXPECT_EQ(later.ToString(), "TIMESTAMP '1970-01-01 00:00:00' < #0");
+
+  BinaryExpression ts_date(BinaryOp::kEq, Col(0), Col(1));
+  auto mixed = ts_date.Evaluate(batch);
+  ASSERT_FALSE(mixed.has_value());
+  EXPECT_EQ(mixed.error().code(), ErrorCode::TypeError);
+
+  BinaryExpression ts_plus(BinaryOp::kAdd, Col(0), Lit(Value{1}));
+  EXPECT_FALSE(ts_plus.Evaluate(batch).has_value());
+}
+
 TEST(Date32ExprTest, LogicalTypesMatchPhysicalRules) {
   SchemaOnlyPlan input(Schema({Field("a", DataType::kDate32, Repetition::kOptional),
                                Field("b", DataType::kDate32), Field("i", DataType::kInt32)}));

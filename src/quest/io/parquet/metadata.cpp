@@ -54,8 +54,20 @@ std::optional<LogicalType> FromLogicalTypeField(int16_t field_id) {
   }
 }
 
-Result<std::optional<LogicalType>> ReadLogicalTypeUnion(ThriftDecoder& decoder) {
-  std::optional<LogicalType> logical;
+// The unit and integer details of a legacy converted_type; a logicalType read later wins.
+void ApplyConvertedTypeDetails(int32_t converted, SchemaElement& elem) {
+  if (converted == 9 || converted == 10) {  // TIMESTAMP_MILLIS, TIMESTAMP_MICROS
+    elem.time_unit = converted == 9 ? TimeUnit::kMillis : TimeUnit::kMicros;
+  } else if (converted >= 11 && converted <= 18) {  // UINT_8 .. UINT_64, INT_8 .. INT_64
+    elem.is_signed = converted >= 15;
+    elem.bit_width = 8 << ((converted - 11) % 4);
+  }
+}
+
+// Reads a thrift struct's fields, calling read_field(field_id, type) for each; it returns
+// true if it read the value and false to have the value skipped.
+template <typename ReadField>
+Status ReadStructFields(ThriftDecoder& decoder, ReadField&& read_field) {
   int16_t last_field_id = 0;
   while (true) {
     auto header = decoder.ReadFieldHeader(last_field_id);
@@ -63,38 +75,83 @@ Result<std::optional<LogicalType>> ReadLogicalTypeUnion(ThriftDecoder& decoder) 
       return std::unexpected(std::move(header).error());
     }
     if (!*header) {
-      return logical;
+      return {};
     }
     last_field_id = (*header)->field_id;
-    logical = FromLogicalTypeField(last_field_id);
-    auto skipped = decoder.SkipField((*header)->type);
-    if (!skipped) {
-      return std::unexpected(std::move(skipped).error());
+    auto read = read_field(last_field_id, (*header)->type);
+    if (!read) {
+      return std::unexpected(std::move(read).error());
+    }
+    if (!*read) {
+      if (auto skipped = decoder.SkipField((*header)->type); !skipped) {
+        return skipped;
+      }
     }
   }
 }
 
-// QUEST has no Decimal type: an INT32/INT64 DECIMAL column reads as Double (value / 10^scale).
-bool IsIntegerDecimal(const SchemaElement& elem) {
-  return elem.logical_type == LogicalType::kDecimal &&
-         (elem.type == PhysicalType::kInt32 || elem.type == PhysicalType::kInt64);
+// TimestampType { 1: bool isAdjustedToUTC; 2: TimeUnit unit }, where TimeUnit is a union of
+// empty structs: 1 MILLIS, 2 MICROS, 3 NANOS. QUEST ignores isAdjustedToUTC.
+Status ReadTimestampType(ThriftDecoder& decoder, SchemaElement& elem) {
+  return ReadStructFields(decoder, [&](int16_t id, ThriftType type) -> Result<bool> {
+    if (id != 2 || type != ThriftType::kStruct) {
+      return false;
+    }
+    auto unit = ReadStructFields(decoder, [&](int16_t unit_id, ThriftType) -> Result<bool> {
+      if (unit_id >= 1 && unit_id <= 3) {
+        elem.time_unit = static_cast<TimeUnit>(unit_id - 1);
+      }
+      return false;
+    });
+    if (!unit) {
+      return std::unexpected(std::move(unit).error());
+    }
+    return true;
+  });
 }
 
-// UTF8, ENUM and JSON all annotate BYTE_ARRAY values that are UTF-8 text.
-DataType LeafDataType(const SchemaElement& elem) {
-  const bool is_text = elem.logical_type == LogicalType::kString ||
-                       elem.logical_type == LogicalType::kEnum ||
-                       elem.logical_type == LogicalType::kJson;
-  if (elem.type == PhysicalType::kByteArray && is_text) {
-    return columnar::DataType::kString;
+// IntType { 1: i8 bitWidth; 2: bool isSigned }; compact thrift puts a bool in its header.
+Status ReadIntType(ThriftDecoder& decoder, SchemaElement& elem) {
+  return ReadStructFields(decoder, [&](int16_t id, ThriftType type) -> Result<bool> {
+    if (id == 1 && type == ThriftType::kByte) {
+      auto width = decoder.ReadByte();
+      if (!width) {
+        return std::unexpected(std::move(width).error());
+      }
+      elem.bit_width = static_cast<int8_t>(*width);
+      return true;
+    }
+    if (id == 2 && (type == ThriftType::kBoolTrue || type == ThriftType::kBoolFalse)) {
+      elem.is_signed = type == ThriftType::kBoolTrue;
+      return true;
+    }
+    return false;
+  });
+}
+
+// SchemaElement.logicalType is a union: the id of its one set field names the type.
+Result<std::optional<LogicalType>> ReadLogicalTypeUnion(ThriftDecoder& decoder,
+                                                        SchemaElement& elem) {
+  std::optional<LogicalType> logical;
+  auto status = ReadStructFields(decoder, [&](int16_t id, ThriftType type) -> Result<bool> {
+    logical = FromLogicalTypeField(id);
+    if (type != ThriftType::kStruct) {
+      return false;
+    }
+    if (logical == LogicalType::kTimestamp) {
+      auto read = ReadTimestampType(decoder, elem);
+      return read ? Result<bool>{true} : std::unexpected(std::move(read).error());
+    }
+    if (logical == LogicalType::kInteger) {
+      auto read = ReadIntType(decoder, elem);
+      return read ? Result<bool>{true} : std::unexpected(std::move(read).error());
+    }
+    return false;
+  });
+  if (!status) {
+    return std::unexpected(std::move(status).error());
   }
-  if (elem.type == PhysicalType::kInt32 && elem.logical_type == LogicalType::kDate) {
-    return columnar::DataType::kDate32;
-  }
-  if (IsIntegerDecimal(elem)) {
-    return columnar::DataType::kDouble;
-  }
-  return PhysicalTypeToDataType(elem.type);
+  return logical;
 }
 
 }  // namespace
@@ -269,6 +326,7 @@ Result<SchemaElement> MetadataParser::ParseSchemaElement(
         if (!elem.logical_type) {
           elem.logical_type = FromConvertedType(result.value());
         }
+        ApplyConvertedTypeDetails(result.value(), elem);
         break;
       }
       case 7: {  // scale
@@ -296,7 +354,7 @@ Result<SchemaElement> MetadataParser::ParseSchemaElement(
         break;
       }
       case 10: {  // logicalType
-        auto result = ReadLogicalTypeUnion(decoder);
+        auto result = ReadLogicalTypeUnion(decoder, elem);
         if (!result.has_value()) {
           return std::unexpected(result.error());
         }
@@ -802,30 +860,75 @@ Result<KeyValue> MetadataParser::ParseKeyValue(ThriftDecoder& decoder) {
   return kv;
 }
 
-Schema BuildSchema(const FileMetadata& metadata) {
+Result<LeafType> ResolveLeafType(const SchemaElement& elem) {
+  using Conversion = LeafType::Conversion;
+  const auto logical = elem.logical_type;
+  switch (elem.type) {
+    case PhysicalType::kBoolean:
+      return LeafType{DataType::kBool};
+    case PhysicalType::kFloat:
+      return LeafType{DataType::kFloat};
+    case PhysicalType::kDouble:
+      return LeafType{DataType::kDouble};
+    case PhysicalType::kByteArray:
+      return LeafType{DataType::kString};  // text or not, the bytes as they are
+    case PhysicalType::kInt96:
+      return LeafType{DataType::kTimestamp, Conversion::kInt96};
+    case PhysicalType::kFixedLenByteArray:
+      return Error::TypeError("Parquet column '" + elem.name +
+                              "': FIXED_LEN_BYTE_ARRAY is not supported");
+    case PhysicalType::kInt32:
+    case PhysicalType::kInt64:
+      break;
+  }
+  const bool is_int64 = elem.type == PhysicalType::kInt64;
+  // QUEST has no Decimal type: an INT32/INT64 DECIMAL reads as Double (value / 10^scale).
+  if (logical == LogicalType::kDecimal) {
+    return LeafType{DataType::kDouble, Conversion::kDecimal, elem.scale.value_or(0)};
+  }
+  if (logical == LogicalType::kDate && !is_int64) {
+    return LeafType{DataType::kDate32};
+  }
+  if (logical == LogicalType::kTimestamp && is_int64) {
+    return LeafType{DataType::kTimestamp, Conversion::kTimestamp, 0,
+                    elem.time_unit.value_or(TimeUnit::kMicros)};
+  }
+  if (logical == LogicalType::kInteger && elem.is_signed == false) {
+    if (elem.bit_width == 64) {
+      return Error::TypeError("Parquet column '" + elem.name + "': UINT_64 is not supported");
+    }
+    if (elem.bit_width == 32) {
+      return LeafType{DataType::kInt64, Conversion::kUInt32};
+    }
+  }
+  return LeafType{is_int64 ? DataType::kInt64 : DataType::kInt32};
+}
+
+Result<FileSchema> BuildSchema(const FileMetadata& metadata) {
+  FileSchema file_schema;
   std::vector<Field> fields;
 
   // Skip the root schema element (index 0) and process leaf columns.
-  size_t i = 1;
-  while (i < metadata.schema_elements.size()) {
+  for (size_t i = 1; i < metadata.schema_elements.size(); ++i) {
     const auto& elem = metadata.schema_elements[i];
-    if (elem.IsLeaf()) {
-      DataType data_type = LeafDataType(elem);
-      fields.emplace_back(elem.name, data_type, elem.repetition);
-      if (elem.field_id) {
-        fields.back().field_id = elem.field_id;
-      }
-      if (elem.type_length) {
-        fields.back().type_length = elem.type_length;
-      }
-      if (IsIntegerDecimal(elem)) {
-        fields.back().decimal_scale = elem.scale.value_or(0);
-      }
+    if (!elem.IsLeaf()) {
+      continue;
     }
-    ++i;
+    auto leaf = ResolveLeafType(elem);
+    if (!leaf) {
+      return std::unexpected(std::move(leaf).error());
+    }
+    fields.emplace_back(elem.name, leaf->type, elem.repetition);
+    if (elem.field_id) {
+      fields.back().field_id = elem.field_id;
+    }
+    if (elem.type_length) {
+      fields.back().type_length = elem.type_length;
+    }
+    file_schema.leaves.push_back(*leaf);
   }
-
-  return Schema(std::move(fields));
+  file_schema.schema = Schema(std::move(fields));
+  return file_schema;
 }
 
 }  // namespace quest::io::parquet

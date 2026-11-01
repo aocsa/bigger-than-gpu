@@ -151,6 +151,25 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeDate32WithNulls) {
   EXPECT_EQ(out.GetValue(2), Value{Date32{-1}});
 }
 
+TEST(RecordBatchSerializerTest, SerializeDeserializeTimestampWithNulls) {
+  Schema schema({Field("t", DataType::kTimestamp, Repetition::kOptional)});
+  auto col = std::make_shared<TypedColumnVector<Timestamp>>(DataType::kTimestamp, 3);
+  col->Append(Timestamp{1'704'164'645'500'000});
+  col->AppendNull();
+  col->Append(Timestamp{-1});
+  RecordBatch original(schema, {col});
+
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
+
+  EXPECT_EQ(deserialized.schema().field(0).data_type, DataType::kTimestamp);
+  const auto& out = deserialized.column(0);
+  ASSERT_EQ(out.size(), 3U);
+  EXPECT_EQ(out.GetValue(0), Value{Timestamp{1'704'164'645'500'000}});
+  EXPECT_TRUE(out.IsNull(1));
+  EXPECT_EQ(out.GetValue(2), Value{Timestamp{-1}});
+}
+
 TEST(RecordBatchSerializerTest, SerializeDeserializeStringWithNulls) {
   Schema schema({Field("text", DataType::kString, Repetition::kOptional)});
 

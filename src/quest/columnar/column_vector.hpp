@@ -24,7 +24,7 @@ namespace quest::columnar {
 
 using Value = std::variant<std::monostate,  // null
                            bool, int8_t, int16_t, int32_t, int64_t, float,
-                           double, std::string, std::vector<uint8_t>, Date32>;
+                           double, std::string, std::vector<uint8_t>, Date32, Timestamp>;
 
 inline std::string ValueToString(const Value& value) {
   return std::visit(
@@ -42,6 +42,23 @@ inline std::string ValueToString(const Value& value) {
           const std::chrono::year_month_day ymd{std::chrono::sys_days{std::chrono::days{v.days}}};
           return std::format("{:04}-{:02}-{:02}", static_cast<int>(ymd.year()),
                              static_cast<unsigned>(ymd.month()), static_cast<unsigned>(ymd.day()));
+        } else if constexpr (std::is_same_v<T, Timestamp>) {
+          // DuckDB's text form: fractional seconds only when nonzero, without trailing zeros.
+          using namespace std::chrono;
+          const sys_time<microseconds> time{microseconds{v.micros}};
+          const auto day = floor<days>(time);
+          const year_month_day ymd{day};
+          const hh_mm_ss clock{time - day};
+          std::string text = std::format(
+              "{:04}-{:02}-{:02} {:02}:{:02}:{:02}", static_cast<int>(ymd.year()),
+              static_cast<unsigned>(ymd.month()), static_cast<unsigned>(ymd.day()),
+              clock.hours().count(), clock.minutes().count(), clock.seconds().count());
+          if (const auto micros = clock.subseconds().count(); micros != 0) {
+            std::string fraction = std::format("{:06}", micros);
+            fraction.erase(fraction.find_last_not_of('0') + 1);
+            text += "." + fraction;
+          }
+          return text;
         } else {
           return std::to_string(v);
         }

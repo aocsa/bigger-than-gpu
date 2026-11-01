@@ -377,6 +377,14 @@ TEST(Date32Test, ValueToStringIsIsoDate) {
   EXPECT_EQ(ValueToString(Value{Date32{11016}}), "2000-02-29");
 }
 
+TEST(TimestampTest, FormatsLikeDuckDb) {
+  EXPECT_EQ(ValueToString(Value{Timestamp{0}}), "1970-01-01 00:00:00");
+  EXPECT_EQ(ValueToString(Value{Timestamp{1'704'164'645'500'000}}), "2024-01-02 03:04:05.5");
+  EXPECT_EQ(ValueToString(Value{Timestamp{1'704'164'645'123'456}}), "2024-01-02 03:04:05.123456");
+  EXPECT_EQ(ValueToString(Value{Timestamp{-1}}), "1969-12-31 23:59:59.999999");
+  EXPECT_EQ(GetTypeName(DataType::kTimestamp), "Timestamp");
+}
+
 TEST(Date32Test, TypeTraits) {
   EXPECT_EQ(GetTypeName(DataType::kDate32), "Date32");
   EXPECT_TRUE(VisitType(DataType::kDate32,

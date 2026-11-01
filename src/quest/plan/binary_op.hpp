@@ -59,17 +59,17 @@ inline constexpr std::array<std::string_view, 13> kBinaryOpSymbols = {
 /// Comparisons and AND/OR yield bool. Arithmetic needs numeric operands: any float or
 /// double operand, or `/`, yields double (int / int is real division, as in DuckDB);
 /// otherwise the wider of the two integer types. Callers resolve a NULL literal operand,
-/// which has no type of its own, to the other operand's type. A Date32 compares only with
-/// another Date32: there is no implicit cast between dates and numbers or strings.
+/// which has no type of its own, to the other operand's type. A Date32 or Timestamp compares
+/// only with the same type: there is no implicit cast to or from a temporal type.
 /// @param op Operator.
 /// @param left Left operand type.
 /// @param right Right operand type.
 /// @return The result type, or `TypeError` for arithmetic on a non-numeric type or a
-/// comparison between a Date32 and a non-date.
+/// comparison between a temporal type and a different type.
 [[nodiscard]] inline Result<columnar::DataType> BinaryResultType(BinaryOp op, columnar::DataType left,
                                                                  columnar::DataType right) {
   if (!IsArithmetic(op)) {
-    if ((left == columnar::DataType::kDate32) != (right == columnar::DataType::kDate32)) {
+    if ((columnar::IsTemporal(left) || columnar::IsTemporal(right)) && left != right) {
       return Error::TypeError("'" + std::string(ToString(op)) + "' cannot compare " +
                               columnar::GetTypeName(left) + " with " +
                               columnar::GetTypeName(right));

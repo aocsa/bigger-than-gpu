@@ -57,6 +57,8 @@ template <typename T>
               std::string_view(reinterpret_cast<const char*>(v.data()), v.size()));
         } else if constexpr (std::is_same_v<V, columnar::Date32>) {
           return std::hash<std::int32_t>{}(v.days);
+        } else if constexpr (std::is_same_v<V, columnar::Timestamp>) {
+          return std::hash<std::int64_t>{}(v.micros);
         } else {
           return std::hash<V>{}(v);
         }

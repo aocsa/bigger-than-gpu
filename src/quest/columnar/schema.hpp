@@ -32,8 +32,6 @@ struct Field {
   Repetition repetition = Repetition::kRequired;
   std::optional<int32_t> field_id;
   std::optional<int32_t> type_length;  // For fixed-length types
-  /// Set for a Parquet INT32/INT64 DECIMAL column, which reads as Double: value / 10^scale.
-  std::optional<int32_t> decimal_scale;
 
   Field(std::string name, DataType type,
         Repetition rep = Repetition::kRequired)

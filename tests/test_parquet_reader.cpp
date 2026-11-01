@@ -362,7 +362,6 @@ TEST(ParquetTpchTest, DecimalColumnReadsAsDouble) {
   ASSERT_TRUE(index.has_value());
   const auto& field = reader.schema().field(*index);
   EXPECT_TRUE(field.data_type == DataType::kDouble);
-  EXPECT_EQ(field.decimal_scale, 2);
   EXPECT_FALSE(field.field_id.has_value());  // Thrift field 7 is the scale, not the field id
 
   ASSERT_OK_AND_ASSIGN(auto batch, reader.ReadRowGroup(0, {"l_extendedprice", "l_discount"}));
@@ -418,5 +417,72 @@ TEST(ParquetSnappyTest, PageWithEqualSizesIsStillDecompressed) {
                                           "RAIL", "RAIL", "SHIP", "FOB"};
   for (std::size_t i = 0; i < first.size(); ++i) {
     EXPECT_EQ(batch.column(0).GetValue(i), Value{first[i]}) << "row " << i;
+  }
+}
+
+// =============================================================================
+// Type mapping (testdata/types; generate.sql and generate_int96.py there)
+// =============================================================================
+
+namespace {
+
+[[nodiscard]] std::string TypesFile(const std::string& name) {
+  return (std::filesystem::path(__FILE__).parent_path().parent_path() / "testdata" / "types" /
+          name)
+      .string();
+}
+
+}  // namespace
+
+TEST(ParquetTypeMappingTest, TimestampUnitsUnsignedAndDecimal) {
+  ASSERT_OK_AND_ASSIGN(auto reader,
+                       ParquetFileReader::Open(TypesFile("timestamps_unsigned.parquet")));
+  const std::vector<std::pair<std::string, DataType>> expected_fields = {
+      {"ts_ms", DataType::kTimestamp}, {"ts_us", DataType::kTimestamp},
+      {"ts_ns", DataType::kTimestamp}, {"u8", DataType::kInt32},
+      {"u16", DataType::kInt32},       {"u32", DataType::kInt64},
+      {"dec32", DataType::kDouble}};
+  ASSERT_EQ(reader.schema().num_fields(), expected_fields.size());
+  for (std::size_t i = 0; i < expected_fields.size(); ++i) {
+    EXPECT_EQ(reader.schema().field(i).name, expected_fields[i].first);
+    EXPECT_EQ(reader.schema().field(i).data_type, expected_fields[i].second)
+        << expected_fields[i].first;
+  }
+
+  ASSERT_OK_AND_ASSIGN(auto batch, reader.ReadRowGroup(0, {}));
+  auto text = [&batch](std::size_t column, std::size_t row) {
+    return ValueToString(batch.column(column).GetValue(row));
+  };
+  EXPECT_EQ(text(0, 0), "2024-01-02 03:04:05.5");
+  EXPECT_EQ(text(1, 0), "2024-01-02 03:04:05.123456");
+  EXPECT_EQ(text(2, 0), "2024-01-02 03:04:05.123456");  // nanoseconds drop to micros
+  EXPECT_EQ(batch.column(3).GetValue(0), Value{std::int32_t{200}});
+  EXPECT_EQ(batch.column(4).GetValue(0), Value{std::int32_t{60000}});
+  EXPECT_EQ(batch.column(5).GetValue(0), Value{std::int64_t{4000000000}});  // above INT32_MAX
+  EXPECT_EQ(batch.column(6).GetValue(0), Value{1234567.89});
+
+  EXPECT_TRUE(batch.column(0).IsNull(1));
+  EXPECT_EQ(text(1, 1), "1969-12-31 23:59:59.999999");
+  EXPECT_EQ(text(2, 1), "1969-12-31 23:59:59.999999");  // -1 ns floors to -1 us
+  EXPECT_TRUE(batch.column(5).IsNull(1));
+  EXPECT_EQ(batch.column(6).GetValue(1), Value{-0.07});
+}
+
+TEST(ParquetTypeMappingTest, Int96ReadsAsTimestamp) {
+  ASSERT_OK_AND_ASSIGN(auto reader, ParquetFileReader::Open(TypesFile("int96_timestamps.parquet")));
+  ASSERT_EQ(reader.schema().num_fields(), 1U);
+  EXPECT_EQ(reader.schema().field(0).data_type, DataType::kTimestamp);
+  ASSERT_OK_AND_ASSIGN(auto batch, reader.ReadRowGroup(0, {}));
+  ASSERT_EQ(batch.num_rows(), 3U);
+  EXPECT_EQ(batch.column(0).GetValue(0), Value{Timestamp{0}});
+  EXPECT_EQ(ValueToString(batch.column(0).GetValue(1)), "2024-01-02 03:04:05.5");
+  EXPECT_EQ(batch.column(0).GetValue(2), Value{Timestamp{-1}});
+}
+
+TEST(ParquetTypeMappingTest, UnsupportedColumnsFailToOpen) {
+  for (const char* name : {"uint64.parquet", "uuid.parquet"}) {
+    auto reader = ParquetFileReader::Open(TypesFile(name));
+    ASSERT_FALSE(reader.has_value()) << name;
+    EXPECT_EQ(reader.error().code(), ErrorCode::TypeError) << name;
   }
 }

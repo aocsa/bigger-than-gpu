@@ -158,7 +158,7 @@ Result<RecordBatch> ParquetFileReader::ReadRowGroup(
       return std::unexpected(codec_result.error());
     }
 
-    ColumnReader reader(schema_.field(col_idx), column_meta,
+    ColumnReader reader(schema_.field(col_idx), leaves_[col_idx], column_meta,
                         column_data_result.value(),
                         std::move(codec_result.value()));
     auto column_result = reader.ReadAll();
@@ -226,7 +226,12 @@ Status ParquetFileReader::ReadMetadata() {
   }
   metadata_ = std::move(metadata_result.value());
 
-  schema_ = BuildSchema(metadata_);
+  auto file_schema = BuildSchema(metadata_);
+  if (!file_schema) {
+    return std::unexpected(file_schema.error());
+  }
+  schema_ = std::move(file_schema->schema);
+  leaves_ = std::move(file_schema->leaves);
 
   return {};
 }

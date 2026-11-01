@@ -42,6 +42,9 @@ enum class LogicalType : int8_t {
   kUuid
 };
 
+/// @brief The unit of a Parquet TIMESTAMP column's INT64 values.
+enum class TimeUnit : int8_t { kMillis, kMicros, kNanos };
+
 enum class Encoding : int8_t {
   kPlain = 0,
   kPlainDictionary = 2,
@@ -72,8 +75,8 @@ enum class CompressionType : int8_t {
   kLz4Raw = 7
 };
 
-/// @brief The DataType a physical type reads as when no logical type says otherwise.
-/// BYTE_ARRAY, INT96 and FIXED_LEN_BYTE_ARRAY read as String with the raw bytes.
+/// @brief The DataType that holds a physical type's raw values; the reader decodes into it
+/// before a `LeafType` conversion. `ResolveLeafType` decides what a column reads as.
 [[nodiscard]] constexpr DataType PhysicalTypeToDataType(PhysicalType type) noexcept {
   switch (type) {
     case PhysicalType::kBoolean:

@@ -130,6 +130,7 @@ class ParquetFileReader {
   FileHandle file_;
   FileMetadata metadata_;
   Schema schema_;
+  std::vector<LeafType> leaves_;  ///< How to read each field of schema_.
 };
 
 }  // namespace quest::io::parquet

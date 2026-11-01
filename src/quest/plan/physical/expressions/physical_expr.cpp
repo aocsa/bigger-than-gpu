@@ -352,6 +352,8 @@ Result<std::shared_ptr<ColumnVector>> LiteralExpression::Evaluate(
           return columnar::DataType::kBool;
         } else if constexpr (std::is_same_v<T, columnar::Date32>) {
           return columnar::DataType::kDate32;
+        } else if constexpr (std::is_same_v<T, columnar::Timestamp>) {
+          return columnar::DataType::kTimestamp;
         } else {
           return columnar::DataType::kString;
         }
@@ -374,6 +376,8 @@ std::string LiteralExpression::ToString() const {
           return "<binary>";
         } else if constexpr (std::is_same_v<T, columnar::Date32>) {
           return "DATE '" + columnar::ValueToString(val) + "'";
+        } else if constexpr (std::is_same_v<T, columnar::Timestamp>) {
+          return "TIMESTAMP '" + columnar::ValueToString(val) + "'";
         } else {
           return std::to_string(val);
         }

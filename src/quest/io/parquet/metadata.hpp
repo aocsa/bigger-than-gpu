@@ -42,6 +42,9 @@ struct SchemaElement {
   std::optional<int32_t> precision;
   std::optional<int32_t> scale;
   std::optional<int32_t> field_id;
+  std::optional<TimeUnit> time_unit;  ///< TIMESTAMP columns.
+  std::optional<int32_t> bit_width;   ///< Integer annotation (IntType or INT_* / UINT_*).
+  std::optional<bool> is_signed;      ///< Integer annotation (IntType or INT_* / UINT_*).
 
   /// @brief Returns true if this element is a leaf (has no children).
   [[nodiscard]] bool IsLeaf() const { return num_children == 0; }
@@ -161,6 +164,33 @@ class MetadataParser {
 // Schema Building
 // =============================================================================
 
-Schema BuildSchema(const FileMetadata& metadata);
+/// @brief How the reader turns a leaf column's physical values into its DataType.
+struct LeafType {
+  enum class Conversion : uint8_t {
+    kNone,       ///< The physical values are the column's values.
+    kDecimal,    ///< INT32/INT64 DECIMAL to Double: value / 10^decimal_scale.
+    kTimestamp,  ///< INT64 TIMESTAMP in `unit` to Timestamp micros.
+    kInt96,      ///< Legacy INT96 timestamp (Julian day, nanos of day) to Timestamp.
+    kUInt32,     ///< UINT_32 stored as INT32, widened to Int64.
+  };
+
+  DataType type;
+  Conversion conversion = Conversion::kNone;
+  int32_t decimal_scale = 0;
+  TimeUnit unit = TimeUnit::kMicros;
+};
+
+/// @brief The DataType of a leaf column and how to read it.
+/// @return The leaf type, or `TypeError` for FIXED_LEN_BYTE_ARRAY and UINT_64 columns.
+[[nodiscard]] Result<LeafType> ResolveLeafType(const SchemaElement& elem);
+
+/// @brief The schema of a file's leaf columns, and how to read each (same order).
+struct FileSchema {
+  Schema schema;
+  std::vector<LeafType> leaves;
+};
+
+/// @return The file schema, or the `ResolveLeafType` error of the first unsupported column.
+[[nodiscard]] Result<FileSchema> BuildSchema(const FileMetadata& metadata);
 
 }  // namespace quest::io::parquet

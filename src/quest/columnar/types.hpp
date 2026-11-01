@@ -22,6 +22,12 @@ struct Date32 {
 // Parquet plain/dictionary decoding memcpy's raw INT32 values into Date32.
 static_assert(sizeof(Date32) == sizeof(std::int32_t) && std::is_trivially_copyable_v<Date32>);
 
+/// @brief A `DataType::kTimestamp` value: microseconds since 1970-01-01 00:00:00, no time zone.
+struct Timestamp {
+  std::int64_t micros;
+  auto operator<=>(const Timestamp&) const = default;
+};
+
 /// @brief The type of a column.
 ///
 /// The value is the spill format's type tag: append new types, never reorder. kInt8..kInt64
@@ -36,6 +42,7 @@ enum class DataType : std::uint8_t {
   kDouble,
   kString,
   kDate32,
+  kTimestamp,
 };
 
 /// @brief The C++ type a kernel reads for a DataType (`CType`), and the type's name.
@@ -87,6 +94,11 @@ struct TypeTraits<DataType::kDate32> {
   using CType = Date32;
   static constexpr std::string_view kName = "Date32";
 };
+template <>
+struct TypeTraits<DataType::kTimestamp> {
+  using CType = Timestamp;
+  static constexpr std::string_view kName = "Timestamp";
+};
 
 /// @brief What `VisitType` passes to its callable: the traits of one DataType.
 template <DataType Id>
@@ -119,6 +131,8 @@ constexpr decltype(auto) VisitType(DataType type, F&& f) {
       return std::forward<F>(f)(TypeTag<DataType::kString>{});
     case DataType::kDate32:
       return std::forward<F>(f)(TypeTag<DataType::kDate32>{});
+    case DataType::kTimestamp:
+      return std::forward<F>(f)(TypeTag<DataType::kTimestamp>{});
   }
   std::unreachable();
 }
@@ -129,6 +143,10 @@ constexpr decltype(auto) VisitType(DataType type, F&& f) {
 
 [[nodiscard]] constexpr bool IsNumeric(DataType type) noexcept {
   return type >= DataType::kInt8 && type <= DataType::kDouble;
+}
+
+[[nodiscard]] constexpr bool IsTemporal(DataType type) noexcept {
+  return type == DataType::kDate32 || type == DataType::kTimestamp;
 }
 
 [[nodiscard]] inline std::string GetTypeName(DataType type) {

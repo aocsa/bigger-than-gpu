@@ -34,10 +34,11 @@ class ParquetFileReader;
 /// with nullable-column support via definition levels.
 class ColumnReader {
  public:
-  ColumnReader(const Field& field, const ColumnChunkMetadata& column_meta,
+  ColumnReader(const Field& field, const LeafType& leaf, const ColumnChunkMetadata& column_meta,
                std::span<const uint8_t> data,
                std::unique_ptr<CompressionCodec> codec)
       : field_(field),
+        leaf_(leaf),
         column_meta_(column_meta),
         data_(data),
         page_reader_(data),
@@ -46,6 +47,9 @@ class ColumnReader {
   [[nodiscard]] Result<std::shared_ptr<ColumnVector>> ReadAll();
 
  private:
+  /// @brief @p physical (decoded as the physical type) as the leaf's DataType.
+  [[nodiscard]] std::shared_ptr<ColumnVector> Convert(const ColumnVector& physical) const;
+
   // ===========================================================================
   // Decompression
   // ===========================================================================
@@ -113,15 +117,12 @@ class ColumnReader {
       std::span<const uint8_t> data, size_t num_values,
       const std::vector<int32_t>& def_levels, StringColumnVector* column);
 
-  [[nodiscard]] Status DecodeFixedLenByteArrayValues(
-      Encoding /*encoding*/, std::span<const uint8_t> data, size_t num_values,
-      const std::vector<int32_t>& def_levels, ColumnVector* column);
-
   [[nodiscard]] Status DecodeInt96Values(
       Encoding /*encoding*/, std::span<const uint8_t> data, size_t num_values,
       const std::vector<int32_t>& def_levels, ColumnVector* column);
 
   Field field_;
+  LeafType leaf_;
   ColumnChunkMetadata column_meta_;
   std::span<const uint8_t> data_;
   PageReader page_reader_;

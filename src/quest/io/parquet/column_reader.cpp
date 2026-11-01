@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <string>
 #include <utility>
 
@@ -48,21 +49,33 @@ template <typename ReadFn, typename AppendFn, typename AppendNullFn>
   return {};
 }
 
-/// @brief Unscaled DECIMAL values as Double. Division keeps 7 / 100 equal to the literal 0.07,
-/// which multiplying by 0.01 does not.
-template <typename T>
-[[nodiscard]] std::shared_ptr<ColumnVector> DecimalToDouble(const TypedColumnVector<T>& unscaled,
-                                                            int32_t scale) {
-  const double divisor = std::pow(10.0, scale);
-  auto column = std::make_shared<TypedColumnVector<double>>(columnar::DataType::kDouble, unscaled.size());
-  for (size_t i = 0; i < unscaled.size(); ++i) {
-    if (unscaled.IsNull(i)) {
-      column->AppendNull();
+/// @brief @p in with @p convert applied to each value, as a column of @p type.
+template <typename To, typename From, typename Convert>
+[[nodiscard]] std::shared_ptr<ColumnVector> ConvertValues(const ColumnVector& in, DataType type,
+                                                          Convert convert) {
+  // ReadAll decoded @p in as the column's physical type, From.
+  const auto& from = static_cast<const TypedColumnVector<From>&>(in);
+  auto out = std::make_shared<TypedColumnVector<To>>(type, from.size());
+  for (size_t i = 0; i < from.size(); ++i) {
+    if (from.IsNull(i)) {
+      out->AppendNull();
     } else {
-      column->Append(static_cast<double>(unscaled.GetTypedValue(i)) / divisor);
+      out->Append(convert(from.GetTypedValue(i)));
     }
   }
-  return column;
+  return out;
+}
+
+[[nodiscard]] constexpr int64_t ToMicros(int64_t value, TimeUnit unit) noexcept {
+  switch (unit) {
+    case TimeUnit::kMillis:
+      return value * 1000;
+    case TimeUnit::kMicros:
+      return value;
+    case TimeUnit::kNanos:
+      return value >= 0 ? value / 1000 : (value - 999) / 1000;  // floor
+  }
+  std::unreachable();
 }
 
 }  // namespace
@@ -72,10 +85,11 @@ Result<std::shared_ptr<ColumnVector>> ColumnReader::ReadAll() {
     return Error::ColumnDecodeError("Negative column chunk value count");
   }
   size_t total_values = column_meta_.num_values;
-  // A DECIMAL column decodes as its physical integer type and converts to Double at the end.
+  // A converted column decodes as its physical type; Convert() then makes its DataType.
+  const bool decode_physical = leaf_.conversion != LeafType::Conversion::kNone &&
+                               leaf_.conversion != LeafType::Conversion::kInt96;
   auto column = CreateColumnVector(
-      field_.decimal_scale ? PhysicalTypeToDataType(column_meta_.type) : field_.data_type,
-      total_values);
+      decode_physical ? PhysicalTypeToDataType(column_meta_.type) : leaf_.type, total_values);
 
   while (page_reader_.HasNextPage()) {
     auto header_result = page_reader_.ReadPageHeader();
@@ -125,15 +139,36 @@ Result<std::shared_ptr<ColumnVector>> ColumnReader::ReadAll() {
     }
   }
 
-  if (field_.decimal_scale) {
-    if (const auto* i64 = dynamic_cast<const TypedColumnVector<int64_t>*>(column.get())) {
-      return DecimalToDouble(*i64, *field_.decimal_scale);
-    }
-    // decimal_scale is set only for INT32 and INT64 columns (metadata.cpp IsIntegerDecimal).
-    return DecimalToDouble(static_cast<const TypedColumnVector<int32_t>&>(*column),
-                           *field_.decimal_scale);
+  if (decode_physical) {
+    return Convert(*column);
   }
   return column;
+}
+
+std::shared_ptr<ColumnVector> ColumnReader::Convert(const ColumnVector& physical) const {
+  using Conversion = LeafType::Conversion;
+  const bool is_int64 = column_meta_.type == PhysicalType::kInt64;
+  switch (leaf_.conversion) {
+    case Conversion::kDecimal: {
+      // Division keeps 7 / 100 equal to the literal 0.07; multiplying by 0.01 does not.
+      const double divisor = std::pow(10.0, leaf_.decimal_scale);
+      auto to_double = [divisor](auto unscaled) { return static_cast<double>(unscaled) / divisor; };
+      return is_int64 ? ConvertValues<double, int64_t>(physical, leaf_.type, to_double)
+                      : ConvertValues<double, int32_t>(physical, leaf_.type, to_double);
+    }
+    case Conversion::kTimestamp:
+      return ConvertValues<columnar::Timestamp, int64_t>(
+          physical, leaf_.type,
+          [unit = leaf_.unit](int64_t value) { return columnar::Timestamp{ToMicros(value, unit)}; });
+    case Conversion::kUInt32:
+      return ConvertValues<int64_t, int32_t>(physical, leaf_.type, [](int32_t value) {
+        return static_cast<int64_t>(static_cast<uint32_t>(value));
+      });
+    case Conversion::kNone:
+    case Conversion::kInt96:
+      break;
+  }
+  std::unreachable();  // ReadAll converts only the conversions above
 }
 
 Result<std::span<const uint8_t>> ColumnReader::DecompressPageData(
@@ -291,8 +326,7 @@ Status ColumnReader::DecodeValues(Encoding encoding,
       return DecodeBinaryValues(encoding, data, num_values, def_levels,
                                 column);
     case PhysicalType::kFixedLenByteArray:
-      return DecodeFixedLenByteArrayValues(encoding, data, num_values,
-                                           def_levels, column);
+      std::unreachable();  // ResolveLeafType rejects FIXED_LEN_BYTE_ARRAY columns
     case PhysicalType::kInt96:
       return DecodeInt96Values(encoding, data, num_values, def_levels,
                                column);
@@ -463,59 +497,36 @@ Status ColumnReader::DecodeDictionaryBinaryValues(
       [column]() { column->AppendNull(); });
 }
 
-Status ColumnReader::DecodeFixedLenByteArrayValues(
-    Encoding /*encoding*/, std::span<const uint8_t> data, size_t num_values,
-    const std::vector<int32_t>& def_levels, ColumnVector* column) {
-  auto* str_col = dynamic_cast<StringColumnVector*>(column);
-  if (!str_col) {
-    return Error::TypeError("Column type mismatch for fixed len byte array");
-  }
-
-  int32_t type_length = field_.type_length.value_or(0);
-  size_t pos = 0;
-
-  return ProcessWithDefLevels(
-      num_values, def_levels,
-      [&data, &pos, type_length]() -> Result<std::string> {
-        if (pos + type_length > data.size()) {
-          return std::unexpected(Error::PageDecodeError(
-              "Not enough data for fixed len byte array"));
-        }
-        std::string value(reinterpret_cast<const char*>(data.data() + pos),
-                          type_length);
-        pos += type_length;
-        return value;
-      },
-      [str_col](std::string val) { str_col->Append(std::move(val)); },
-      [str_col]() { str_col->AppendNull(); });
-}
-
 Status ColumnReader::DecodeInt96Values(
     Encoding /*encoding*/, std::span<const uint8_t> data, size_t num_values,
     const std::vector<int32_t>& def_levels, ColumnVector* column) {
-  // INT96 is typically used for timestamps, treat as binary.
-  auto* str_col = dynamic_cast<StringColumnVector*>(column);
-  if (!str_col) {
+  auto* timestamps = dynamic_cast<TypedColumnVector<columnar::Timestamp>*>(column);
+  if (!timestamps) {
     return Error::TypeError("Column type mismatch for INT96");
   }
 
-  constexpr size_t INT96_SIZE = 12;
+  // A legacy Impala/Spark timestamp: 8 bytes of nanoseconds in the day, then the Julian day.
+  constexpr size_t kInt96Size = 12;
+  constexpr int64_t kUnixEpochJulianDay = 2440588;
+  constexpr int64_t kMicrosPerDay = 86'400'000'000;
   size_t pos = 0;
 
   return ProcessWithDefLevels(
       num_values, def_levels,
-      [&data, &pos]() -> Result<std::string> {
-        if (pos + INT96_SIZE > data.size()) {
-          return std::unexpected(
-              Error::PageDecodeError("Not enough data for INT96"));
+      [&data, &pos]() -> Result<columnar::Timestamp> {
+        if (pos + kInt96Size > data.size()) {
+          return std::unexpected(Error::PageDecodeError("Not enough data for INT96"));
         }
-        std::string value(reinterpret_cast<const char*>(data.data() + pos),
-                          INT96_SIZE);
-        pos += INT96_SIZE;
-        return value;
+        int64_t nanos_of_day = 0;
+        int32_t julian_day = 0;
+        std::memcpy(&nanos_of_day, data.data() + pos, sizeof(nanos_of_day));
+        std::memcpy(&julian_day, data.data() + pos + sizeof(nanos_of_day), sizeof(julian_day));
+        pos += kInt96Size;
+        return columnar::Timestamp{(julian_day - kUnixEpochJulianDay) * kMicrosPerDay +
+                                   nanos_of_day / 1000};
       },
-      [str_col](std::string val) { str_col->Append(std::move(val)); },
-      [str_col]() { str_col->AppendNull(); });
+      [timestamps](columnar::Timestamp value) { timestamps->Append(value); },
+      [timestamps]() { timestamps->AppendNull(); });
 }
 
 }  // namespace quest::io::parquet
