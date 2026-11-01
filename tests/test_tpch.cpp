@@ -55,8 +55,14 @@ using Rows = std::vector<std::vector<std::string>>;
   return rows;
 }
 
-[[nodiscard]] Rows ToRows(const std::vector<columnar::RecordBatch>& batches) {
-  Rows rows;
+/// @brief A result cell as text, and whether it is a Double (only those match approximately).
+struct Cell {
+  std::string text;
+  bool is_double = false;
+};
+
+[[nodiscard]] std::vector<std::vector<Cell>> ToRows(const std::vector<columnar::RecordBatch>& batches) {
+  std::vector<std::vector<Cell>> rows;
   for (const auto& batch : batches) {
     for (std::size_t r = 0; r < batch.num_rows(); ++r) {
       auto& row = rows.emplace_back();
@@ -64,7 +70,8 @@ using Rows = std::vector<std::vector<std::string>>;
         const auto value = batch.column(c).GetValue(r);
         // ValueToString prints doubles with 6 decimals, too few to compare an AVG.
         const auto* d = std::get_if<double>(&value);
-        row.push_back(d != nullptr ? std::format("{}", *d) : columnar::ValueToString(value));
+        row.push_back(d != nullptr ? Cell{std::format("{}", *d), true}
+                                   : Cell{columnar::ValueToString(value)});
       }
     }
   }
@@ -80,20 +87,21 @@ using Rows = std::vector<std::vector<std::string>>;
   return value;
 }
 
-/// @brief Numbers match within a relative 1e-9: QUEST reads DECIMAL as double, DuckDB does
-/// exact decimal arithmetic. Every other cell must match as text.
-void ExpectRowsMatch(const Rows& actual, const Rows& expected) {
+/// @brief Every cell matches DuckDB's text exactly (Decimal money included), except a Double
+/// (an AVG), which matches within a relative 1e-9.
+void ExpectRowsMatch(const std::vector<std::vector<Cell>>& actual, const Rows& expected) {
   ASSERT_EQ(actual.size(), expected.size());
   for (std::size_t r = 0; r < expected.size(); ++r) {
     ASSERT_EQ(actual[r].size(), expected[r].size()) << "row " << r;
     for (std::size_t c = 0; c < expected[r].size(); ++c) {
+      const Cell& cell = actual[r][c];
       const auto want = ParseNumber(expected[r][c]);
-      const auto got = ParseNumber(actual[r][c]);
-      if (want && got) {
+      const auto got = ParseNumber(cell.text);
+      if (cell.is_double && want && got) {
         EXPECT_LE(std::abs(*got - *want), 1e-9 * std::max(1.0, std::abs(*want)))
-            << "row " << r << " column " << c << ": " << actual[r][c] << " vs " << expected[r][c];
+            << "row " << r << " column " << c << ": " << cell.text << " vs " << expected[r][c];
       } else {
-        EXPECT_EQ(actual[r][c], expected[r][c]) << "row " << r << " column " << c;
+        EXPECT_EQ(cell.text, expected[r][c]) << "row " << r << " column " << c;
       }
     }
   }
@@ -164,8 +172,8 @@ TEST(TpchTest, Q6ForecastingRevenueChange) {
   auto query = Scan("lineitem")
                    .Where(Col("l_shipdate") >= LitDate(1994y / 1 / 1) &&
                           Col("l_shipdate") < LitDate(1995y / 1 / 1) &&
-                          Col("l_discount") >= Lit(0.05) && Col("l_discount") <= Lit(0.07) &&
-                          Col("l_quantity") < Lit(24))
+                          Col("l_discount") >= LitDecimal(5, 2) &&
+                          Col("l_discount") <= LitDecimal(7, 2) && Col("l_quantity") < Lit(24))
                    .GroupBy({})
                    .Aggregate({{"revenue", agg::Sum(Col("l_extendedprice") * Col("l_discount"))}});
   ExpectMatchesDuckDb(std::move(query), "q6");

@@ -882,15 +882,23 @@ Result<LeafType> ResolveLeafType(const SchemaElement& elem) {
       break;
   }
   const bool is_int64 = elem.type == PhysicalType::kInt64;
-  // QUEST has no Decimal type: an INT32/INT64 DECIMAL reads as Double (value / 10^scale).
   if (logical == LogicalType::kDecimal) {
-    return LeafType{DataType::kDouble, Conversion::kDecimal, elem.scale.value_or(0)};
+    const int precision = elem.precision.value_or(DataType::kMaxDecimalPrecision);
+    const int scale = elem.scale.value_or(0);
+    if (precision < 1 || precision > DataType::kMaxDecimalPrecision || scale < 0 ||
+        scale > precision) {
+      return Error::TypeError(std::format("Parquet column '{}': DECIMAL({},{}) is not supported",
+                                          elem.name, precision, scale));
+    }
+    return LeafType{DataType::Decimal(static_cast<std::uint8_t>(precision),
+                                      static_cast<std::uint8_t>(scale)),
+                    Conversion::kDecimal};
   }
   if (logical == LogicalType::kDate && !is_int64) {
     return LeafType{DataType::kDate32};
   }
   if (logical == LogicalType::kTimestamp && is_int64) {
-    return LeafType{DataType::kTimestamp, Conversion::kTimestamp, 0,
+    return LeafType{DataType::kTimestamp, Conversion::kTimestamp,
                     elem.time_unit.value_or(TimeUnit::kMicros)};
   }
   if (logical == LogicalType::kInteger && elem.is_signed == false) {

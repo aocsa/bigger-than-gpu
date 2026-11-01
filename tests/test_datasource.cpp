@@ -51,7 +51,7 @@ TEST(TypesTest, VisitTypeGivesTheCType) {
   EXPECT_EQ(width(DataType::kInt64), 8U);
   EXPECT_EQ(width(DataType::kDate32), 4U);
   EXPECT_TRUE(VisitType(DataType::kString, []<typename Tag>(Tag) {
-    return std::same_as<typename Tag::CType, std::string_view> && Tag::kId == DataType::kString;
+    return std::same_as<typename Tag::CType, std::string_view> && Tag::kId == TypeId::kString;
   }));
 }
 

@@ -4,7 +4,6 @@
 #include "quest/io/parquet/column_reader.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <cstring>
 #include <string>
 #include <utility>
@@ -224,13 +223,11 @@ Result<ColumnVectorPtr> ColumnReader::Convert(const ColumnVector& physical) cons
   const bool is_int64 = column_meta_.type == PhysicalType::kInt64;
   switch (leaf_.conversion) {
     case Conversion::kDecimal: {
-      // Division keeps 7 / 100 equal to the literal 0.07; multiplying by 0.01 does not.
-      const double divisor = std::pow(10.0, leaf_.decimal_scale);
-      auto to_double = [divisor](auto unscaled) -> Result<double> {
-        return static_cast<double>(unscaled) / divisor;
+      auto to_decimal = [](auto unscaled) -> Result<columnar::Decimal64> {
+        return columnar::Decimal64{static_cast<int64_t>(unscaled)};
       };
-      return is_int64 ? ConvertValues<double, int64_t>(physical, leaf_.type, to_double)
-                      : ConvertValues<double, int32_t>(physical, leaf_.type, to_double);
+      return is_int64 ? ConvertValues<columnar::Decimal64, int64_t>(physical, leaf_.type, to_decimal)
+                      : ConvertValues<columnar::Decimal64, int32_t>(physical, leaf_.type, to_decimal);
     }
     case Conversion::kTimestamp:
       return ConvertValues<columnar::Timestamp, int64_t>(

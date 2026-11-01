@@ -356,17 +356,17 @@ namespace {
 
 }  // namespace
 
-TEST(ParquetTpchTest, DecimalColumnReadsAsDouble) {
+TEST(ParquetTpchTest, DecimalColumnReadsAsDecimal) {
   ASSERT_OK_AND_ASSIGN(auto reader, ParquetFileReader::Open(TpchLineitem()));
   const auto index = reader.schema().GetFieldIndex("l_extendedprice");
   ASSERT_TRUE(index.has_value());
   const auto& field = reader.schema().field(*index);
-  EXPECT_TRUE(field.data_type == DataType::kDouble);
+  EXPECT_EQ(field.data_type, DataType::Decimal(15, 2));
   EXPECT_FALSE(field.field_id.has_value());  // Thrift field 7 is the scale, not the field id
 
   ASSERT_OK_AND_ASSIGN(auto batch, reader.ReadRowGroup(0, {"l_extendedprice", "l_discount"}));
-  EXPECT_EQ(batch.column(0).GetValue(0), Value{24710.35});
-  EXPECT_EQ(batch.column(1).GetValue(0), Value{0.04});  // 4 / 100.0, the same double as 0.04
+  EXPECT_EQ(batch.column(0).GetValue(0), (Value{DecimalValue{2471035, 2}}));  // 24710.35
+  EXPECT_EQ(batch.column(1).GetValue(0), (Value{DecimalValue{4, 2}}));        // 0.04
 }
 
 TEST(ParquetTpchTest, ParallelRowGroupReadsMatchSerialReads) {
@@ -441,7 +441,7 @@ TEST(ParquetTypeMappingTest, TimestampUnitsUnsignedAndDecimal) {
       {"ts_ms", DataType::kTimestamp}, {"ts_us", DataType::kTimestamp},
       {"ts_ns", DataType::kTimestamp}, {"u8", DataType::kInt32},
       {"u16", DataType::kInt32},       {"u32", DataType::kInt64},
-      {"dec32", DataType::kDouble}};
+      {"dec32", DataType::Decimal(9, 2)}};
   ASSERT_EQ(reader.schema().num_fields(), expected_fields.size());
   for (std::size_t i = 0; i < expected_fields.size(); ++i) {
     EXPECT_EQ(reader.schema().field(i).name, expected_fields[i].first);
@@ -459,13 +459,13 @@ TEST(ParquetTypeMappingTest, TimestampUnitsUnsignedAndDecimal) {
   EXPECT_EQ(batch.column(3).GetValue(0), Value{std::int32_t{200}});
   EXPECT_EQ(batch.column(4).GetValue(0), Value{std::int32_t{60000}});
   EXPECT_EQ(batch.column(5).GetValue(0), Value{std::int64_t{4000000000}});  // above INT32_MAX
-  EXPECT_EQ(batch.column(6).GetValue(0), Value{1234567.89});
+  EXPECT_EQ(ValueToString(batch.column(6).GetValue(0)), "1234567.89");  // INT32 widened
 
   EXPECT_TRUE(batch.column(0).IsNull(1));
   EXPECT_EQ(text(1, 1), "1969-12-31 23:59:59.999999");
   EXPECT_EQ(text(2, 1), "1969-12-31 23:59:59.999999");  // -1 ns floors to -1 us
   EXPECT_TRUE(batch.column(5).IsNull(1));
-  EXPECT_EQ(batch.column(6).GetValue(1), Value{-0.07});
+  EXPECT_EQ(ValueToString(batch.column(6).GetValue(1)), "-0.07");
 }
 
 TEST(ParquetTypeMappingTest, Int96ReadsAsTimestamp) {

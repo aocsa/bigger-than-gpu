@@ -168,7 +168,7 @@ class MetadataParser {
 struct LeafType {
   enum class Conversion : uint8_t {
     kNone,       ///< The physical values are the column's values.
-    kDecimal,    ///< INT32/INT64 DECIMAL to Double: value / 10^decimal_scale.
+    kDecimal,    ///< INT32/INT64 DECIMAL to Decimal: the unscaled values widen to int64.
     kTimestamp,  ///< INT64 TIMESTAMP in `unit` to Timestamp micros.
     kInt96,      ///< Legacy INT96 timestamp (Julian day, nanos of day) to Timestamp.
     kUInt32,     ///< UINT_32 stored as INT32, widened to Int64.
@@ -176,12 +176,12 @@ struct LeafType {
 
   DataType type;
   Conversion conversion = Conversion::kNone;
-  int32_t decimal_scale = 0;
   TimeUnit unit = TimeUnit::kMicros;
 };
 
 /// @brief The DataType of a leaf column and how to read it.
-/// @return The leaf type, or `TypeError` for FIXED_LEN_BYTE_ARRAY and UINT_64 columns.
+/// @return The leaf type, or `TypeError` for FIXED_LEN_BYTE_ARRAY, UINT_64 and DECIMAL
+/// columns of more than 18 digits.
 [[nodiscard]] Result<LeafType> ResolveLeafType(const SchemaElement& elem);
 
 /// @brief The schema of a file's leaf columns, and how to read each (same order).

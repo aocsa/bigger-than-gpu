@@ -329,6 +329,38 @@ TEST(HashAggregateTest, Int32SumWidensToInt64) {
   EXPECT_EQ(out->ToCSV(), std::to_string(3LL * kMax) + "\n");
 }
 
+TEST(HashAggregateTest, DecimalSumIsExactAvgIsDouble) {
+  constexpr DataType kMoney = DataType::Decimal(15, 2);
+  std::vector<AggregateSpec> aggs;
+  aggs.push_back(Agg(AggregateKind::kSum, Col(1), "s"));
+  aggs.push_back(Agg(AggregateKind::kAvg, Col(1), "a"));
+  aggs.push_back(Agg(AggregateKind::kMax, Col(1), "m"));
+  HashAggregateOperator op{0, {"g"}, std::move(aggs)};
+  ASSERT_OK_AND_ASSIGN(
+      auto out, Drive(op, {MakeBatch({{"g", Int32s({1, 1, 1})},
+                                      {"v", MakeColumn<columnar::Decimal64>(
+                                                kMoney, {columnar::Decimal64{10},
+                                                         columnar::Decimal64{20},
+                                                         std::nullopt})}})}));
+  ASSERT_TRUE(out.has_value());
+  EXPECT_EQ(TypeNames(*out),
+            (std::vector<std::string>{"Int32", "Decimal(18,2)", "Double", "Decimal(15,2)"}));
+  EXPECT_EQ(out->ToCSV(), "1,0.30,0.150000,0.20\n");
+}
+
+TEST(HashAggregateTest, DecimalSumOverflowIsOutOfRange) {
+  constexpr DataType kWide = DataType::Decimal(18, 0);
+  std::vector<AggregateSpec> aggs;
+  aggs.push_back(Agg(AggregateKind::kSum, Col(0), "s"));
+  HashAggregateOperator op{0, {}, std::move(aggs)};
+  auto status = op.Sink(Block(MakeBatch(
+      {{"v", MakeColumn<columnar::Decimal64>(
+                 kWide, {columnar::Decimal64{std::numeric_limits<int64_t>::max()},
+                         columnar::Decimal64{1}})}})));
+  ASSERT_FALSE(status.has_value());
+  EXPECT_EQ(status.error().code(), ErrorCode::OutOfRange);
+}
+
 TEST(HashAggregateTest, StringMinMaxCompareBytewise) {
   std::vector<AggregateSpec> aggs;
   aggs.push_back(Agg(AggregateKind::kMin, Col(0), "mn"));

@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <bit>
 #include <cassert>
 #include <chrono>
@@ -15,6 +16,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <type_traits>
 #include <variant>
 #include <vector>
@@ -24,9 +26,61 @@
 
 namespace quest::columnar {
 
+/// @brief A Decimal cell as a `Value`: the unscaled value and its column's scale. Values
+/// compare by member, so only values of one scale (one column) compare correctly.
+struct DecimalValue {
+  std::int64_t unscaled;
+  std::uint8_t scale;
+  auto operator<=>(const DecimalValue&) const = default;
+};
+
 using Value = std::variant<std::monostate,  // null
                            bool, int8_t, int16_t, int32_t, int64_t, float,
-                           double, std::string, Date32, Timestamp>;
+                           double, std::string, Date32, Timestamp, DecimalValue>;
+
+/// @brief The type of a Decimal literal, as DuckDB types `0.05`: Decimal(3, 2).
+[[nodiscard]] constexpr DataType DecimalValueType(const DecimalValue& value) noexcept {
+  int digits = 1;
+  for (auto magnitude = value.unscaled; magnitude >= 10 || magnitude <= -10; magnitude /= 10) {
+    ++digits;
+  }
+  return DataType::Decimal(static_cast<std::uint8_t>(std::max(digits, value.scale + 1)),
+                           value.scale);
+}
+
+__extension__ using Int128 = __int128;  // __extension__: -Wpedantic rejects bare __int128
+
+/// @brief An integer or Decimal value's unscaled digits and scale (an integer has scale 0).
+template <typename V>
+  requires(std::is_integral_v<V> || std::same_as<V, DecimalValue>)
+[[nodiscard]] constexpr std::pair<std::int64_t, int> UnscaledAndScale(const V& value) noexcept {
+  if constexpr (std::same_as<V, DecimalValue>) {
+    return {value.unscaled, value.scale};
+  } else {
+    return {static_cast<std::int64_t>(value), 0};
+  }
+}
+
+/// @brief @p unscaled at @p from_scale rewritten at @p to_scale (>= from_scale), or nullopt
+/// if it overflows an int64.
+[[nodiscard]] inline std::optional<std::int64_t> Rescale(std::int64_t unscaled, int from_scale,
+                                                         int to_scale) noexcept {
+  std::int64_t out = 0;
+  if (__builtin_mul_overflow(unscaled, PowerOfTen(to_scale - from_scale), &out)) {
+    return std::nullopt;
+  }
+  return out;
+}
+
+/// @brief A numeric `Value` alternative as double; a Decimal divides by 10^scale.
+template <typename V>
+[[nodiscard]] double ToDoubleValue(const V& value) noexcept {
+  if constexpr (std::same_as<V, DecimalValue>) {
+    return static_cast<double>(value.unscaled) / static_cast<double>(PowerOfTen(value.scale));
+  } else {
+    return static_cast<double>(value);
+  }
+}
 
 inline std::string ValueToString(const Value& value) {
   return std::visit(
@@ -42,6 +96,8 @@ inline std::string ValueToString(const Value& value) {
           const std::chrono::year_month_day ymd{std::chrono::sys_days{std::chrono::days{v.days}}};
           return std::format("{:04}-{:02}-{:02}", static_cast<int>(ymd.year()),
                              static_cast<unsigned>(ymd.month()), static_cast<unsigned>(ymd.day()));
+        } else if constexpr (std::is_same_v<T, DecimalValue>) {
+          return FormatDecimal(v.unscaled, v.scale);
         } else if constexpr (std::is_same_v<T, Timestamp>) {
           // DuckDB's text form: fractional seconds only when nonzero, without trailing zeros.
           using namespace std::chrono;
@@ -66,9 +122,22 @@ inline std::string ValueToString(const Value& value) {
       value);
 }
 
-/// @brief The `Value` alternative for C++ type @p T: a String cell is a `std::string`.
+/// @brief The `Value` alternative for C++ type @p T: a String cell is a `std::string` and a
+/// Decimal cell a `DecimalValue`.
 template <typename T>
-using ValueOf = std::conditional_t<std::same_as<T, std::string_view>, std::string, T>;
+using ValueOf = std::conditional_t<
+    std::same_as<T, std::string_view>, std::string,
+    std::conditional_t<std::same_as<T, Decimal64>, DecimalValue, T>>;
+
+/// @brief @p value as C++ type @p T; a `DecimalValue` drops its scale.
+template <typename T>
+[[nodiscard]] T FromValueOf(const ValueOf<T>& value) {
+  if constexpr (std::same_as<T, Decimal64>) {
+    return Decimal64{value.unscaled};
+  } else {
+    return T(value);
+  }
+}
 
 /// @brief How a column stores C++ type @p T: `std::vector<bool>` packs bits and has no
 /// `data()`, so a Bool is one byte.
@@ -229,7 +298,12 @@ class ColumnVector final {
       return std::monostate{};
     }
     return VisitType(type_, [&]<typename Tag>(Tag) -> Value {
-      return ValueOf<typename Tag::CType>(Get<typename Tag::CType>(i));
+      using T = typename Tag::CType;
+      if constexpr (std::same_as<T, Decimal64>) {
+        return DecimalValue{Get<T>(i).unscaled, type_.scale};
+      } else {
+        return ValueOf<T>(Get<T>(i));
+      }
     });
   }
 
@@ -344,7 +418,13 @@ class ColumnBuilder {
       if (std::holds_alternative<std::monostate>(value)) {
         builder.AppendNull();
       } else if (const auto* v = std::get_if<ValueOf<T>>(&value)) {
-        builder.Append(*v);
+        if constexpr (std::same_as<T, Decimal64>) {
+          if (v->scale != type.scale) {
+            return Error::TypeError("Decimal value of scale " + std::to_string(v->scale) +
+                                    " in a column of scale " + std::to_string(type.scale));
+          }
+        }
+        builder.Append(FromValueOf<T>(*v));
       } else {
         return Error::TypeError("Value is not a " + std::string(Tag::kName));
       }

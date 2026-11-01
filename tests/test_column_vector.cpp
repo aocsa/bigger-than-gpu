@@ -198,6 +198,34 @@ TEST(ValueBridgeTest, ColumnFromValuesChecksTypes) {
   EXPECT_EQ(bad.error().code(), quest::ErrorCode::TypeError);
 }
 
+TEST(DecimalColumnTest, StoresUnscaledAndFormatsWithTheScale) {
+  ColumnBuilder<Decimal64> builder(DataType::Decimal(15, 2), 3);
+  builder.Append(Decimal64{123456});
+  builder.Append(Decimal64{-7});
+  builder.AppendNull();
+  auto col = std::move(builder).Finish();
+  EXPECT_EQ(col->GetType(), DataType::Decimal(15, 2));
+  EXPECT_EQ(col->Get<Decimal64>(0), Decimal64{123456});
+  EXPECT_EQ(col->GetValue(0), (Value{DecimalValue{123456, 2}}));
+  EXPECT_EQ(ValueToString(col->GetValue(1)), "-0.07");
+  EXPECT_TRUE(col->IsNull(2));
+}
+
+TEST(DecimalColumnTest, FormatDecimalLikeDuckDb) {
+  EXPECT_EQ(FormatDecimal(38045600, 2), "380456.00");
+  EXPECT_EQ(FormatDecimal(5058224414861, 4), "505822441.4861");
+  EXPECT_EQ(FormatDecimal(-7, 2), "-0.07");
+  EXPECT_EQ(FormatDecimal(42, 0), "42");
+  EXPECT_EQ(FormatDecimal(std::numeric_limits<int64_t>::min(), 18), "-9.223372036854775808");
+}
+
+TEST(DecimalColumnTest, ColumnFromValuesRejectsAnotherScale) {
+  const std::vector<Value> values = {Value{DecimalValue{5, 3}}};
+  auto col = ColumnFromValues(DataType::Decimal(15, 2), values);
+  ASSERT_FALSE(col.has_value());
+  EXPECT_EQ(col.error().code(), quest::ErrorCode::TypeError);
+}
+
 // =============================================================================
 // Date32 and Timestamp
 // =============================================================================

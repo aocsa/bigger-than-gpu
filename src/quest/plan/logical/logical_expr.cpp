@@ -58,6 +58,8 @@ Result<Field> Literal::ToField(const LogicalPlan& /*input*/) const {
           return columnar::DataType::kDate32;
         } else if constexpr (std::is_same_v<T, columnar::Timestamp>) {
           return columnar::DataType::kTimestamp;
+        } else if constexpr (std::is_same_v<T, columnar::DecimalValue>) {
+          return columnar::DecimalValueType(v);
         } else {
           return columnar::DataType::kString;
         }
@@ -80,6 +82,8 @@ std::string Literal::ToString() const {
           return "DATE '" + columnar::ValueToString(v) + "'";
         } else if constexpr (std::is_same_v<T, columnar::Timestamp>) {
           return "TIMESTAMP '" + columnar::ValueToString(v) + "'";
+        } else if constexpr (std::is_same_v<T, columnar::DecimalValue>) {
+          return columnar::ValueToString(v);
         } else {
           return std::to_string(v);
         }
@@ -179,8 +183,13 @@ Result<Field> Sum::ToField(const LogicalPlan& input) const {
   if (!input_field.has_value()) {
     return input_field;
   }
-  // SQL: SUM of an integer type is BIGINT, of a floating type DOUBLE.
+  // SQL: SUM of an integer type is BIGINT, of a floating type DOUBLE, of a Decimal a
+  // Decimal of the same scale (18 digits; HashAggregateOperator fails on overflow).
   const auto& type = input_field->data_type;
+  if (columnar::IsDecimal(type)) {
+    return Field{"SUM(" + input_->ToString() + ")",
+                 columnar::DataType::Decimal(columnar::DataType::kMaxDecimalPrecision, type.scale)};
+  }
   const bool is_integral = (type == columnar::DataType::kBool) ||
                            (type == columnar::DataType::kInt8) ||
                            (type == columnar::DataType::kInt16) ||

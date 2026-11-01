@@ -146,6 +146,22 @@ TEST(RecordBatchSerializerTest, SerializeDeserializeTimestampWithNulls) {
   EXPECT_EQ(out.GetValue(2), Value{Timestamp{-1}});
 }
 
+TEST(RecordBatchSerializerTest, SerializeDeserializeDecimalKeepsPrecisionAndScale) {
+  constexpr DataType kMoney = DataType::Decimal(15, 2);
+  Schema schema({Field("m", kMoney, Repetition::kOptional)});
+  ColumnBuilder<Decimal64> col(kMoney, 2);
+  col.Append(Decimal64{-123456});
+  col.AppendNull();
+  RecordBatch original(schema, {std::move(col).Finish()});
+
+  ASSERT_OK_AND_ASSIGN(std::vector<uint8_t> data, RecordBatchSerializer::Serialize(original));
+  ASSERT_OK_AND_ASSIGN(RecordBatch deserialized, RecordBatchSerializer::Deserialize(data));
+  EXPECT_EQ(deserialized.schema().field(0).data_type, kMoney);
+  EXPECT_EQ(deserialized.column(0).GetType(), kMoney);
+  EXPECT_EQ(ValueToString(deserialized.column(0).GetValue(0)), "-1234.56");
+  EXPECT_TRUE(deserialized.column(0).IsNull(1));
+}
+
 TEST(RecordBatchSerializerTest, SerializeDeserializeStringWithNulls) {
   Schema schema({Field("text", DataType::kString, Repetition::kOptional)});
 

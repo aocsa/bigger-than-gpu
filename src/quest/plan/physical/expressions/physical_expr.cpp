@@ -13,8 +13,18 @@ namespace quest::plan::physical {
 
 namespace {
 
-/// @brief Compares two values; null if either is null. Mixed numeric types compare as
-/// double; other mismatched types compare false.
+/// @brief An integer or Decimal `Value` alternative: exact arithmetic applies.
+template <typename V>
+constexpr bool kIsExact =
+    (std::is_integral_v<V> && !std::is_same_v<V, bool>) || std::is_same_v<V, columnar::DecimalValue>;
+
+/// @brief An exact or floating `Value` alternative.
+template <typename V>
+constexpr bool kIsNumber = kIsExact<V> || std::is_floating_point_v<V>;
+
+/// @brief Compares two values; null if either is null. A Decimal compares exactly with an
+/// integer or Decimal of any scale; other mixed numeric types compare as double; other
+/// mismatched types compare false.
 template <typename Op>
 std::optional<bool> CompareValues(const Value& left, const Value& right) {
   return std::visit(
@@ -25,6 +35,20 @@ std::optional<bool> CompareValues(const Value& left, const Value& right) {
         if constexpr (std::is_same_v<LT, std::monostate> ||
                       std::is_same_v<RT, std::monostate>) {
           return std::nullopt;
+        } else if constexpr (std::is_same_v<LT, columnar::DecimalValue> ||
+                             std::is_same_v<RT, columnar::DecimalValue>) {
+          if constexpr (kIsExact<LT> && kIsExact<RT>) {
+            // Both at the larger scale, in 128 bits so the rescale cannot overflow.
+            const auto [l, ls] = columnar::UnscaledAndScale(lhs);
+            const auto [r, rs] = columnar::UnscaledAndScale(rhs);
+            const int scale = std::max(ls, rs);
+            return Op{}(columnar::Int128{l} * columnar::PowerOfTen(scale - ls),
+                        columnar::Int128{r} * columnar::PowerOfTen(scale - rs));
+          } else if constexpr (kIsNumber<LT> && kIsNumber<RT>) {
+            return Op{}(columnar::ToDoubleValue(lhs), columnar::ToDoubleValue(rhs));
+          } else {
+            return false;
+          }
         } else if constexpr (std::is_same_v<LT, RT>) {
           return Op{}(lhs, rhs);
         } else if constexpr (std::is_arithmetic_v<LT> &&
@@ -98,6 +122,8 @@ template <typename T>
         using V = std::decay_t<decltype(x)>;
         if constexpr (std::is_arithmetic_v<V> && !std::is_same_v<V, bool>) {
           return static_cast<T>(x);
+        } else if constexpr (std::is_same_v<V, columnar::DecimalValue>) {
+          return static_cast<T>(columnar::ToDoubleValue(x));  // a Decimal reaches only Double
         } else {
           // BinaryResultType admitted only numeric column types.
           std::unreachable();
@@ -170,6 +196,51 @@ template <typename T>
                           IsNullLiteral(r) ? l.GetType() : r.GetType());
 }
 
+/// @brief One row of `a op b` as a Decimal of @p scale; BinaryResultType chose @p scale, so
+/// `+` and `-` rescale up and `*` multiplies the unscaled values.
+[[nodiscard]] Result<std::optional<columnar::Decimal64>> DecimalArithmetic(BinaryOp op,
+                                                                           const Value& a,
+                                                                           const Value& b,
+                                                                           int scale) {
+  if (std::holds_alternative<std::monostate>(a) || std::holds_alternative<std::monostate>(b)) {
+    return std::nullopt;
+  }
+  auto unscaled = [](const Value& v) {
+    return std::visit(
+        [](const auto& x) -> std::pair<std::int64_t, int> {
+          if constexpr (kIsExact<std::decay_t<decltype(x)>>) {
+            return columnar::UnscaledAndScale(x);
+          } else {
+            std::unreachable();  // BinaryResultType gives Decimal only for exact operands
+          }
+        },
+        v);
+  };
+  auto [x, xs] = unscaled(a);
+  auto [y, ys] = unscaled(b);
+  const auto overflow = [op] {
+    return Error::OutOfRange("Decimal overflow in '" + std::string(plan::ToString(op)) + "'");
+  };
+  std::int64_t out = 0;
+  if (op == BinaryOp::kMultiply) {
+    if (__builtin_mul_overflow(x, y, &out)) {
+      return overflow();
+    }
+    return columnar::Decimal64{out};
+  }
+  const auto xr = columnar::Rescale(x, xs, scale);
+  const auto yr = columnar::Rescale(y, ys, scale);
+  if (!xr || !yr) {
+    return overflow();
+  }
+  const bool overflowed = op == BinaryOp::kAdd ? __builtin_add_overflow(*xr, *yr, &out)
+                                               : __builtin_sub_overflow(*xr, *yr, &out);
+  if (overflowed) {
+    return overflow();
+  }
+  return columnar::Decimal64{out};
+}
+
 [[nodiscard]] Result<ColumnVectorPtr> EvaluateArithmetic(BinaryOp op,
                                                                        const ColumnVector& l,
                                                                        const ColumnVector& r,
@@ -180,13 +251,69 @@ template <typename T>
   }
   return columnar::VisitType(*type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
     using T = typename Tag::CType;
-    if constexpr (std::is_arithmetic_v<T> && !std::same_as<T, bool>) {
+    if constexpr (std::same_as<T, columnar::Decimal64>) {
+      return MapRows<T>(l, r, n, *type, [op, scale = type->scale](const Value& a, const Value& b) {
+        return DecimalArithmetic(op, a, b, scale);
+      });
+    } else if constexpr (std::is_arithmetic_v<T> && !std::same_as<T, bool>) {
       return MapRows<T>(l, r, n, *type,
                         [op](const Value& a, const Value& b) { return Arithmetic<T>(op, a, b); });
     } else {
       std::unreachable();  // BinaryResultType yields only numeric types for arithmetic
     }
   });
+}
+
+/// @brief @p col as @p type: a numeric value widens and a Decimal rescales. An equal type or
+/// a NULL literal comes back as it is; a constant column stays constant.
+[[nodiscard]] Result<ColumnVectorPtr> CastColumn(const ColumnVectorPtr& col, DataType type) {
+  if (col->GetType() == type || IsNullLiteral(*col)) {
+    return col;
+  }
+  const size_t rows = col->is_constant() ? 1 : col->size();
+  auto cast = columnar::VisitType(type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
+    using T = typename Tag::CType;
+    columnar::ColumnBuilder<T> builder(type, rows);
+    for (size_t i = 0; i < rows; ++i) {
+      const Value v = col->GetValue(i);
+      if (std::holds_alternative<std::monostate>(v)) {
+        builder.AppendNull();
+        continue;
+      }
+      Result<T> value = std::visit(
+          [&](const auto& x) -> Result<T> {
+            using V = std::decay_t<decltype(x)>;
+            if constexpr (std::same_as<T, columnar::Decimal64> && kIsExact<V>) {
+              const auto [unscaled, scale] = columnar::UnscaledAndScale(x);
+              const auto rescaled = columnar::Rescale(unscaled, scale, type.scale);
+              if (!rescaled) {
+                return Error::OutOfRange("Decimal overflow in a cast to " +
+                                         columnar::GetTypeName(type));
+              }
+              return T{*rescaled};
+            } else if constexpr (std::is_arithmetic_v<T> && !std::same_as<T, bool> &&
+                                 std::is_arithmetic_v<V> && !std::same_as<V, bool>) {
+              return static_cast<T>(x);
+            } else if constexpr (std::is_floating_point_v<T> &&
+                                 std::same_as<V, columnar::DecimalValue>) {
+              return static_cast<T>(columnar::ToDoubleValue(x));
+            } else {
+              return Error::TypeError("Cannot cast " + columnar::GetTypeName(col->GetType()) +
+                                      " to " + columnar::GetTypeName(type));
+            }
+          },
+          v);
+      if (!value) {
+        return std::unexpected(value.error());
+      }
+      builder.Append(*value);
+    }
+    return std::move(builder).Finish();
+  });
+  if (!cast || !col->is_constant()) {
+    return cast;
+  }
+  return ColumnVector::Constant(**cast, col->size());
 }
 
 /// @brief @p x as @p T; the caller has checked that the types are equal or both numeric.
@@ -268,7 +395,7 @@ template <typename T>
     }
     const auto& lane = lanes[pick];
     if (lane.Valid(i)) {
-      builder.Append(lane.values[lane.Row(i)]);
+      builder.Append(columnar::FromValueOf<T>(lane.values[lane.Row(i)]));
     } else {
       builder.AppendNull();
     }
@@ -305,6 +432,8 @@ Result<ColumnVectorPtr> LiteralExpression::Evaluate(
           return columnar::DataType::kDate32;
         } else if constexpr (std::is_same_v<T, columnar::Timestamp>) {
           return columnar::DataType::kTimestamp;
+        } else if constexpr (std::is_same_v<T, columnar::DecimalValue>) {
+          return columnar::DecimalValueType(val);
         } else {
           return columnar::DataType::kString;
         }
@@ -331,6 +460,8 @@ std::string LiteralExpression::ToString() const {
           return "DATE '" + columnar::ValueToString(val) + "'";
         } else if constexpr (std::is_same_v<T, columnar::Timestamp>) {
           return "TIMESTAMP '" + columnar::ValueToString(val) + "'";
+        } else if constexpr (std::is_same_v<T, columnar::DecimalValue>) {
+          return columnar::ValueToString(val);
         } else {
           return std::to_string(val);
         }
@@ -462,6 +593,14 @@ Result<ColumnVectorPtr> CaseExpression::Evaluate(const RecordBatch& input) const
     type = results.back()->GetType();  // every result is a NULL literal
   }
 
+  for (auto& result : results) {
+    auto cast = CastColumn(result, *type);
+    if (!cast) {
+      return std::unexpected(cast.error());
+    }
+    result = std::move(*cast);
+  }
+
   const size_t n = input.num_rows();
   return columnar::VisitType(*type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
     return SelectRows<typename Tag::CType>(whens, results, n, *type);
@@ -486,6 +625,8 @@ double AggregateExpression::ToDouble(const Value& val) {
         using T = std::decay_t<decltype(v)>;
         if constexpr (std::is_arithmetic_v<T>) {
           return static_cast<double>(v);
+        } else if constexpr (std::is_same_v<T, columnar::DecimalValue>) {
+          return columnar::ToDoubleValue(v);
         } else {
           return 0.0;
         }

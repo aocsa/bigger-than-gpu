@@ -156,17 +156,23 @@ Result<RecordBatch> RecordBatchSerializer::DeserializeFromFile(const std::string
 }
 
 void RecordBatchSerializer::WriteDataType(std::vector<uint8_t>& buffer, DataType type) {
-  WriteValue(buffer, std::to_underlying(type));
+  WriteValue(buffer, std::to_underlying(type.id));
+  WriteValue(buffer, type.precision);
+  WriteValue(buffer, type.scale);
 }
 
 Result<DataType> RecordBatchSerializer::ReadDataType(const std::vector<uint8_t>& buffer,
                                                      size_t& offset) {
-  auto tag = ReadValue<std::underlying_type_t<DataType>>(buffer, offset);
+  auto tag = ReadValue<std::underlying_type_t<TypeId>>(buffer, offset);
   if (!tag) return std::unexpected(tag.error());
-  if (*tag > std::to_underlying(DataType::kTimestamp)) {
+  if (*tag > std::to_underlying(TypeId::kDecimal)) {
     return Error::Invalid("Unknown type index");
   }
-  return static_cast<DataType>(*tag);
+  auto precision = ReadValue<uint8_t>(buffer, offset);
+  if (!precision) return std::unexpected(precision.error());
+  auto scale = ReadValue<uint8_t>(buffer, offset);
+  if (!scale) return std::unexpected(scale.error());
+  return DataType{static_cast<TypeId>(*tag), *precision, *scale};
 }
 
 Status RecordBatchSerializer::WriteColumn(std::vector<uint8_t>& buffer, const ColumnVector& column,
@@ -191,10 +197,11 @@ Status RecordBatchSerializer::WriteColumn(std::vector<uint8_t>& buffer, const Co
 Status RecordBatchSerializer::WriteColumnValues(std::vector<uint8_t>& buffer,
                                                 const ColumnVector& column, size_t num_rows) {
   return VisitType(column.GetType(), [&]<typename Tag>(Tag) -> Status {
-    using T = ValueOf<typename Tag::CType>;
+    using T = typename Tag::CType;
+    const auto view = column.View<T>();
     for (size_t i = 0; i < num_rows; ++i) {
-      const T val = column.IsNull(i) ? T{} : std::get<T>(column.GetValue(i));
-      if constexpr (std::same_as<T, std::string>) {
+      const T val = view.IsNull(i) ? T{} : view[i];
+      if constexpr (std::same_as<T, std::string_view>) {
         WriteValue(buffer, static_cast<uint32_t>(val.size()));
         buffer.insert(buffer.end(), val.begin(), val.end());
       } else {
@@ -215,14 +222,14 @@ Result<ColumnVectorPtr> RecordBatchSerializer::ReadColumn(const std::vector<uint
   offset += *bitmap_size;
 
   return VisitType(type, [&]<typename Tag>(Tag) -> Result<ColumnVectorPtr> {
-    using T = ValueOf<typename Tag::CType>;
-    ColumnBuilder<typename Tag::CType> builder(type, num_rows);
+    using T = typename Tag::CType;
+    ColumnBuilder<T> builder(type, num_rows);
     for (size_t i = 0; i < num_rows; ++i) {
       T val{};
-      if constexpr (std::same_as<T, std::string>) {
+      if constexpr (std::same_as<T, std::string_view>) {
         auto len = ReadValue<uint32_t>(buffer, offset);
         if (!len) return std::unexpected(len.error());
-        val.assign(buffer.begin() + offset, buffer.begin() + offset + *len);
+        val = std::string_view(reinterpret_cast<const char*>(buffer.data()) + offset, *len);
         offset += *len;
       } else {
         auto read = ReadValue<T>(buffer, offset);

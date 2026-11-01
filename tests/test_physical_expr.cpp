@@ -1190,3 +1190,108 @@ TEST(Date32ExprTest, FilterKeepsDate32Columns) {
   ExpectColumn<Date32>(out.column(0), {k19950615});
   ExpectColumn<Date32>(out.column(1), {k19941231});
 }
+
+// =============================================================================
+// Decimal (types as DuckDB types them; see testdata/tpch)
+// =============================================================================
+
+namespace {
+
+[[nodiscard]] ColumnVectorPtr Decimals(DataType type, std::initializer_list<std::optional<int64_t>> unscaled) {
+  ColumnBuilder<Decimal64> builder(type, unscaled.size());
+  for (const auto& u : unscaled) {
+    u ? builder.Append(Decimal64{*u}) : builder.AppendNull();
+  }
+  return std::move(builder).Finish();
+}
+
+constexpr DataType kMoney = DataType::Decimal(15, 2);
+
+}  // namespace
+
+TEST(DecimalExprTest, ResultTypesFollowDuckDb) {
+  auto type = [](BinaryOp op, DataType l, DataType r) { return plan::BinaryResultType(op, l, r); };
+  EXPECT_EQ(type(BinaryOp::kAdd, kMoney, kMoney), DataType::Decimal(16, 2));
+  EXPECT_EQ(type(BinaryOp::kSubtract, DataType::kInt32, kMoney), DataType::Decimal(16, 2));
+  EXPECT_EQ(type(BinaryOp::kMultiply, kMoney, DataType::Decimal(16, 2)), DataType::Decimal(18, 4));
+  EXPECT_EQ(type(BinaryOp::kMultiply, DataType::Decimal(18, 4), DataType::Decimal(16, 2)),
+            DataType::Decimal(18, 6));
+  EXPECT_EQ(type(BinaryOp::kDivide, kMoney, kMoney), DataType::kDouble);
+  EXPECT_EQ(type(BinaryOp::kModulo, kMoney, DataType::kInt32), DataType::kDouble);
+  EXPECT_EQ(type(BinaryOp::kAdd, kMoney, DataType::kDouble), DataType::kDouble);
+  EXPECT_EQ(type(BinaryOp::kLt, kMoney, DataType::kDouble), DataType::kBool);
+
+  auto too_many_decimals = type(BinaryOp::kMultiply, DataType::Decimal(18, 10), DataType::Decimal(18, 9));
+  ASSERT_FALSE(too_many_decimals.has_value());
+  EXPECT_EQ(too_many_decimals.error().code(), ErrorCode::TypeError);
+  EXPECT_EQ(GetTypeName(kMoney), "Decimal(15,2)");
+}
+
+TEST(DecimalExprTest, ArithmeticIsExact) {
+  // price * (1 - discount) * (1 + tax), as TPC-H Q1 computes it.
+  RecordBatch batch(Schema({Field("p", kMoney), Field("d", kMoney), Field("t", kMoney)}),
+                    {Decimals(kMoney, {123456, std::nullopt}), Decimals(kMoney, {5, 5}),
+                     Decimals(kMoney, {2, 2})});
+  auto disc_price = std::make_unique<BinaryExpression>(
+      BinaryOp::kMultiply, Col(0),
+      std::make_unique<BinaryExpression>(BinaryOp::kSubtract, Lit(Value{1}), Col(1)));
+  BinaryExpression charge(
+      BinaryOp::kMultiply, std::move(disc_price),
+      std::make_unique<BinaryExpression>(BinaryOp::kAdd, Lit(Value{1}), Col(2)));
+  ASSERT_OK_AND_ASSIGN(auto result, charge.Evaluate(batch));
+  EXPECT_EQ(result->GetType(), DataType::Decimal(18, 6));
+  EXPECT_EQ(ValueToString(result->GetValue(0)), "1196.288640");  // DuckDB's answer
+  EXPECT_TRUE(result->IsNull(1));
+}
+
+TEST(DecimalExprTest, OverflowIsOutOfRange) {
+  constexpr DataType kWide = DataType::Decimal(18, 0);
+  RecordBatch batch(Schema({Field("a", kWide)}),
+                    {Decimals(kWide, {std::numeric_limits<int64_t>::max()})});
+  BinaryExpression plus(BinaryOp::kAdd, Col(0), Col(0));
+  auto result = plus.Evaluate(batch);
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(result.error().code(), ErrorCode::OutOfRange);
+}
+
+TEST(DecimalExprTest, ComparesAcrossScalesIntegersAndDoubles) {
+  RecordBatch batch(Schema({Field("d", kMoney), Field("e", DataType::Decimal(4, 3))}),
+                    {Decimals(kMoney, {5, 500}), Decimals(DataType::Decimal(4, 3), {50, 5000})});
+  BinaryExpression same_value(BinaryOp::kEq, Col(0), Col(1));  // 0.05 = 0.050, 5.00 = 5.000
+  ASSERT_OK_AND_ASSIGN(auto eq, same_value.Evaluate(batch));
+  ExpectColumn<bool>(*eq, {true, true});
+
+  BinaryExpression vs_literal(BinaryOp::kLtEq, Col(0), Lit(Value{DecimalValue{5, 2}}));
+  ASSERT_OK_AND_ASSIGN(auto le, vs_literal.Evaluate(batch));
+  ExpectColumn<bool>(*le, {true, false});
+
+  BinaryExpression vs_double(BinaryOp::kEq, Col(0), Lit(Value{0.05}));
+  ASSERT_OK_AND_ASSIGN(auto eq_double, vs_double.Evaluate(batch));
+  ExpectColumn<bool>(*eq_double, {true, false});
+
+  BinaryExpression vs_int(BinaryOp::kGt, Col(0), Lit(Value{4}));
+  ASSERT_OK_AND_ASSIGN(auto gt, vs_int.Evaluate(batch));
+  ExpectColumn<bool>(*gt, {false, true});
+}
+
+TEST(DecimalExprTest, CaseWidensAnIntegerBranchToTheDecimal) {
+  RecordBatch batch(Schema({Field("d", kMoney), Field("c", DataType::kBool)}),
+                    {Decimals(kMoney, {125, 250}),
+                     MakeColumn<bool>(DataType::kBool, {true, false})});
+  CaseExpression::Branches branches;
+  branches.emplace_back(Col(1), Col(0));
+  CaseExpression expr(std::move(branches), Lit(Value{0}));
+  ASSERT_OK_AND_ASSIGN(auto result, expr.Evaluate(batch));
+  EXPECT_EQ(result->GetType(), DataType::Decimal(16, 2));
+  EXPECT_EQ(ValueToString(result->GetValue(0)), "1.25");
+  EXPECT_EQ(ValueToString(result->GetValue(1)), "0.00");
+}
+
+TEST(DecimalExprTest, LiteralIsTypedLikeDuckDb) {
+  LiteralExpression lit(Value{DecimalValue{5, 2}});
+  RecordBatch batch(Schema({Field("x", DataType::kInt32)}), {MakeColumn<int32_t>(DataType::kInt32, {1})});
+  ASSERT_OK_AND_ASSIGN(auto result, lit.Evaluate(batch));
+  EXPECT_EQ(result->GetType(), DataType::Decimal(3, 2));
+  EXPECT_EQ(lit.ToString(), "0.05");
+  EXPECT_EQ(DecimalValueType(DecimalValue{123456, 2}), DataType::Decimal(6, 2));
+}

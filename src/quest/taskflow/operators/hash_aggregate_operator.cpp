@@ -20,11 +20,15 @@ using columnar::ColumnVectorPtr;
 using columnar::DataType;
 using columnar::Value;
 
-enum class NumericClass : std::uint8_t { kInteger, kFloating, kOther };
+/// @brief How SUM adds an input: integers and Decimals (unscaled) in an int64, the rest as double.
+enum class NumericClass : std::uint8_t { kInteger, kDecimal, kFloating, kOther };
 
 [[nodiscard]] NumericClass Classify(DataType type) {
   if (columnar::IsInteger(type)) {
     return NumericClass::kInteger;
+  }
+  if (columnar::IsDecimal(type)) {
+    return NumericClass::kDecimal;
   }
   return columnar::IsNumeric(type) ? NumericClass::kFloating : NumericClass::kOther;
 }
@@ -38,6 +42,13 @@ template <typename T>
         using V = std::decay_t<decltype(v)>;
         if constexpr (std::is_same_v<V, bool>) {
           return static_cast<T>(v ? 1 : 0);
+        } else if constexpr (std::is_same_v<V, columnar::DecimalValue>) {
+          // SUM adds the unscaled digits; AVG adds the value.
+          if constexpr (std::is_integral_v<T>) {
+            return static_cast<T>(v.unscaled);
+          } else {
+            return static_cast<T>(columnar::ToDoubleValue(v));
+          }
         } else if constexpr (std::is_arithmetic_v<V>) {
           return static_cast<T>(v);
         } else {
@@ -57,6 +68,8 @@ template <typename T>
           return std::hash<std::int32_t>{}(v.days);
         } else if constexpr (std::is_same_v<V, columnar::Timestamp>) {
           return std::hash<std::int64_t>{}(v.micros);
+        } else if constexpr (std::is_same_v<V, columnar::DecimalValue>) {
+          return std::hash<std::int64_t>{}(v.unscaled);  // one column, one scale
         } else {
           return std::hash<V>{}(v);
         }
@@ -78,6 +91,11 @@ template <typename T>
     case AggregateKind::kSum:
       if (input_type && Classify(*input_type) == NumericClass::kFloating) {
         return columnar::DataType::kDouble;
+      }
+      if (input_type && columnar::IsDecimal(*input_type)) {
+        // DuckDB widens to DECIMAL(38, s); QUEST keeps an int64 and fails on overflow.
+        return columnar::DataType::Decimal(columnar::DataType::kMaxDecimalPrecision,
+                                           input_type->scale);
       }
       return columnar::DataType::kInt64;
     case AggregateKind::kMin:
@@ -195,7 +213,7 @@ Status HashAggregateOperator::Sink(cache::DataBlockPtr batch) {
       ++state.count;
       switch (kind) {
         case AggregateKind::kSum:
-          if (classes[i] == NumericClass::kInteger) {
+          if (classes[i] == NumericClass::kInteger || classes[i] == NumericClass::kDecimal) {
             auto added =
                 CheckedAdd(state.int_sum, NumericAs<std::int64_t>(inputs[i]->GetValue(row)),
                            aggregates_[i].output_name);
@@ -330,6 +348,8 @@ Result<columnar::RecordBatch> HashAggregateOperator::BuildOutput() const {
             values.emplace_back(std::monostate{});
           } else if (floating_sum) {
             values.emplace_back(state.double_sum);
+          } else if (columnar::IsDecimal(type)) {
+            values.emplace_back(columnar::DecimalValue{state.int_sum, type.scale});
           } else {
             values.emplace_back(state.int_sum);
           }
