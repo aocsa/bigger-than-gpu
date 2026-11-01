@@ -170,7 +170,8 @@ using DataBlockPtr = std::shared_ptr<DataBlock>;
 // Host Block Helpers
 // =============================================================================
 
-/// @brief Ensure a DataBlock is resident in CPU and return its HostMemoryBlock.
+/// @brief Ensure a DataBlock is resident in CPU and return its HostMemoryBlock, whose
+/// record_batch() is not null; `Invalid` for a null block or a released host block.
 [[nodiscard]] Result<std::shared_ptr<HostMemoryBlock>> EnsureHostBlock(DataBlockPtr input);
 
 /// @brief Wrap a RecordBatch in a HostMemoryBlock carrying both memory

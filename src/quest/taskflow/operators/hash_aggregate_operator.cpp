@@ -228,9 +228,6 @@ Status HashAggregateOperator::Sink(cache::DataBlockPtr batch) {
     return std::unexpected(host.error());
   }
   const columnar::RecordBatch* input = (*host)->record_batch();
-  if (input == nullptr) {
-    return Error::Invalid("HashAggregateOperator: empty record batch");
-  }
 
   std::vector<KeyEncoder> encoders;
   std::vector<columnar::Field> key_fields;

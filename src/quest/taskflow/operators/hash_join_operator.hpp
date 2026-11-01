@@ -81,7 +81,7 @@ class HashJoinOperator : public Operator {
   std::shared_ptr<memory::MemoryResourceManager> memory_manager_;
 
   std::mutex sink_mutex_;
-  std::vector<std::shared_ptr<cache::HostMemoryBlock>> build_blocks_;
+  std::vector<cache::DataBlockPtr> build_blocks_;  // host blocks, loaded at Sink()
 
   // Written by FinalizeSink(), read-only afterwards; the executor schedules
   // the probe pipeline only after the build pipeline finalized.

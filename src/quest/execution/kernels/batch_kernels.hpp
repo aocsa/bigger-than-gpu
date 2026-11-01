@@ -21,6 +21,10 @@ namespace quest::execution {
 [[nodiscard]] columnar::ColumnVectorPtr GatherColumn(
     const columnar::ColumnVector& col, const std::vector<size_t>& indices);
 
+/// @brief The rows @p indices of each column of @p batch, in that order.
+[[nodiscard]] std::vector<columnar::ColumnVectorPtr> GatherColumns(
+    const columnar::RecordBatch& batch, const std::vector<size_t>& indices);
+
 /// @brief Apply a boolean mask expression and gather the rows where it is true; a null
 /// mask value does not select its row.
 [[nodiscard]] Result<columnar::RecordBatch> FilterRecordBatch(

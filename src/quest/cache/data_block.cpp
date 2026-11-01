@@ -220,6 +220,9 @@ Result<std::shared_ptr<HostMemoryBlock>> EnsureHostBlock(DataBlockPtr input) {
     if (!host) {
       return Error::Invalid("CPU-tier block is not a HostMemoryBlock");
     }
+    if (host->record_batch() == nullptr) {
+      return Error::Invalid("HostMemoryBlock has no record batch");
+    }
     return host;
   }
   return input->ToCpu();
@@ -260,9 +263,6 @@ Result<DataBlockPtr> ConcatenateHostBlocks(std::vector<DataBlockPtr> blocks) {
       return std::unexpected(host_result.error());
     }
     auto host = std::move(*host_result);
-    if (!host->record_batch()) {
-      return Error::Invalid("HostMemoryBlock has no record batch");
-    }
     batches.push_back(host->record_batch());
     hosts.push_back(std::move(host));
   }

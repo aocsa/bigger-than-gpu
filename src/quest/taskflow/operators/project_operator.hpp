@@ -37,23 +37,14 @@ class ProjectOperator : public SimpleOperator {
 
  protected:
   [[nodiscard]] Result<cache::DataBlockPtr> ProcessBatch(cache::DataBlockPtr input) override {
-    auto host_result = cache::EnsureHostBlock(std::move(input));
-    if (!host_result) {
-      return std::unexpected(host_result.error());
-    }
-    auto host = std::move(*host_result);
-    const auto* batch = host->record_batch();
-    if (!batch) {
-      return Error::Invalid("ProjectOperator: empty record batch");
-    }
-
-    auto projected = execution::ProjectRecordBatch(*batch, schema_, expressions_);
-    if (!projected) {
-      return std::unexpected(projected.error());
-    }
-
-    return cache::MakeTrackedHostBlock(std::format("project_{}", id()), std::move(*projected),
-                                           memory_manager_);
+    return cache::EnsureHostBlock(std::move(input))
+        .and_then([&](std::shared_ptr<cache::HostMemoryBlock> host) {
+          return execution::ProjectRecordBatch(*host->record_batch(), schema_, expressions_);
+        })
+        .transform([&](columnar::RecordBatch projected) -> cache::DataBlockPtr {
+          return cache::MakeTrackedHostBlock(std::format("project_{}", id()),
+                                             std::move(projected), memory_manager_);
+        });
   }
 
  private:
