@@ -5,7 +5,7 @@ Two-tier memory (CPU/Disk) batch processing engine inspired by BlazingSQL.
 ## Codebase Map
 
 Static library `quest` (`quest::quest`), built from the `.cpp` files listed in root `CMakeLists.txt`
-(`QUEST_SOURCES`; most of the code is header-only). Deps: Snappy, Threads; GTest for tests.
+(`QUEST_SOURCES`; the rest of the code is header-only). Deps: Snappy, Threads; GTest for tests.
 Toolchain is pinned via Pixi (`pixi.toml`). Options:
 `QUEST_BUILD_TESTS`, `QUEST_BUILD_EXAMPLES`, `QUEST_WERROR` (CI), `QUEST_SANITIZERS` (e.g. `"address;undefined"`). Default build type: Debug.
 
@@ -33,10 +33,10 @@ Query flow: `QueryBuilder::ExecuteOnGraph` -> logical plan -> `execution::Create
 `Operator`s split into `Pipeline`s by `MetaPipeline` -> `PipelineExecutor` runs them
 (sources `GetNextBatch`, streaming ops `ProcessBatch`, blocking ops `Sink`/`FinalizeSink`).
 
-`OperatorType` also reserves Aggregate, Sort, Join, Partition and Output entries that have no
-operator class yet; check `operators/` before assuming one exists.
+`OperatorType` also reserves Aggregate, Sort, Join and Partition entries that have no operator
+class yet; check `operators/` before assuming one exists.
 
-Other dirs: `tests/` (one `test_*.cpp` per area, GTest), `examples/`, `docs/`, `tasks/`
+Other dirs: `tests/` (one `test_*.cpp` per area, GTest), `examples/`, `tasks/`
 (todo, lessons, handoff notes), `.claude/skills/` (new-operator, verify-operator, etc.).
 
 ## Mandatory Rules
@@ -49,6 +49,8 @@ Other dirs: `tests/` (one `test_*.cpp` per area, GTest), `examples/`, `docs/`, `
 
 ### Error Handling
 - Use `std::expected` (Result/Status types). NEVER throw exceptions.
+- `Status` is `std::expected<void, Error>`: fail with `Error::Invalid(msg)` (or another `Error::`
+  factory), succeed with `return {};`, check with `has_value()`.
 - Propagate errors with early returns, not nested if-chains.
 
 ### Naming Conventions
@@ -84,7 +86,7 @@ Other dirs: `tests/` (one `test_*.cpp` per area, GTest), `examples/`, `docs/`, `
 1. Check ownership conventions match the model above
 2. New operators MUST implement the pipeline-role contract:
    - **Streaming transformations** (Filter, Project, Limit): override `ProcessBatch(DataBlockPtr)` — called in-line by `Pipeline::RunTask`; no `run()` loop.
-   - **Sources** (TableScan, Generate, BindableTableScan): override `GetNextBatch()` and ensure `IsSource()` is true, either through `OperatorType` classification or an override. Return `std::optional<DataBlockPtr>` (nullopt = EOS, never `Status::Invalid`).
+   - **Sources** (TableScan, Generate, BindableTableScan): override `GetNextBatch()` and ensure `IsSource()` is true, either through `OperatorType` classification or an override. Return `Result<std::optional<DataBlockPtr>>` (nullopt = EOS, never an error).
    - **Blocking operators** (Aggregate, Sort, Join): override `Sink(DataBlockPtr)` and `FinalizeSink()`; expose `IsSource()` + `GetNextBatch()` only after finalization for the post-barrier source phase.
    - All roles default to passthrough/no-op in `Operator`; override only what the operator needs.
 3. Every new file gets a test in `tests/` registered in `tests/CMakeLists.txt`
@@ -153,6 +155,5 @@ Other dirs: `tests/` (one `test_*.cpp` per area, GTest), `examples/`, `docs/`, `
 
 ## Context
 
-For architecture, class diagrams, and design patterns: `docs/dev/ARCHITECTURE.md`
-For build commands, directory map, and debugging trace: `docs/dev/CONTRIBUTING.md`
-For known bugs and roadmap: `docs/dev/future_improvement.md`
+For known bugs: `tasks/p1-correctness-bugs.md`, `tasks/p3-incomplete-implementations.md`
+For the roadmap: `tasks/todo.md`; for the slim-down decisions: `tasks/slim-down-plan.md`

@@ -16,7 +16,7 @@ is deleted; operators declare one or more pipeline roles instead.
 - `src/quest/taskflow/operator_type.hpp` — `OperatorType` enum and helper functions
 - `src/quest/taskflow/operators/` — existing operators as reference implementations
 - `tests/CMakeLists.txt` — test registration pattern
-- `docs/dev/future_improvement.md` — known bugs and missing implementations
+- `tasks/p1-correctness-bugs.md`, `tasks/p3-incomplete-implementations.md` — known bugs and missing implementations
 
 ## Step 1: Gather Requirements (then STOP)
 
@@ -36,17 +36,16 @@ STOP and wait for answers before proceeding.
 File: `src/quest/taskflow/operator_type.hpp`
 
 1. Add new entry to `OperatorType` enum in the appropriate section (Source/Transformation/Set/Aggregation/Sort/Join/Limit-Output)
-2. Add `case` to `to_string()` function
+2. Add its name at the same position in `kOperatorTypeNames` and bump the array size (the `static_assert` checks it)
 3. If source operator: add to `is_source_operator()`
-4. If blocking/terminal operator: add to `is_blocking_operator()` / `is_terminal_operator()`
-5. If multi-input: add to `is_multi_input_operator()`
+4. If blocking operator: add to `is_blocking_operator()`
+5. If multi-input: override `DeclaredInputPorts()` in the operator class (Step 3)
 
 ## Step 3: Create Operator Class
 
 File: `src/quest/taskflow/operators/{operator_name_snake}_operator.hpp`
 
-Use `#ifndef`/`#define`/`#endif` header guards — NOT `#pragma once`.
-Pattern: `QUEST_TASKFLOW_OPERATORS_{FILENAME}_HPP_`
+Use `#pragma once` after the copyright header. No macros in `src/`.
 
 ### For Streaming (ProcessBatch):
 
@@ -54,14 +53,14 @@ Pattern: `QUEST_TASKFLOW_OPERATORS_{FILENAME}_HPP_`
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_OPERATORS_NEW_OPERATOR_HPP_
-#define QUEST_TASKFLOW_OPERATORS_NEW_OPERATOR_HPP_
+#pragma once
 
 #include <memory>
 #include <string>
+
 #include "quest/cache/data_block.hpp"
+#include "quest/common/result.hpp"
 #include "quest/taskflow/operator.hpp"
-#include "quest/result.hpp"
 
 namespace quest::taskflow {
 
@@ -77,8 +76,6 @@ class NewOperator : public Operator {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_OPERATORS_NEW_OPERATOR_HPP_
 ```
 
 ### For Source (GetNextBatch):
@@ -87,13 +84,13 @@ class NewOperator : public Operator {
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_OPERATORS_NEW_SOURCE_OPERATOR_HPP_
-#define QUEST_TASKFLOW_OPERATORS_NEW_SOURCE_OPERATOR_HPP_
+#pragma once
 
-#include <optional>
 #include <memory>
+#include <optional>
+
+#include "quest/common/result.hpp"
 #include "quest/taskflow/operator.hpp"
-#include "quest/result.hpp"
 
 namespace quest::taskflow {
 
@@ -106,13 +103,11 @@ class NewSourceOperator : public Operator {
   [[nodiscard]] bool IsSource() const noexcept override { return true; }
 
   /// @brief Returns the next batch, or nullopt (EOS) when exhausted.
-  /// EOS is signaled as an engaged nullopt — never as Status::Invalid.
+  /// EOS is signaled as an engaged nullopt — never as an error.
   [[nodiscard]] Result<std::optional<cache::DataBlockPtr>> GetNextBatch() override;
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_OPERATORS_NEW_SOURCE_OPERATOR_HPP_
 ```
 
 ### For Blocking/Sink (Sink + FinalizeSink + GetNextBatch):
@@ -121,13 +116,13 @@ class NewSourceOperator : public Operator {
 // Copyright 2024 Quest Authors
 // SPDX-License-Identifier: Apache-2.0
 
-#ifndef QUEST_TASKFLOW_OPERATORS_NEW_BLOCKING_OPERATOR_HPP_
-#define QUEST_TASKFLOW_OPERATORS_NEW_BLOCKING_OPERATOR_HPP_
+#pragma once
 
 #include <optional>
 #include <vector>
+
+#include "quest/common/result.hpp"
 #include "quest/taskflow/operator.hpp"
-#include "quest/result.hpp"
 
 namespace quest::taskflow {
 
@@ -158,8 +153,6 @@ class NewBlockingOperator : public Operator {
 };
 
 }  // namespace quest::taskflow
-
-#endif  // QUEST_TASKFLOW_OPERATORS_NEW_BLOCKING_OPERATOR_HPP_
 ```
 
 ## Step 4: Create Test File
@@ -171,9 +164,11 @@ Wire with `GraphBuilder` (never with the old `*graph += a >> b` DSL or `link()`)
 
 ```cpp
 #include <gtest/gtest.h>
-#include "quest/taskflow/operators/{operator_name_snake}_operator.hpp"
+
 #include "quest/taskflow/graph_builder.hpp"
+#include "quest/taskflow/operators/{operator_name_snake}_operator.hpp"
 #include "quest/taskflow/prepared_query.hpp"
+#include "support/test_utils.hpp"  // ASSERT_OK, ASSERT_OK_AND_ASSIGN
 
 namespace quest::taskflow {
 namespace {
@@ -188,7 +183,7 @@ TEST({OperatorName}Test, EmptyInput) {
 }
 
 TEST({OperatorName}Test, EndOfStream) {
-  // Verify GetNextBatch/ProcessBatch signals EOS correctly (nullopt, not Status::Invalid)
+  // Verify GetNextBatch signals EOS correctly (engaged nullopt, not an error)
 }
 
 }  // namespace
@@ -204,7 +199,7 @@ Add these 3 lines:
 ```cmake
 add_executable(test_{name} test_{name}.cpp)
 target_link_libraries(test_{name} PRIVATE quest::quest GTest::gtest GTest::gtest_main)
-gtest_discover_tests(test_{name})
+gtest_discover_tests(test_{name} DISCOVERY_TIMEOUT 60)
 ```
 
 ## Step 6: Build and Verify
@@ -241,6 +236,7 @@ ASSERT_OK(graph->Execute());
 - Sentinel node ID is `-1` (`kGraphEntryPointId`)
 - Constructor signature is `(uint32_t id, string expression, OperatorType type)`
 - Use `shared_ptr` for `DataBlock`, `IBatchHolder`; `unique_ptr` for nothing in operator scope
-- **EOS is a value** (`std::optional<DataBlockPtr>` returning `nullopt`) — never signal EOS via `Status::Invalid`
-- Header guards use `#ifndef`/`#define`/`#endif` — NOT `#pragma once`
+- **EOS is a value** (`Result<std::optional<DataBlockPtr>>` holding `nullopt`) — never signal EOS via an error
+- `Status` is `std::expected<void, Error>`: return `{}` on success, `Error::Invalid(msg)` (etc.) on failure; never throw
+- Use `#pragma once`; no macros in `src/`
 - All files in `src/quest/taskflow/operators/` (not the base `taskflow/` dir for production operators)

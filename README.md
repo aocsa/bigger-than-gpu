@@ -33,18 +33,25 @@ auto batches = std::move(QueryBuilder::FromParquet("data.parquet").value())
     .ExecuteOnGraph();
 ```
 
-### Dataflow DSL
+### Graph Builder
 
 ```cpp
+#include "quest/taskflow/graph_builder.hpp"
+using namespace quest::taskflow;
+
+GraphBuilder gb{memory_manager};
+
 // Simple chain
-graph += scan >> filter >> project >> output;
+gb.Chain(scan, filter, project, collector);
 
 // Named ports for multi-input operators
-graph += customers >> join["input_a"];
-graph += orders >> join["input_b"];
+gb.Edge(customers, union_op["input_a"]);
+gb.Edge(orders, union_op["input_b"]);
 
 // With edge configuration
-graph += link(sort, merge, EdgeConfig::Concatenating());
+gb.Edge(sort, merge).Concatenating();
+
+auto graph = std::move(gb).Build();  // Result<std::shared_ptr<Graph>>
 ```
 
 ## Architecture
@@ -54,11 +61,11 @@ QueryBuilder → LogicalPlan → TaskFlow Graph → Cache → Memory
 ```
 
 Three subsystems:
-- **TaskFlow** — execution graph, operator scheduling, BFS traversal
+- **TaskFlow** — execution graph split into pipelines (`MetaPipeline`), run by `PipelineExecutor`
 - **Cache** — BatchHolders (FIFO + Concatenating) with thread-safe BlockingQueue
 - **Memory** — two-tier CPU/Disk with auto-spill at 85% saturation
 
-For detailed architecture, class diagrams, and design patterns: [`docs/dev/ARCHITECTURE.md`](docs/dev/ARCHITECTURE.md)
+For the directory map, query flow and coding rules: [`CLAUDE.md`](CLAUDE.md)
 
 ## Project Structure
 
@@ -90,13 +97,13 @@ This project includes slash commands for [Claude Code](https://claude.ai/code) t
 | Command | What it does | Example |
 |---------|-------------|---------|
 | `/new-op` | Scaffold a new operator (enum, class, test, CMake) | `/new-op Sort` |
-| `/new-node` | Add a logical + physical plan node with QueryPlan wiring | `/new-node Limit` |
+| `/new-node` | Add a logical plan node, its lowering to an operator, and QueryPlan wiring | `/new-node Sort` |
 
 **Review & Analysis**
 
 | Command | What it does | Example |
 |---------|-------------|---------|
-| `/verify` | Adversarial 6-point stress test on an operator | `/verify FilterOperator` |
+| `/verify` | Adversarial 5-point stress test on an operator | `/verify FilterOperator` |
 | `/trace` | Read-only trace of a query through all 6 layers | `/trace Where(Col("age") > Lit(21))` |
 | `/review-mem` | Review code against the ownership model | `/review-mem src/quest/cache/data_block.hpp` |
 | `/diagnose` | Run clang-tidy on changed files | `/diagnose src/quest/taskflow/graph.cpp` |
@@ -116,7 +123,7 @@ Commands require the `/project:` prefix since they are project-scoped. Without a
 ### Examples
 
 ```bash
-# Scaffold a new operator (asks stateless/stateful, port count)
+# Scaffold a new operator (asks pipeline role, port count)
 /project:new-op Limit
 
 # Run a specific test
@@ -146,7 +153,7 @@ Commands require the `/project:` prefix since they are project-scoped. Without a
 
 ## Contributing
 
-See [`docs/dev/CONTRIBUTING.md`](docs/dev/CONTRIBUTING.md) for build setup, test organization, and debugging guide.
+See the Build & Test section of [`CLAUDE.md`](CLAUDE.md) for build and test commands.
 
 ## License
 

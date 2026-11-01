@@ -10,13 +10,13 @@ Reviews code changes against QUEST's ownership model and known concurrency issue
 ## Read These Files First
 
 - The files being reviewed (diff or changed files)
-- `docs/dev/future_improvement.md` — known data races and bugs
+- `tasks/p1-correctness-bugs.md` — known data races and bugs
 
 ## Ownership Model
 
 | Pointer Type | Used For | Why |
 |-------------|----------|-----|
-| `unique_ptr` | Expression trees (`LogicalExprPtr`), plan nodes (`LogicalPlanPtr`, `PhysicalPlanPtr`), compression codecs, column vectors in physical expressions | Single owner, no sharing needed |
+| `unique_ptr` | Expression trees (`LogicalExprPtr`, physical `ExpressionPtr`), plan nodes (`LogicalPlanPtr`), operators built by `CreateGraph`, compression codecs, column vectors from `CreateColumnVector` | Single owner, no sharing needed |
 | `shared_ptr` | `IBatchHolder` (shared between source/target operators), `MemoryResourceManager` (one per graph), `DataSource` (shared across plan layers), `ColumnVector` in `RecordBatch` (zero-copy slicing), `DataBlock` (multi-consumer cache) | Multiple owners or cross-boundary sharing |
 | `weak_ptr` | `Operator::owning_graph_` (back-reference to `Graph`) | Break circular dependency: Graph owns Operators, Operators reference Graph |
 
@@ -41,8 +41,7 @@ Review each changed file against these rules:
 
 ### INFO (note for awareness)
 
-10. **Known data race: `processed_edges` in `Graph::Execute()`** — P1.1 in future_improvement.md. Read in jthread lambdas, written in main loop.
-11. **Known data race: `saturation_threshold`** — P1.5 in future_improvement.md. Written under mutex, read without it in `is_saturated()`.
+10. **Known data race: `saturation_threshold`** — P1.5 in `tasks/p1-correctness-bugs.md`. Written under mutex, read without it in `is_saturated()`.
 
 ## Specific Patterns to Watch
 
@@ -51,7 +50,7 @@ Review each changed file against these rules:
 BatchHolders are `shared_ptr<IBatchHolder>` because they connect two operators:
 - Source operator's output port holds a reference
 - Target operator's input port holds a reference
-- Both operators run in separate threads
+- Producer and consumer pipelines may run concurrently on different `PipelineExecutor` workers
 
 Verify: thread-safe access only through `Add()`, `Pull()`, `Finish()`, `WaitIfSaturated()`.
 
@@ -80,7 +79,8 @@ QueryPlan owns LogicalPlanPtr (unique_ptr<LogicalPlan>)
     -> Scan owns shared_ptr<DataSource>
 ```
 
-Physical plan mirrors this: `PhysicalPlanPtr = unique_ptr<PhysicalPlan>`.
+Lowering mirrors this: `CreateGraph` returns an `ExecutableGraph` that owns the operators as
+`unique_ptr<Operator>`; the `Graph` and its edges hold non-owning `Operator*`.
 
 ## Verdict Format
 

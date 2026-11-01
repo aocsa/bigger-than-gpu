@@ -1,19 +1,21 @@
 ---
 name: new-plan-node
-description: Adds a new logical + physical plan node and wires it into QueryPlan fluent API. Trigger: "add plan node", "implement Limit", "add Aggregate", "new logical plan"
+description: Adds a new logical plan node, lowers it to a taskflow operator, and wires it into QueryPlan fluent API. Trigger: "add plan node", "implement Limit", "add Aggregate", "new logical plan"
 ---
 
 # New Plan Node
 
-Creates a logical plan node, its physical execution counterpart, and wires both into the QueryPlan fluent API.
+Creates a logical plan node, lowers it to a taskflow operator in `CreateGraph`, and wires it into
+the QueryPlan fluent API. `QueryBuilder::ExecuteOnGraph` is the only execution path.
 
 ## Read These Files First
 
-- `src/quest/logical_plan/logical_plan.hpp` — `LogicalPlan` base, `Scan`, `Selection`, `Projection` nodes
-- `src/quest/physical_plan/physical_plan.hpp` — `PhysicalPlan` base, exec nodes, `CreatePhysicalPlan()` factory
-- `src/quest/builder/query_plan.hpp` — `QueryPlan` fluent API (`Where`, `Select`)
-- `src/quest/logical_plan/logical_expr.hpp` — expression types if new expressions needed
-- `docs/dev/future_improvement.md` — Priority 4 lists missing plan nodes
+- `src/quest/plan/logical/logical_plan.hpp` (+ `.cpp`) — `LogicalPlan` base, `Scan`, `Selection`, `Projection`, `Limit`, `Union` nodes
+- `src/quest/execution/lowering/plan_to_graph.cpp` — `TranslateNode()` (logical node → taskflow operator) and `CreatePhysicalExpr()`
+- `src/quest/taskflow/operators/` — existing operators the lowering creates
+- `src/quest/builder/query_plan.hpp` — `QueryPlan` fluent API (`Where`, `Select`, `Limit`, `UnionAll`); `query_builder.hpp` forwards each method
+- `src/quest/plan/logical/logical_expr.hpp` — expression types if new expressions needed
+- `tasks/todo.md` — roadmap; Aggregate, Sort and Join operators are deferred to phase 6
 
 ## Step 1: Gather Requirements (then STOP)
 
@@ -26,9 +28,10 @@ STOP and wait for answers before proceeding.
 
 ## Step 2: Create Logical Plan Node
 
-File: `src/quest/logical_plan/logical_plan.hpp`
+File: `src/quest/plan/logical/logical_plan.hpp` (namespace `quest::plan::logical`)
 
-Add the new class after the existing nodes (Scan, Selection, Projection). Follow the Selection pattern for unary nodes:
+Add the new class after the existing nodes. Follow the Limit pattern for unary nodes (Union for
+binary); put non-trivial bodies in `logical_plan.cpp`:
 
 ```cpp
 /// @brief {NodeName} node - {description}.
@@ -58,65 +61,49 @@ class {NodeName} : public LogicalPlan {
 
 Key ownership: `LogicalPlanPtr = std::unique_ptr<LogicalPlan>` for child nodes, `LogicalExprPtr = std::unique_ptr<LogicalExpr>` for expressions.
 
-## Step 3: Create Physical Plan Node
+## Step 3: Provide the Taskflow Operator
 
-File: `src/quest/physical_plan/physical_plan.hpp`
+The node executes as a taskflow operator in `src/quest/taskflow/operators/`. If no existing
+operator does the work, scaffold one first with the `new-operator` skill (`/project:new-op`) and
+come back. The `LimitOperator` is the model for a unary streaming node; `UnionOperator` for a
+node with two inputs (named ports `input_a` / `input_b`).
 
-Add after existing exec nodes. Follow SelectionExec pattern:
+## Step 4: Add a Lowering Branch in TranslateNode()
 
-```cpp
-/// @brief {NodeName} execution node.
-class {NodeName}Exec : public PhysicalPlan {
- public:
-  {NodeName}Exec(PhysicalPlanPtr input, /* physical params */)
-      : input_(std::move(input)) /* , ... */ {}
+File: `src/quest/execution/lowering/plan_to_graph.cpp`, function `TranslateNode()` (anonymous
+namespace)
 
-  [[nodiscard]] Schema schema() const override { return input_->schema(); }
-
-  [[nodiscard]] std::vector<const PhysicalPlan*> Children() const override {
-    return {input_.get()};
-  }
-
-  [[nodiscard]] Status Execute(const ResultCallback& callback) override {
-    return input_->Execute([this, &callback](RecordBatch batch) {
-      // Process batch and call callback
-    });
-  }
-
-  [[nodiscard]] std::string ToString() const override {
-    return "{NodeName}Exec(...)";
-  }
-
- private:
-  PhysicalPlanPtr input_;
-  // Physical node members...
-};
-```
-
-Key: `Execute()` must propagate errors via `std::expected` (Status), NEVER throw.
-
-## Step 4: Add Branch in CreatePhysicalPlan()
-
-File: `src/quest/physical_plan/physical_plan.hpp`, function `CreatePhysicalPlan()` (line ~439)
-
-Add new `dynamic_cast` branch BEFORE the final error return:
+Add a new `dynamic_cast` branch BEFORE the final error return. Follow the Limit pattern:
+translate the child first, create the operator, hand ownership to `ops`, wire the child's root
+into it with `gb.Edge`, and return the new root:
 
 ```cpp
-if (const auto* node = dynamic_cast<const {NodeName}*>(&plan)) {
-  auto input_result = CreatePhysicalPlan(node->input());
-  if (!input_result) {
-    return std::unexpected(input_result.error());
+if (const auto* node = dynamic_cast<const plan::logical::{NodeName}*>(&plan)) {
+  auto child = TranslateNode(node->input(), memory_manager, ops, gb, next_id);
+  if (!child) {
+    return std::unexpected(child.error());
   }
-  // Create physical expressions if needed...
-  return std::make_unique<{NodeName}Exec>(std::move(*input_result), /* params */);
+  // Create physical expressions if needed: CreatePhysicalExpr(expr, node->input())
+  auto op = std::make_unique<taskflow::{NodeName}Operator>(next_id++, /* params */);
+  auto* op_ptr = op.get();
+  ops.push_back(std::move(op));
+  gb.Edge(**child, *op_ptr);
+  return op_ptr;
 }
 
 // This must remain LAST:
-return std::unexpected(
-    Status::PhysicalPlanError("Unsupported logical plan type"));
+return std::unexpected(Error::PhysicalPlanError(
+    "CreateGraph: unsupported logical plan node: " + plan.ToString()));
 ```
 
-If the node needs new expression types, also add branches in `CreatePhysicalExpr()` (line ~373).
+Include the operator header at the top of the file, and add the node to the "Supported:" list
+in the `CreateGraph` doc comment in `plan_to_graph.hpp`.
+
+If the node needs new expression types, add the physical class in
+`src/quest/plan/physical/expressions/physical_expr.{hpp,cpp}` and a branch in
+`CreatePhysicalExpr()` (same `.cpp` file, above `TranslateNode`). Comparison and arithmetic
+operators already exist: extend `plan::BinaryOp` (`src/quest/plan/binary_op.hpp`) instead of
+adding new expression classes for them.
 
 ## Step 5: Add Fluent Method to QueryPlan
 
@@ -128,9 +115,12 @@ Add a new `&&`-qualified method in the Query Building section:
 /// @brief Add a {node_name} operation.
 [[nodiscard]] QueryPlan {MethodName}(/* params */) && {
   return QueryPlan(
-      std::make_unique<{NodeName}>(std::move(plan_), /* params */));
+      std::make_unique<plan::logical::{NodeName}>(std::move(plan_), /* params */));
 }
 ```
+
+Add the matching forwarding method to `QueryBuilder` in `src/quest/builder/query_builder.hpp`
+(`return QueryBuilder(std::move(plan_).{MethodName}(...));`).
 
 ALL QueryPlan methods are `&&`-qualified — they consume `this` and return a new QueryPlan by value. Chain with `std::move`:
 
@@ -142,7 +132,7 @@ auto plan = std::move(base_plan).Where(condition).Select({"col"}).Limit(10);
 
 File: `tests/test_logical_plan.cpp` — test logical node creation, schema, ToString
 
-File: `tests/test_physical_plan.cpp` — test physical execution, error propagation
+File: `tests/test_{node_name_snake}.cpp` — test `CreateGraph` lowering and `ExecuteOnGraph` results, error propagation (see `tests/test_limit.cpp`); register it in `tests/CMakeLists.txt`
 
 File: `tests/test_query_builder.cpp` — test fluent API integration
 
@@ -155,9 +145,10 @@ cmake --build build && ctest --test-dir build
 ## Gotchas
 
 - ALL `QueryPlan` methods are `&&`-qualified — must `std::move` the plan into the new node
-- `CreatePhysicalPlan` uses `dynamic_cast` chains — add new branch BEFORE the final error return
+- `TranslateNode` uses `dynamic_cast` chains — add new branch BEFORE the final error return
 - Expressions use `unique_ptr` everywhere — NO `shared_ptr` for expression trees
-- Physical `Execute()` must propagate errors via `std::expected`, not exceptions
-- `LogicalPlanPtr = unique_ptr<LogicalPlan>`, `PhysicalPlanPtr = unique_ptr<PhysicalPlan>`
+- Lowering propagates errors via `std::expected` (`return std::unexpected(r.error());`), not exceptions
+- `LogicalPlanPtr = unique_ptr<LogicalPlan>`; operators are owned by `ExecutableGraph` (the `ops` vector), the graph holds `Operator*`
+- A `Projection` of pure column references directly over a `Scan` is folded into one `BindableTableScan`; new nodes between them disable that fold
 - For nodes that change schema (like Aggregate), override `schema()` properly
-- Check `docs/dev/future_improvement.md` P4 for implementation order: Limit -> Aggregate -> Sort -> Join
+- Aggregate, Sort and Join have `OperatorType` entries but no operator class yet; Step 3 must create one

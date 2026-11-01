@@ -15,6 +15,6 @@ If no argument was provided, list available test binaries:
 ls build/tests/test_*
 ```
 
-Common test binaries: graph, cache, memory, datasource, parquet_reader, query_builder, logical_plan, physical_plan, query_integration, batch_holder, blocking_queue, schema, column_vector, expr_builder, generator, streaming_query_builder, record_batch_serializer, result.
+Common test binaries: graph, graph_builder, cache, memory, datasource, parquet_reader, query_builder, logical_plan, physical_expr, query_integration, pipeline_executor, meta_pipeline, operator_roles, limit, union, batch_holder, blocking_queue, schema, column_vector, expr_builder, record_batch_serializer, result.
 
 Argument: $ARGUMENTS

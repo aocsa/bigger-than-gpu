@@ -12,13 +12,13 @@ deleted; all operators run through `Graph::Execute()` → `MetaPipeline::Build` 
 
 ## Read These Files First
 
-- The operator under test (its `.hpp` and `.cpp` in `src/quest/taskflow/operators/`)
+- The operator under test (`src/quest/taskflow/operators/{name}_operator.hpp`)
 - `src/quest/cache/batch_holder.hpp` — `IBatchHolder` interface: `Add()`, `Pull()`, `Finish()`
 - `src/quest/cache/data_block.hpp` — `HostMemoryBlock`, `DiskBlock`
 - `src/quest/cache/blocking_queue.hpp` — thread safety via mutex + condition_variable
 - `src/quest/memory/memory_resource.hpp` — 85% CPU threshold, `is_saturated()`, `should_spill()`
 - `src/quest/taskflow/pipeline_executor.hpp` — claim/task-creation discipline
-- `docs/dev/future_improvement.md` — known bugs that may affect test results
+- `tasks/p1-correctness-bugs.md`, `tasks/p3-incomplete-implementations.md` — known bugs that may affect test results
 
 ## 5-Point Test Strategy
 
@@ -70,8 +70,8 @@ For each operator, verify the role contract before writing tests:
 | Role | Method | Contract |
 |------|--------|---------|
 | Streaming | `ProcessBatch(batch)` | Returns transformed batch or error; never returns nullopt |
-| Source | `IsSource()` → true, `GetNextBatch()` | Returns `optional<DataBlockPtr>`; `nullopt` = EOS (not `Status::Invalid`) |
-| Sink | `IsSink()` → true, `Sink(batch)` | Accumulates; returns `Status::OK()` on each batch |
+| Source | `IsSource()` → true, `GetNextBatch()` | Returns `Result<optional<DataBlockPtr>>`; `nullopt` = EOS (not an error) |
+| Sink | `IsSink()` → true, `Sink(batch)` | Accumulates; returns success (`{}`) on each batch |
 | Finalize | `FinalizeSink()` | Called once; flips operator to source mode |
 | Blocking source | `IsSource()` → true, `GetNextBatch()` | Emits accumulated batches after finalize; nullopt = done |
 
@@ -103,12 +103,11 @@ Overall: PASS / PARTIAL / FAIL
 ```
 
 - **PASS**: All 5 dimensions pass
-- **PARTIAL**: Some dimensions blocked by known bugs (reference `future_improvement.md`)
+- **PARTIAL**: Some dimensions blocked by known bugs (reference `tasks/p1-correctness-bugs.md` / `tasks/p3-incomplete-implementations.md`)
 - **FAIL**: At least one dimension fails with a new (not previously known) bug
 
 ## Gotchas
 
 - `MaterializedColumnVector::IsNull()` always returns false (P1.4) — affects null testing
-- `ConcatenatingBatchHolder` multi-block case is not implemented (P3.1) — use `BatchHolder` (kSimple) for testing
 - `DataBlock::ToCpu()` on a `HostMemoryBlock` returns error (P3.2) — can't round-trip self-conversion
-- EOS from `GetNextBatch()` is engaged `std::nullopt` — never `Status::Invalid`; a `Status::Invalid` from a source is a real error
+- EOS from `GetNextBatch()` is an engaged `std::nullopt` — never an error; any error from a source is a real error
