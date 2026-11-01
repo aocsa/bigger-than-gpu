@@ -4,7 +4,6 @@
 #pragma once
 
 #include <cstdint>
-#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -32,29 +31,30 @@ constexpr size_t kFooterSize = 8;  // footer length (4) + magic (4)
 // File Handle
 // =============================================================================
 
+/// @brief A read-only file. `Read()` uses pread(2) and keeps no file position, so the threads
+/// that read row groups in parallel can share one handle.
 class FileHandle {
  public:
   [[nodiscard]] static Result<FileHandle> Open(const std::string& path);
 
   FileHandle() = default;
-  FileHandle(FileHandle&&) = default;
-  FileHandle& operator=(FileHandle&&) = default;
-
-  // Non-copyable due to ifstream.
+  FileHandle(FileHandle&& other) noexcept;
+  FileHandle& operator=(FileHandle&& other) noexcept;
   FileHandle(const FileHandle&) = delete;
   FileHandle& operator=(const FileHandle&) = delete;
+  ~FileHandle();
 
   [[nodiscard]] size_t size() const noexcept { return file_size_; }
 
   [[nodiscard]] Status Read(size_t offset, size_t length,
-                            std::vector<uint8_t>& buffer);
+                            std::vector<uint8_t>& buffer) const;
 
   [[nodiscard]] Result<std::vector<uint8_t>> Read(size_t offset,
-                                                   size_t length);
+                                                   size_t length) const;
 
  private:
   std::string path_;
-  std::ifstream stream_;
+  int fd_ = -1;
   size_t file_size_ = 0;
 };
 

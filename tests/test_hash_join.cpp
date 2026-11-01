@@ -544,7 +544,7 @@ TEST_P(HashJoinTpchTest, OrdersJoinFilteredLineitemMatchesDuckDb) {
                                   std::vector<std::string>{"l_orderkey", "l_shipmode"}};
   FilterOperator shipmode_filter{1, std::move(predicate)};
   HashJoinOperator join{2, "l_orderkey", "o_orderkey"};
-  TableScanOperator orders_scan{3, orders};
+  TableScanOperator orders_scan{3, orders, std::vector<std::string>{"o_orderkey", "o_orderpriority"}};
   CollectorOperator collector{4};
 
   GraphBuilder gb;

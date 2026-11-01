@@ -582,7 +582,7 @@ Q12   2       1      <span class="g">runs today, matches DuckDB</span>
 
 <span class="y">Q1, Q3, Q5, Q6 and Q10 read DECIMAL money columns.</span>
 <span class="dim">Int64 keys, String, Date32: in the plan already.</span>
-<span class="dim">Chained joins: no test today; only Q12 has a join.</span></template></doc-mock>
+<span class="dim">Step 7 is done: all five pass on today's code.</span></template></doc-mock>
 
   <doc-claim>
     <p>The reader turns each DECIMAL(15,2) column into Double.</p>
@@ -626,7 +626,7 @@ DuckDB  <b>96 · 82 ms</b>           <span class="dim">(threads = 1)</span>
 <span class="dim">$</span> git checkout testdata/tpch
 
 <span class="dim">after: step 0's Sf1MatchesDuckDb, same report</span></template></doc-mock>
-    <doc-note tone="warn"><strong>Reader bug</strong> The reader fails on files with more than one row group (<code>OutOfRange</code>, <code>bytes.hpp:29</code>). The benchmark file has one row group.</doc-note>
+    <doc-note tone="ok"><strong>Reader fixed</strong> Threads raced on one <code>ifstream</code>. A Snappy page with equal sizes was not decompressed. Q12 now reads the default SF 1 files: 828 to 898 ms.</doc-note>
   </doc-claim>
 
   <doc-claim>
@@ -679,7 +679,7 @@ class ColumnView {
     <li>Three-valued AND/OR, null on division by zero, overflow errors.</li>
     <li>No Decimal, Binary, nested types, unsigned types or time zones. DECIMAL columns read as Double.</li>
     <li>No Arrow dependency and no SIMD intrinsics.</li>
-    <li>Parquet page decode and compression.</li>
+    <li>Parquet page decode, except the two reader fixes above.</li>
   </ul>
 </doc-claim>
 

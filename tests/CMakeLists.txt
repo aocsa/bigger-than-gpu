@@ -157,6 +157,10 @@ add_executable(test_tpch_q12 test_tpch_q12.cpp)
 target_link_libraries(test_tpch_q12 PRIVATE quest::quest GTest::gtest GTest::gtest_main)
 gtest_discover_tests(test_tpch_q12 DISCOVERY_TIMEOUT 60)
 
+add_executable(test_tpch test_tpch.cpp)
+target_link_libraries(test_tpch PRIVATE quest::quest GTest::gtest GTest::gtest_main)
+gtest_discover_tests(test_tpch DISCOVERY_TIMEOUT 60)
+
 if(TARGET bloom_join_demo)
     add_test(NAME BloomJoin.Demo COMMAND bloom_join_demo)
 endif()

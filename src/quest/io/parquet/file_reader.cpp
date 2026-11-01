@@ -3,6 +3,11 @@
 
 #include "quest/io/parquet/file_reader.hpp"
 
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#include <cerrno>
 #include <cstring>
 #include <utility>
 
@@ -15,32 +20,64 @@ namespace quest::io::parquet {
 Result<FileHandle> FileHandle::Open(const std::string& path) {
   FileHandle handle;
   handle.path_ = path;
-  handle.stream_.open(path, std::ios::binary | std::ios::ate);
-  if (!handle.stream_) {
+  handle.fd_ = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
+  if (handle.fd_ < 0) {
     return Error::IOError("Failed to open file: " + path);
   }
-  handle.file_size_ = handle.stream_.tellg();
-  handle.stream_.seekg(0);
+  struct stat info {};
+  if (::fstat(handle.fd_, &info) != 0) {
+    return Error::IOError("Failed to stat file: " + path);
+  }
+  handle.file_size_ = static_cast<size_t>(info.st_size);
   return handle;
 }
 
+FileHandle::FileHandle(FileHandle&& other) noexcept
+    : path_(std::move(other.path_)),
+      fd_(std::exchange(other.fd_, -1)),
+      file_size_(other.file_size_) {}
+
+FileHandle& FileHandle::operator=(FileHandle&& other) noexcept {
+  if (this != &other) {
+    if (fd_ >= 0) {
+      ::close(fd_);
+    }
+    path_ = std::move(other.path_);
+    fd_ = std::exchange(other.fd_, -1);
+    file_size_ = other.file_size_;
+  }
+  return *this;
+}
+
+FileHandle::~FileHandle() {
+  if (fd_ >= 0) {
+    ::close(fd_);
+  }
+}
+
 Status FileHandle::Read(size_t offset, size_t length,
-                        std::vector<uint8_t>& buffer) {
+                        std::vector<uint8_t>& buffer) const {
   if (offset > file_size_ || length > file_size_ - offset) {
     return Error::OutOfRange("Read past end of file");
   }
   buffer.resize(length);
-  stream_.seekg(static_cast<std::streamoff>(offset));
-  stream_.read(reinterpret_cast<char*>(buffer.data()),
-               static_cast<std::streamsize>(length));
-  if (!stream_) {
-    return Error::IOError("Failed to read from file");
+  size_t done = 0;
+  while (done < length) {
+    const ssize_t n = ::pread(fd_, buffer.data() + done, length - done,
+                              static_cast<off_t>(offset + done));
+    if (n < 0 && errno == EINTR) {
+      continue;
+    }
+    if (n <= 0) {
+      return Error::IOError("Failed to read from file: " + path_);
+    }
+    done += static_cast<size_t>(n);
   }
   return {};
 }
 
 Result<std::vector<uint8_t>> FileHandle::Read(size_t offset,
-                                              size_t length) {
+                                              size_t length) const {
   std::vector<uint8_t> buffer;
   auto status = Read(offset, length, buffer);
   if (!status.has_value()) {

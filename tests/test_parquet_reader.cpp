@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <string>
+#include <thread>
 #include <vector>
 
 #include "quest/io/parquet/bytes.hpp"
@@ -338,4 +340,83 @@ TEST(ParquetDateTest, PlainEncodedDateWithNullLoadsAsDate32) {
   EXPECT_TRUE(col.IsNull(1));
   EXPECT_EQ(ValueToString(col.GetValue(2)), "1969-12-31");
   EXPECT_EQ(ValueToString(col.GetValue(3)), "2000-02-29");
+}
+
+// =============================================================================
+// TPC-H lineitem (testdata/tpch, written by DuckDB; 3 row groups)
+// =============================================================================
+
+namespace {
+
+[[nodiscard]] std::string TpchLineitem() {
+  return (std::filesystem::path(__FILE__).parent_path().parent_path() / "testdata" / "tpch" /
+          "lineitem.parquet")
+      .string();
+}
+
+}  // namespace
+
+TEST(ParquetTpchTest, DecimalColumnReadsAsDouble) {
+  ASSERT_OK_AND_ASSIGN(auto reader, ParquetFileReader::Open(TpchLineitem()));
+  const auto index = reader.schema().GetFieldIndex("l_extendedprice");
+  ASSERT_TRUE(index.has_value());
+  const auto& field = reader.schema().field(*index);
+  EXPECT_TRUE(std::holds_alternative<DoubleType>(field.data_type));
+  EXPECT_EQ(field.decimal_scale, 2);
+  EXPECT_FALSE(field.field_id.has_value());  // Thrift field 7 is the scale, not the field id
+
+  ASSERT_OK_AND_ASSIGN(auto batch, reader.ReadRowGroup(0, {"l_extendedprice", "l_discount"}));
+  EXPECT_EQ(batch.column(0).GetValue(0), Value{24710.35});
+  EXPECT_EQ(batch.column(1).GetValue(0), Value{0.04});  // 4 / 100.0, the same double as 0.04
+}
+
+TEST(ParquetTpchTest, ParallelRowGroupReadsMatchSerialReads) {
+  ASSERT_OK_AND_ASSIGN(auto reader, ParquetFileReader::Open(TpchLineitem()));
+  const std::size_t groups = reader.num_row_groups();
+  ASSERT_GT(groups, 1U);
+  std::vector<std::string> serial;
+  for (std::size_t g = 0; g < groups; ++g) {
+    ASSERT_OK_AND_ASSIGN(auto batch, reader.ReadRowGroup(g, {}));
+    serial.push_back(batch.ToCSV());
+  }
+
+  constexpr int kThreads = 8;
+  constexpr int kRounds = 4;
+  std::vector<std::vector<std::string>> reads(kThreads);
+  {
+    std::vector<std::jthread> threads;
+    for (int t = 0; t < kThreads; ++t) {
+      threads.emplace_back([&reader, &reads, groups, t] {
+        for (int round = 0; round < kRounds; ++round) {
+          for (std::size_t g = 0; g < groups; ++g) {
+            auto batch = reader.ReadRowGroup(g, {});
+            reads[t].push_back(batch ? batch->ToCSV() : batch.error().ToString());
+          }
+        }
+      });
+    }
+  }
+  for (const auto& thread_reads : reads) {
+    ASSERT_EQ(thread_reads.size(), kRounds * groups);
+    for (std::size_t i = 0; i < thread_reads.size(); ++i) {
+      EXPECT_EQ(thread_reads[i], serial[i % groups]) << "read " << i;
+    }
+  }
+}
+
+// testdata/snappy_dictionary_page.parquet holds 100 l_shipmode rows of TPC-H SF 1 row group 2
+// (DuckDB, Snappy). Its dictionary page is 58 bytes compressed and 58 bytes uncompressed.
+TEST(ParquetSnappyTest, PageWithEqualSizesIsStillDecompressed) {
+  ASSERT_OK_AND_ASSIGN(
+      auto reader,
+      ParquetFileReader::Open((std::filesystem::path(__FILE__).parent_path().parent_path() /
+                               "testdata" / "snappy_dictionary_page.parquet")
+                                  .string()));
+  ASSERT_OK_AND_ASSIGN(auto batch, reader.ReadRowGroup(0, {}));
+  ASSERT_EQ(batch.num_rows(), 100U);
+  const std::vector<std::string> first = {"MAIL", "MAIL", "MAIL", "TRUCK",
+                                          "RAIL", "RAIL", "SHIP", "FOB"};
+  for (std::size_t i = 0; i < first.size(); ++i) {
+    EXPECT_EQ(batch.column(0).GetValue(i), Value{first[i]}) << "row " << i;
+  }
 }

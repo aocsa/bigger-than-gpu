@@ -4,6 +4,7 @@
 #include "quest/io/parquet/column_reader.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <string>
 #include <utility>
 
@@ -47,6 +48,23 @@ template <typename ReadFn, typename AppendFn, typename AppendNullFn>
   return {};
 }
 
+/// @brief Unscaled DECIMAL values as Double. Division keeps 7 / 100 equal to the literal 0.07,
+/// which multiplying by 0.01 does not.
+template <typename T>
+[[nodiscard]] std::shared_ptr<ColumnVector> DecimalToDouble(const TypedColumnVector<T>& unscaled,
+                                                            int32_t scale) {
+  const double divisor = std::pow(10.0, scale);
+  auto column = std::make_shared<TypedColumnVector<double>>(columnar::DoubleType{}, unscaled.size());
+  for (size_t i = 0; i < unscaled.size(); ++i) {
+    if (unscaled.IsNull(i)) {
+      column->AppendNull();
+    } else {
+      column->Append(static_cast<double>(unscaled.GetTypedValue(i)) / divisor);
+    }
+  }
+  return column;
+}
+
 }  // namespace
 
 Result<std::shared_ptr<ColumnVector>> ColumnReader::ReadAll() {
@@ -54,7 +72,10 @@ Result<std::shared_ptr<ColumnVector>> ColumnReader::ReadAll() {
     return Error::ColumnDecodeError("Negative column chunk value count");
   }
   size_t total_values = column_meta_.num_values;
-  auto column = CreateColumnVector(field_.data_type, total_values);
+  // A DECIMAL column decodes as its physical integer type and converts to Double at the end.
+  auto column = CreateColumnVector(
+      field_.decimal_scale ? PhysicalTypeToDataType(column_meta_.type) : field_.data_type,
+      total_values);
 
   while (page_reader_.HasNextPage()) {
     auto header_result = page_reader_.ReadPageHeader();
@@ -104,14 +125,22 @@ Result<std::shared_ptr<ColumnVector>> ColumnReader::ReadAll() {
     }
   }
 
+  if (field_.decimal_scale) {
+    if (const auto* i64 = dynamic_cast<const TypedColumnVector<int64_t>*>(column.get())) {
+      return DecimalToDouble(*i64, *field_.decimal_scale);
+    }
+    // decimal_scale is set only for INT32 and INT64 columns (metadata.cpp IsIntegerDecimal).
+    return DecimalToDouble(static_cast<const TypedColumnVector<int32_t>&>(*column),
+                           *field_.decimal_scale);
+  }
   return column;
 }
 
 Result<std::span<const uint8_t>> ColumnReader::DecompressPageData(
     const PageHeader& header, std::span<const uint8_t> compressed_data) {
-  bool needs_decompression =
-      (codec_->type() != CompressionType::kUncompressed) &&
-      (header.compressed_page_size != header.uncompressed_page_size);
+  // Equal compressed and uncompressed sizes do not mean "stored raw": a small Snappy page can
+  // be the same size either way (testdata/snappy_dictionary_page.parquet).
+  bool needs_decompression = codec_->type() != CompressionType::kUncompressed;
 
   // For DataPageV2, check the is_compressed flag.
   if (header.type == PageType::kDataPageV2 && !header.is_compressed) {

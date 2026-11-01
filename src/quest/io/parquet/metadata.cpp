@@ -74,6 +74,12 @@ Result<std::optional<LogicalType>> ReadLogicalTypeUnion(ThriftDecoder& decoder) 
   }
 }
 
+// QUEST has no Decimal type: an INT32/INT64 DECIMAL column reads as Double (value / 10^scale).
+bool IsIntegerDecimal(const SchemaElement& elem) {
+  return elem.logical_type == LogicalType::kDecimal &&
+         (elem.type == PhysicalType::kInt32 || elem.type == PhysicalType::kInt64);
+}
+
 // UTF8, ENUM and JSON all annotate BYTE_ARRAY values that are UTF-8 text.
 DataType LeafDataType(const SchemaElement& elem) {
   const bool is_text = elem.logical_type == LogicalType::kString ||
@@ -84,6 +90,9 @@ DataType LeafDataType(const SchemaElement& elem) {
   }
   if (elem.type == PhysicalType::kInt32 && elem.logical_type == LogicalType::kDate) {
     return columnar::Date32Type{};
+  }
+  if (IsIntegerDecimal(elem)) {
+    return columnar::DoubleType{};
   }
   return PhysicalTypeToDataType(elem.type, elem.type_length.value_or(0));
 }
@@ -262,7 +271,23 @@ Result<SchemaElement> MetadataParser::ParseSchemaElement(
         }
         break;
       }
-      case 7: {  // field_id
+      case 7: {  // scale
+        auto result = decoder.ReadI32();
+        if (!result.has_value()) {
+          return std::unexpected(result.error());
+        }
+        elem.scale = result.value();
+        break;
+      }
+      case 8: {  // precision
+        auto result = decoder.ReadI32();
+        if (!result.has_value()) {
+          return std::unexpected(result.error());
+        }
+        elem.precision = result.value();
+        break;
+      }
+      case 9: {  // field_id
         auto result = decoder.ReadI32();
         if (!result.has_value()) {
           return std::unexpected(result.error());
@@ -792,6 +817,9 @@ Schema BuildSchema(const FileMetadata& metadata) {
       }
       if (elem.type_length) {
         fields.back().type_length = elem.type_length;
+      }
+      if (IsIntegerDecimal(elem)) {
+        fields.back().decimal_scale = elem.scale.value_or(0);
       }
     }
     ++i;
