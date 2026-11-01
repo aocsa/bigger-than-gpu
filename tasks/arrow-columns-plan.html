@@ -199,11 +199,7 @@ l_extendedprice / l_quantity         DOUBLE
 SUM(l_extendedprice)                 <span class="y">DECIMAL(38,2)</span>
 AVG(l_extendedprice)                 DOUBLE
 MIN(l_extendedprice)                 DECIMAL(15,2)</template></doc-mock>
-    <doc-ask id="decimal-sum">
-      <p>What does SUM of a Decimal produce?</p>
-      <label><input type="radio" name="decimal-sum" value="int64" checked> DECIMAL(18,s) in an int64; overflow is an error <small>one storage type; Q1 fits up to approximately SF 170</small></label>
-      <label><input type="radio" name="decimal-sum" value="int128"> DECIMAL(38,s) in an int128, as DuckDB <small>a second storage type and its arithmetic</small></label>
-    </doc-ask>
+    <doc-note tone="ok"><strong>Decided</strong> DECIMAL(18,s) in an int64; overflow is an error.</doc-note>
 
     <doc-claim at="src/quest/columnar/types.hpp:35">
       <p><b>types.hpp:35</b> · DataType</p>
@@ -650,7 +646,7 @@ l_tax            INT64  DECIMAL         2
     <p>The change lands in 8 steps; each step ends with all tests green.</p>
     <doc-mock frame="terminal" title="steps, in order" w="480"><template><span class="g">✓</span> <b>1 Types</b>      DataType, TypeTraits, VisitType, Parquet
 <span class="g">✓</span> <b>2 Buffers</b>    ColumnVector, ColumnBuilder, ColumnView
-  <b>3 Decimal</b>    DataType with precision and scale,
+<span class="g">✓</span> <b>3 Decimal</b>    DataType with precision and scale,
                Decimal64 arithmetic, SUM, Parquet
   <b>4 Kernels</b>    Filter, gather, concatenate, spill, size.
   <b>5 Expressions</b> Cast, compare, arithmetic, CASE on views.
@@ -659,11 +655,7 @@ l_tax            INT64  DECIMAL         2
 <span class="g">✓</span> <b>8 TPC-H</b>      6 tables at SF 0.01; 1 test per query.
 
 <span class="dim">each step: build -Werror, ctest, Q12 at SF 1</span></template></doc-mock>
-    <doc-ask id="decimal-order">
-      <p>When does Decimal land?</p>
-      <label><input type="radio" name="decimal-order" value="next" checked> Next, as step 3 <small>the kernel rewrites then handle Decimal once</small></label>
-      <label><input type="radio" name="decimal-order" value="last"> Last, after the Value variant goes <small>the kernels change twice</small></label>
-    </doc-ask>
+    <doc-note tone="ok"><strong>Decided</strong> Next, as step 3.</doc-note>
   </doc-claim>
 
   <doc-claim>
